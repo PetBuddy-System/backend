@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.controller;
 
+import com.petbuddy.petbuddystore.common.enums.OrderStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.CreateOrderRequest;
 import com.petbuddy.petbuddystore.dto.response.OrderResponse;
@@ -27,41 +28,36 @@ public class OrderController {
 
     OrderService orderService;
 
+    @PreAuthorize("hasRole('CUSTOMER')")
     @PostMapping
     public ResponseEntity<ApiResponse<OrderResponse>> createOrder(@RequestBody CreateOrderRequest createOrderRequest) {
-        return ResponseEntity.ok(ApiResponse.success("Order created successfully",
-                orderService.createOrder(createOrderRequest)));
+        return ResponseEntity.ok(ApiResponse.success("Order created successfully", orderService.createOrder(createOrderRequest)));
     }
 
+    @PreAuthorize("hasRole('CUSTOMER')")
     @GetMapping
-    public ResponseEntity<ApiResponse<Page<OrderResponse>>> getMyOrders(
-            @ParameterObject
-            @PageableDefault(
+    public ResponseEntity<ApiResponse<Page<OrderResponse>>> getMyOrders(@ParameterObject @PageableDefault(
             sort = "createdAt",
             direction = Sort.Direction.DESC
     ) Pageable pageable) {
-        return ResponseEntity.ok(
-                ApiResponse.success("Orders retrieved successfully", orderService.getOrder(pageable)));
+        return ResponseEntity.ok(ApiResponse.success("Orders retrieved successfully", orderService.getOrder(pageable)));
     }
 
-    @GetMapping("/id")
-    public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(@RequestParam long id) {
+    @PreAuthorize("hasRole('CUSTOMER') or hasRole('STAFF')")
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(@PathVariable long id) {
         return ResponseEntity.ok(ApiResponse.success("Order retrieved successfully", orderService.getOrder(id)));
     }
 
-    @PreAuthorize("hasRole('STAFF')")
-    @PutMapping("/{id}/confirm")
-    public ResponseEntity<ApiResponse<Void>> confirmOrder(@PathVariable Long id){
-        orderService.confirmOrder(id);
-        return ResponseEntity.ok(ApiResponse.success("Order confirmed", null));
-    }
+    @PreAuthorize("hasRole('STAFF') or hasRole('CUSTOMER')")
+    @PatchMapping("/{orderId}/status")
+    public ResponseEntity<ApiResponse<Void>> updateStatus(
+            @PathVariable Long orderId,
+            @RequestParam OrderStatus status) {
 
-    @PreAuthorize("hasRole('STAFF')")
-    @PutMapping("/{id}/picking")
-    public ResponseEntity<ApiResponse<Void>> startPicking(@PathVariable Long id){
+        orderService.updateOrderStatus(orderId, status);
 
-        orderService.startPicking(id);
-        return ResponseEntity.ok(ApiResponse.success("Order picking started", null));
+        return ResponseEntity.ok(ApiResponse.success("Order status updated successfully", null));
     }
 
     @PreAuthorize("hasRole('STAFF')")
@@ -71,35 +67,7 @@ public class OrderController {
     }
 
     @PreAuthorize("hasRole('STAFF')")
-    @PutMapping("/{id}/shipping")
-    public ResponseEntity<ApiResponse<Void>> shipOrder(@PathVariable Long id){
-
-        orderService.shipOrder(id);
-        return ResponseEntity.ok(ApiResponse.success("Order shipped", null));
-    }
-
-    @PreAuthorize("hasRole('STAFF')")
-    @PutMapping("/{id}/delivered")
-    public ResponseEntity<ApiResponse<Void>> deliverOrder(@PathVariable Long id){
-        orderService.deliveredOrder(id);
-        return ResponseEntity.ok(ApiResponse.success("Order delivered", null));
-    }
-    @PreAuthorize("hasRole('CUSTOMER')")
-    @PutMapping("/{id}/completed")
-    public ResponseEntity<ApiResponse<Void>> completedOrder(@PathVariable Long id){
-        orderService.completedOrder(id);
-        return ResponseEntity.ok(ApiResponse.success("Order completed", null));
-    }
-
-    @PreAuthorize("hasRole('STAFF')")
-    @PutMapping("/{id}/cancel")
-    public ResponseEntity<ApiResponse<Void>> cancelOrder(@PathVariable Long id){
-        orderService.cancelOrder(id);
-        return ResponseEntity.ok(ApiResponse.success("Order cancelled", null));
-    }
-
-    @PreAuthorize("hasRole('STAFF')")
-    @GetMapping("/get-all")
+    @GetMapping("/all")
     public ResponseEntity<ApiResponse<Page<StaffOrderResponse>>> getAllOrders(Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success("Orders retrieved successfully", orderService.getAllOrder(pageable)));
     }

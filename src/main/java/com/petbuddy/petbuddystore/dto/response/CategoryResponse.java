@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.dto.response;
 
+import com.petbuddy.petbuddystore.common.enums.CategoryStatus;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -14,10 +15,16 @@ import java.time.LocalDateTime;
 public class CategoryResponse {
 
     Long categoryId;
+
     String name;
+
     String description;
-    Boolean status;
+
+    CategoryStatus status;
+
+    LocalDateTime deletedAt;
 
     LocalDateTime createdAt;
+
     LocalDateTime updatedAt;
 }

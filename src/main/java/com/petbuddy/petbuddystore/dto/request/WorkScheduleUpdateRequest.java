@@ -13,11 +13,10 @@ import java.time.LocalTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class StaffScheduleCreationRequest {
+public class WorkScheduleUpdateRequest {
     LocalDate workDate;
     LocalTime startTime;
     LocalTime endTime;
     String note;
     ShiftType shiftType;
-    ScheduleStatus scheduleStatus;
 }

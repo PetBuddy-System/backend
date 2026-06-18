@@ -4,6 +4,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -13,13 +14,15 @@ import java.math.BigDecimal;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ToString
 public class CartItemResponse {
-    private Long productId;
+    UUID cartItemId;
 
-    private String productName;
+    UUID productId;
 
-    private BigDecimal price;
+    String productName;
 
-    private Integer quantity;
+    BigDecimal price;
 
-    private BigDecimal subtotal;
+    Integer quantity;
+
+    BigDecimal subtotal;
 }

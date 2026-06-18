@@ -7,17 +7,18 @@ import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class StaffScheduleUpdateRequest {
+public class WorkScheduleCreationRequest {
     LocalDate workDate;
     LocalTime startTime;
     LocalTime endTime;
     String note;
     ShiftType shiftType;
-    ScheduleStatus scheduleStatus;
+    List<String> staffIds;
 }

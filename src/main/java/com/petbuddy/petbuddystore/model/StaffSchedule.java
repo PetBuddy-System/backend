@@ -23,22 +23,14 @@ import java.time.LocalTime;
 public class StaffSchedule {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    String scheduleId;
-
-    @Column(nullable = false)
-    LocalDate workDate;
-
-    @Column(nullable = false)
-    LocalTime startTime;
-
-    @Column(nullable = false)
-    LocalTime endTime;
+    String staffScheduleId;
 
     @Column(columnDefinition = "TEXT")
     String note;
 
-    @Enumerated(EnumType.STRING)
-    ShiftType shiftType;
+    LocalDateTime checkInAt;
+    LocalDateTime checkOutAt;
+    LocalDateTime assignedAt;
 
     @Enumerated(EnumType.STRING)
     ScheduleStatus scheduleStatus;
@@ -53,4 +45,8 @@ public class StaffSchedule {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "staff_id", nullable = false)
     User staff;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "work_schedule_id", nullable = false)
+    WorkSchedule workSchedule;
 }

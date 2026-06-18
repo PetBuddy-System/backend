@@ -1,36 +1,32 @@
-package com.petbuddy.petbuddystore.dto.response;
+package com.petbuddy.petbuddystore.dto.request;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ProductResponse {
+public class ProductImportRequest {
 
-    Long productId;
+    int rowNumber;
+
     String name;
-    String description;
-    BigDecimal price;
-    Integer stockQuantity;
-    String imageUrl;
-    String brandName;
-    Boolean status;
-    Boolean deleted;
-    LocalDateTime deletedAt;
 
-    Long categoryId;
+    String description;
+
+    BigDecimal price;
+
+    String brandName;
+
     String categoryName;
 
-    LocalDateTime createdAt;
-    LocalDateTime updatedAt;
+    Integer stockQuantity;
 
     LocalDate expiryDate;
 }

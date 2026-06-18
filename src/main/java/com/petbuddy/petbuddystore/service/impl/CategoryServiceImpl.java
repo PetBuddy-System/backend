@@ -1,5 +1,7 @@
 package com.petbuddy.petbuddystore.service.impl;
 
+import com.petbuddy.petbuddystore.common.enums.CategoryStatus;
+import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.CategoryCreationRequest;
@@ -14,6 +16,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -28,16 +31,26 @@ public class CategoryServiceImpl implements CategoryService {
     CategoryMapper categoryMapper;
 
     @Override
-    public CategoryResponse createCategory(CategoryCreationRequest request) {
+    @Transactional
+    public List<CategoryResponse> createCategories(List<CategoryCreationRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            throw new AppException(ErrorCode.CATEGORY_REQUIRED);
+        }
+
+        return requests.stream()
+                .map(this::createOrRestoreCategory)
+                .toList();
+    }
+
+    private CategoryResponse createOrRestoreCategory(CategoryCreationRequest request) {
         var existedCategory = categoryRepository.findByNameIgnoreCase(request.getName());
 
         if (existedCategory.isPresent()) {
             Category category = existedCategory.get();
 
-            if (Boolean.TRUE.equals(category.getDeleted())) {
-                category.setDeleted(false);
+            if (category.getStatus() == CategoryStatus.DELETED) {
+                category.setStatus(CategoryStatus.ACTIVE);
                 category.setDeletedAt(null);
-                category.setStatus(true);
                 category.setDescription(request.getDescription());
 
                 return categoryMapper.toCategoryResponse(categoryRepository.save(category));
@@ -47,24 +60,15 @@ public class CategoryServiceImpl implements CategoryService {
         }
 
         Category category = categoryMapper.toCategory(request);
-        category.setStatus(true);
-        category.setDeleted(false);
+        category.setStatus(CategoryStatus.ACTIVE);
         category.setDeletedAt(null);
 
         return categoryMapper.toCategoryResponse(categoryRepository.save(category));
     }
 
     @Override
-    public List<CategoryResponse> getAllCategories() {
-        return categoryRepository.findByDeletedFalse()
-                .stream()
-                .map(categoryMapper::toCategoryResponse)
-                .toList();
-    }
-
-    @Override
     public List<CategoryResponse> getActiveCategories() {
-        return categoryRepository.findByStatusTrueAndDeletedFalse()
+        return categoryRepository.findByStatus(CategoryStatus.ACTIVE)
                 .stream()
                 .map(categoryMapper::toCategoryResponse)
                 .toList();
@@ -80,75 +84,74 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     public CategoryResponse getCategoryById(Long categoryId) {
-        Category category = getCategoryEntityByIdAndNotDeleted(categoryId);
-
-        return categoryMapper.toCategoryResponse(category);
+        return categoryMapper.toCategoryResponse(getCategoryEntityById(categoryId));
     }
 
     @Override
     public CategoryResponse updateCategory(Long categoryId, CategoryUpdateRequest request) {
-        Category category = getCategoryEntityByIdAndNotDeleted(categoryId);
+        Category category = getCategoryEntityById(categoryId);
 
-        var existedCategory = categoryRepository.findByNameIgnoreCase(request.getName());
+        if (request.getName() != null && !request.getName().isBlank()) {
+            var existedCategory = categoryRepository.findByNameIgnoreCase(request.getName());
 
-        if (existedCategory.isPresent()
-                && !existedCategory.get().getCategoryId().equals(categoryId)
-                && Boolean.FALSE.equals(existedCategory.get().getDeleted())) {
-            throw new AppException(ErrorCode.CATEGORY_EXISTED);
+            if (existedCategory.isPresent()
+                    && !existedCategory.get().getCategoryId().equals(categoryId)
+                    && existedCategory.get().getStatus() != CategoryStatus.DELETED) {
+                throw new AppException(ErrorCode.CATEGORY_EXISTED);
+            }
+
+            category.setName(request.getName());
         }
 
-        categoryMapper.updateCategory(category, request);
+        if (request.getDescription() != null) {
+            category.setDescription(request.getDescription());
+        }
+
+        if (request.getStatus() != null) {
+            if (request.getStatus() == CategoryStatus.DELETED
+                    && productRepository.existsByCategory_CategoryIdAndStatusIn(
+                    categoryId,
+                    List.of(ProductStatus.ACTIVE, ProductStatus.INACTIVE))) {
+                throw new AppException(ErrorCode.CATEGORY_HAS_PRODUCTS);
+            }
+
+            category.setStatus(request.getStatus());
+
+            if (request.getStatus() == CategoryStatus.DELETED) {
+                category.setDeletedAt(LocalDateTime.now());
+            } else {
+                category.setDeletedAt(null);
+            }
+        }
 
         return categoryMapper.toCategoryResponse(categoryRepository.save(category));
     }
 
     @Override
-    public CategoryResponse updateCategoryStatus(Long categoryId, Boolean status) {
-        Category category = getCategoryEntityByIdAndNotDeleted(categoryId);
+    public Category getActiveCategoryEntityById(Long categoryId) {
+        Category category = getCategoryEntityById(categoryId);
 
-        category.setStatus(status);
-
-        return categoryMapper.toCategoryResponse(categoryRepository.save(category));
-    }
-
-    @Override
-    public void softDeleteCategory(Long categoryId) {
-        Category category = getCategoryEntityByIdAndNotDeleted(categoryId);
-
-        if (productRepository.existsByCategory_CategoryId(categoryId)) {
-            throw new AppException(ErrorCode.CATEGORY_HAS_PRODUCTS);
-        }
-
-        category.setDeleted(true);
-        category.setDeletedAt(LocalDateTime.now());
-        category.setStatus(false);
-
-        categoryRepository.save(category);
-    }
-    @Override
-    public CategoryResponse restoreCategory(Long categoryId) {
-        Category category = categoryRepository.findById(categoryId)
-                .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
-
-        if (Boolean.FALSE.equals(category.getDeleted())) {
-            throw new AppException(ErrorCode.CATEGORY_NOT_DELETED);
-        }
-
-        category.setDeleted(false);
-        category.setDeletedAt(null);
-        category.setStatus(true);
-
-        return categoryMapper.toCategoryResponse(categoryRepository.save(category));
-    }
-
-    private Category getCategoryEntityByIdAndNotDeleted(Long categoryId) {
-        Category category = categoryRepository.findById(categoryId)
-                .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
-
-        if (Boolean.TRUE.equals(category.getDeleted())) {
+        if (category.getStatus() == CategoryStatus.DELETED) {
             throw new AppException(ErrorCode.CATEGORY_DELETED);
         }
 
         return category;
+    }
+
+    @Override
+    public Category getActiveCategoryEntityByName(String categoryName) {
+        Category category = categoryRepository.findByNameIgnoreCase(categoryName)
+                .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
+
+        if (category.getStatus() == CategoryStatus.DELETED) {
+            throw new AppException(ErrorCode.CATEGORY_DELETED);
+        }
+
+        return category;
+    }
+
+    private Category getCategoryEntityById(Long categoryId) {
+        return categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
     }
 }

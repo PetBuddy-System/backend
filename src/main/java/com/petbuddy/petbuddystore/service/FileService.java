@@ -1,13 +1,17 @@
 package com.petbuddy.petbuddystore.service;
 
+import com.petbuddy.petbuddystore.dto.request.ProductImportRequest;
 import org.springframework.web.multipart.MultipartFile;
 
-public interface FileService {
-    String uploadProductImage(MultipartFile file);
-    String uploadPetImage(MultipartFile file);
-    String uploadBlogImage(MultipartFile file);
-    String uploadImage(byte[] bytes, String fileName, String contentType);
+import java.util.List;
 
-    void deleteImage(String imageUrl);
+public interface FileService {
+
+    List<String> uploadProductImages(List<MultipartFile> files);
+
+    String uploadPetImage(MultipartFile file);
+
+    String uploadBlogImage(MultipartFile file);
+
 
 }

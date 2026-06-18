@@ -59,4 +59,7 @@ public class User {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     List<Pet> pets = new ArrayList<>();
 
+    @OneToMany(mappedBy = "staff", cascade = CascadeType.ALL, orphanRemoval = true)
+    List<StaffSchedule> staffSchedules = new ArrayList<>();
+
 }

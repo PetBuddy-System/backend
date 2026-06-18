@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.dto.request;
 
+import com.petbuddy.petbuddystore.common.enums.CategoryStatus;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -12,10 +13,9 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CategoryUpdateRequest {
 
-    @NotBlank(message = "CATEGORY_NAME_REQUIRED")
     String name;
 
     String description;
 
-    Boolean status;
+    CategoryStatus status;
 }

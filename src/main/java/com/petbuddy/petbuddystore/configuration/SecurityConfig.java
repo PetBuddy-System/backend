@@ -50,32 +50,6 @@ public class SecurityConfig {
             "/api/products/{productId}"
     };
 
-    // TODO: Temporary public endpoints for Swagger testing only.
-// Later: require ADMIN / MANAGER / STAFF.
-    private static final String[] TEMP_CATEGORY_MANAGEMENT_ENDPOINTS = {
-            "/api/categories/create",
-            "/api/categories/management",
-            "/api/categories/admin",
-            "/api/categories/{categoryId}/update",
-            "/api/categories/{categoryId}/active",
-            "/api/categories/{categoryId}/inactive",
-            "/api/categories/{categoryId}/soft-deleted",
-            "/api/categories/{categoryId}/restore",
-            "/api/products/{productId}"
-    };
-
-    // TODO: Temporary public endpoints for Swagger testing only.
-// Later: require ADMIN / MANAGER / STAFF.
-    private static final String[] TEMP_PRODUCT_MANAGEMENT_ENDPOINTS = {
-            "/api/products/create",
-            "/api/products/management",
-            "/api/products/admin",
-            "/api/products/{productId}/soft-deleted",
-            "/api/products/{productId}/status",
-            "/api/products/{productId}/restore",
-            "/api/products/import"
-    };
-
     private final CustomJwtDecoder customJwtDecoder;
 
     @Bean
@@ -86,8 +60,6 @@ public class SecurityConfig {
                         .requestMatchers(PUBLIC_ENDPOINTS_SWAGGER).permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_CATEGORY_GET_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_PRODUCT_GET_ENDPOINTS).permitAll()
-                        .requestMatchers(TEMP_CATEGORY_MANAGEMENT_ENDPOINTS).permitAll()
-                        .requestMatchers(TEMP_PRODUCT_MANAGEMENT_ENDPOINTS).permitAll()
                         .anyRequest().authenticated());
 
         httpSecurity.oauth2ResourceServer(oauth2 ->

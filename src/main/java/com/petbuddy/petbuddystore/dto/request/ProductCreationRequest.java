@@ -1,23 +1,23 @@
 package com.petbuddy.petbuddystore.dto.request;
 
-import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.util.List;
 
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ProductCreationRequest {
-
     @NotBlank(message = "PRODUCT_NAME_REQUIRED")
     String name;
 
@@ -27,19 +27,8 @@ public class ProductCreationRequest {
     @DecimalMin(value = "0.0", inclusive = false, message = "PRODUCT_PRICE_INVALID")
     BigDecimal price;
 
-    @NotNull(message = "PRODUCT_STOCK_REQUIRED")
-    @Min(value = 0, message = "PRODUCT_STOCK_INVALID")
-    Integer stockQuantity;
-
-    MultipartFile image;
-
     String brandName;
 
-    @NotNull(message = "CATEGORY_ID_REQUIRED")
+    @NotNull(message = "CATEGORY_REQUIRED")
     Long categoryId;
-
-    @NotNull(message = "EXPIRY_DATE_REQUIRED")
-    @Future(message = "EXPIRY_DATE_INVALID")
-    @DateTimeFormat(pattern = "yyyy-MM-dd")
-    LocalDate expiryDate;
 }

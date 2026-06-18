@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.model;
 
+import com.petbuddy.petbuddystore.common.enums.CategoryStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -30,11 +31,10 @@ public class Category {
     @Column(columnDefinition = "NVARCHAR(500)")
     String description;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     @Builder.Default
-    Boolean status = true;
-
-    @Builder.Default
-    Boolean deleted = false;
+    CategoryStatus status = CategoryStatus.ACTIVE;
 
     LocalDateTime deletedAt;
 

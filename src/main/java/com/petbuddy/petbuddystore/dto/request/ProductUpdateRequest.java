@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.dto.request;
 
+import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 import lombok.*;
@@ -9,30 +10,25 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-@FieldDefaults(level = AccessLevel.PRIVATE)
 public class ProductUpdateRequest {
-
     String name;
 
     String description;
 
     BigDecimal price;
 
-    Integer stockQuantity;
-
-    MultipartFile image;
-
     String brandName;
 
     Long categoryId;
 
-    @Future(message = "EXPIRY_DATE_INVALID")
-    @DateTimeFormat(pattern = "yyyy-MM-dd")
-    LocalDate expiryDate;
+    ProductStatus status;
+
+    Boolean mergeIfNameExists;
 }

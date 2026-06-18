@@ -26,33 +26,33 @@ public class DataInitializer implements CommandLineRunner {
 
         List<Category> categories = List.of(
                 Category.builder()
-                        .name("Dog Food")
-                        .description("Food for dogs")
+                        .name("Thức ăn cho chó")
+                        .description("Các loại thức ăn khô, pate, hạt và sản phẩm dinh dưỡng dành cho chó")
                         .build(),
 
                 Category.builder()
-                        .name("Cat Food")
-                        .description("Food for cats")
+                        .name("Thức ăn cho mèo")
+                        .description("Các loại thức ăn khô, pate, hạt và sản phẩm dinh dưỡng dành cho mèo")
                         .build(),
 
                 Category.builder()
-                        .name("Pet Accessories")
-                        .description("Accessories for pets")
+                        .name("Phụ kiện thú cưng")
+                        .description("Vòng cổ, dây dắt, balo, chuồng, nệm và các phụ kiện dành cho thú cưng")
                         .build(),
 
                 Category.builder()
-                        .name("Pet Supplement")
-                        .description("Functional food and supplements for pets, not medicine")
+                        .name("Dinh dưỡng bổ sung")
+                        .description("Thực phẩm chức năng và sản phẩm bổ sung dinh dưỡng cho thú cưng, không phải thuốc")
                         .build(),
 
                 Category.builder()
-                        .name("Pet Toys")
-                        .description("Toys and entertainment products for pets")
+                        .name("Đồ chơi thú cưng")
+                        .description("Đồ chơi và sản phẩm giải trí giúp thú cưng vận động, giảm stress")
                         .build(),
 
                 Category.builder()
-                        .name("Pet Hygiene")
-                        .description("Hygiene and grooming products for pets")
+                        .name("Vệ sinh và chăm sóc")
+                        .description("Sữa tắm, lược chải, cát vệ sinh, dung dịch khử mùi và sản phẩm chăm sóc thú cưng")
                         .build()
         );
 

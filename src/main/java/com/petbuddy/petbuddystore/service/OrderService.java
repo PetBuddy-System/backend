@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.service;
 
+import com.petbuddy.petbuddystore.common.enums.OrderStatus;
 import com.petbuddy.petbuddystore.dto.request.CreateOrderRequest;
 import com.petbuddy.petbuddystore.dto.response.OrderResponse;
 import com.petbuddy.petbuddystore.dto.response.PickingItemResponse;
@@ -11,15 +12,11 @@ import java.util.List;
 
 public interface OrderService {
     OrderResponse createOrder(CreateOrderRequest request);
-    void confirmOrder(Long  orderId);
-    void startPicking(Long orderId);
-    void shipOrder(Long orderId);
-    void cancelOrder(Long orderId);
+    void updateOrderStatus(Long orderId, OrderStatus status);
     Page<OrderResponse> getOrder(Pageable pageable);
     Page<StaffOrderResponse> getAllOrder(Pageable pageable);
     OrderResponse getOrder(Long orderId);
     List<PickingItemResponse> getPickingList(Long orderId);
-    void deliveredOrder(Long orderId);
-    void completedOrder(Long orderId);
+
 
 }

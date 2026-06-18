@@ -1,17 +1,20 @@
 package com.petbuddy.petbuddystore.model;
 
+import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "products")
@@ -24,35 +27,33 @@ import java.util.List;
 public class Product {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "product_id")
-    Long productId;
+    UUID productId;
 
-    @Column(nullable = false, columnDefinition = "NVARCHAR(255)")
+
+    @Column(name = "product_code", nullable = false, unique = true, length = 12)
+    String productCode;
+
+    @NotBlank(message = "PRODUCT_NAME_REQUIRED")
+    @Column(nullable = false, unique = true, columnDefinition = "NVARCHAR(255)")
     String name;
 
     @Column(columnDefinition = "NVARCHAR(2000)")
     String description;
 
+    @NotNull(message = "PRODUCT_PRICE_REQUIRED")
+    @DecimalMin(value = "0.0", inclusive = false, message = "PRODUCT_PRICE_INVALID")
     @Column(nullable = false)
     BigDecimal price;
-
-    @Column(nullable = false)
-    @Min(value = 0, message = "PRODUCT_STOCK_INVALID")
-    Integer stockQuantity;
-
-    @Column(columnDefinition = "TEXT")
-    String imageUrl;
-
 
     @Column(columnDefinition = "NVARCHAR(100)")
     String brandName;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     @Builder.Default
-    Boolean status = true;
-
-    @Builder.Default
-    Boolean deleted = false;
+    ProductStatus status = ProductStatus.ACTIVE;
 
     LocalDateTime deletedAt;
 
@@ -60,9 +61,15 @@ public class Product {
     @JoinColumn(name = "category_id")
     Category category;
 
+    @ElementCollection
+    @CollectionTable(name = "product_images", joinColumns = @JoinColumn(name = "product_id"))
+    @Column(name = "image_url", columnDefinition = "TEXT")
     @Builder.Default
-    @OneToMany(mappedBy = "product")
-    List<OrderDetail> orderDetails = new ArrayList<>();
+    List<String> imageUrls = new ArrayList<>();
+
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    List<ProductBatch> batches = new ArrayList<>();
 
     @CreationTimestamp
     @Column(updatable = false)
@@ -70,7 +77,4 @@ public class Product {
 
     @UpdateTimestamp
     LocalDateTime updatedAt;
-
-    @Column(name = "expiry_date")
-    LocalDate expiryDate;
 }

@@ -8,5 +8,5 @@ public class CreateOrderRequest {
     private String phoneNumber;
     private String address;
     private String note;
-//    private Long voucherId;
+    private String voucherCode;
 }

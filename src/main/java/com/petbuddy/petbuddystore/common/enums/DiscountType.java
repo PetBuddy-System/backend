@@ -1,6 +1,6 @@
 package com.petbuddy.petbuddystore.common.enums;
 
 public enum DiscountType {
-    PERCENT,
+    PERCENTAGE,
     FIXED,
 }

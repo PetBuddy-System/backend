@@ -2,8 +2,9 @@ package com.petbuddy.petbuddystore.common.enums;
 
 public enum ScheduleStatus {
     SCHEDULED,
-    WORKING,
+    WORKING,  //đã checkin
+    COMPLETED,  //đã checkout
     ABSENT,
-    LEAVE,
+    LEAVE,  //nghỉ phép
     CANCELLED
 }

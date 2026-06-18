@@ -12,7 +12,6 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CategoryCreationRequest {
 
-    @NotBlank(message = "CATEGORY_NAME_REQUIRED")
     String name;
 
     String description;

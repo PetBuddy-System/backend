@@ -9,21 +9,26 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
-@Data
-@Builder
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class StaffScheduleResponse {
-    String scheduleId;
+    String staffScheduleId;
     String staffId;
     String staffName;
+    String workScheduleId;
     LocalDate workDate;
     LocalTime startTime;
     LocalTime endTime;
-    String note;
     ShiftType shiftType;
     ScheduleStatus scheduleStatus;
+    LocalDateTime assignedAt;
+    LocalDateTime checkInAt;
+    LocalDateTime checkOutAt;
+    String note;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 }

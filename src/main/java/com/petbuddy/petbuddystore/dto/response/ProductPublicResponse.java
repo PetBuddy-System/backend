@@ -1,31 +1,26 @@
 package com.petbuddy.petbuddystore.dto.response;
 
 import lombok.*;
-import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.util.UUID;
 
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-@FieldDefaults(level = AccessLevel.PRIVATE)
 public class ProductPublicResponse {
 
-    Long productId; // id của product đại diện mới nhất
+    UUID productId;
 
     String name;
-    String description;
-    BigDecimal price;
-    Integer totalStock;
 
-    String imageUrl;
+    BigDecimal price;
+
     String brandName;
 
-    Long categoryId;
-    String categoryName;
+    String thumbnail;
 
-    LocalDate expiryDate; // expiryDate của lô đại diện mới nhất
+    Integer totalStock;
 }

@@ -3,6 +3,7 @@ package com.petbuddy.petbuddystore.session;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -11,7 +12,9 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @ToString
 public class CartItemSession {
-    private Long productId;
+    private UUID cartItemId;
+
+    private UUID productId;
 
     private String productName;
 

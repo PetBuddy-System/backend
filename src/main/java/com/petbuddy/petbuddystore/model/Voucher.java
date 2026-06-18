@@ -8,6 +8,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "voucher")
@@ -19,9 +20,9 @@ import java.time.LocalDateTime;
 @Builder
 public class Voucher {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "voucher_id")
-    private Long voucherId;
+    private UUID voucherId;
 
     @Column(name = "voucher_code", nullable = false, unique = true)
     private String voucherCode;
@@ -59,7 +60,7 @@ public class Voucher {
     private LocalDateTime startAt;
 
     @Column(name = "end_at")
-    private LocalDateTime endAt;
+    private LocalDateTime expiredAt;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
