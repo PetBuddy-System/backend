@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -26,7 +27,7 @@ public class ProductManagementResponse {
 
     ProductStatus status;
 
-    String thumbnail;
+    List<String> imageUrls;
 
     Integer totalStock;
 

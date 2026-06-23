@@ -15,6 +15,8 @@ import com.petbuddy.petbuddystore.session.CartSession;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -32,7 +34,7 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public void addToCart(AddToCartRequest request) {
-        checkLogin();
+        ensureCartSessionUser();
 
         Product product = productService.getProductEntityById(request.getProductId());
 
@@ -50,7 +52,6 @@ public class CartServiceImpl implements CartService {
             if (existingItem.getCartItemId() == null) {
                 existingItem.setCartItemId(UUID.randomUUID());
             }
-
             newQuantity += existingItem.getQuantity();
         }
 
@@ -80,7 +81,8 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public CartResponse getCart() {
-        checkLogin();
+        ensureCartSessionUser();
+
         for (CartItemSession item : cartSession.getItems()) {
             if (item.getCartItemId() == null) {
                 item.setCartItemId(UUID.randomUUID());
@@ -92,7 +94,7 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public void removeItem(UUID productId) {
-        checkLogin();
+        ensureCartSessionUser();
 
         boolean removed = cartSession.getItems()
                 .removeIf(item -> item.getProductId().equals(productId));
@@ -104,13 +106,14 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public void clearCart() {
-        checkLogin();
+        ensureCartSessionUser();
         cartSession.getItems().clear();
     }
 
     @Override
     public void updateCart(UUID cartItemId, UpdateCartItemRequest request) {
-        checkLogin();
+        ensureCartSessionUser();
+
         CartItemSession item = cartSession.getItems()
                 .stream()
                 .filter(i -> i.getCartItemId() != null && i.getCartItemId().equals(cartItemId))
@@ -118,7 +121,6 @@ public class CartServiceImpl implements CartService {
                 .orElseThrow(() -> new AppException(ErrorCode.CART_ITEM_NOT_FOUND));
 
         Product product = productService.getProductEntityById(item.getProductId());
-
         int availableStock = productBatchRepository.findAvailableStockByProductId(product.getProductId());
 
         if (availableStock < request.getQuantity()) {
@@ -140,11 +142,27 @@ public class CartServiceImpl implements CartService {
         item.setSubtotal(item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
     }
 
-    private void checkLogin() {
-        String userId = cartSession.getUserId();
+    private String getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        if (userId == null) {
+        if (authentication == null || !authentication.isAuthenticated()) {
             throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        return authentication.getName();
+    }
+
+    private void ensureCartSessionUser() {
+        String currentUserId = getCurrentUserId();
+
+        if (cartSession.getUserId() == null) {
+            cartSession.setUserId(currentUserId);
+            return;
+        }
+
+        if (!cartSession.getUserId().equals(currentUserId)) {
+            cartSession.setUserId(currentUserId);
+            cartSession.getItems().clear();
         }
     }
 }

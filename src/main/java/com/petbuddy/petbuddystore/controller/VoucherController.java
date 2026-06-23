@@ -41,6 +41,18 @@ public class VoucherController {
                 voucherService.getVoucherById(id)));
     }
 
+    @GetMapping("/active")
+    public ResponseEntity<ApiResponse<Page<VoucherResponse>>> getActiveVouchers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortBy).descending());
+        return ResponseEntity.ok(ApiResponse.success(
+                "Lấy voucher đang hoạt động thành công",
+                voucherService.getActiveVouchers(pageable)));
+    }
+
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Page<VoucherResponse>>> getAll(

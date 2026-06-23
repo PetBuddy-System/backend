@@ -61,9 +61,6 @@ public class Product {
     @JoinColumn(name = "category_id")
     Category category;
 
-    @ElementCollection
-    @CollectionTable(name = "product_images", joinColumns = @JoinColumn(name = "product_id"))
-    @Column(name = "image_url", columnDefinition = "TEXT")
     @Builder.Default
     List<String> imageUrls = new ArrayList<>();
 

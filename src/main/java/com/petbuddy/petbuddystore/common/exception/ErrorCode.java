@@ -91,6 +91,12 @@ public enum ErrorCode {
     VOUCHER_USER_LIMIT_EXCEEDED(5308, "You have reached voucher usage limit",HttpStatus.BAD_REQUEST),
     VOUCHER_INVALID_STATUS(5309, "Voucher is inactive",HttpStatus.BAD_REQUEST),
 
+    LOCATION_OUTSIDE_HCM(5401,"Location is outside Ho Chi Minh city",HttpStatus.BAD_REQUEST),
+    INVALID_COORDINATES(5402,"Invalid coordinates",HttpStatus.BAD_REQUEST),
+    INVALID_DISTANCE(5403,"Invalid distance",HttpStatus.BAD_REQUEST),
+    SHIPPING_CONFIG_NOT_FOUND(5404,"Shipping configuration not found",HttpStatus.NOT_FOUND),
+    SHIPPING_RULE_OVERLAP(5405,"Shipping rule overlaps with existing rules",HttpStatus.BAD_REQUEST),
+
     FILE_REQUIRED(7001, "File is required", HttpStatus.BAD_REQUEST),
     FILE_TOO_LARGE(7002, "File size is too large", HttpStatus.BAD_REQUEST),
     INVALID_FILE_TYPE(7003, "Only JPG, PNG, WEBP images are allowed", HttpStatus.BAD_REQUEST),

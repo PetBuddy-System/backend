@@ -2,7 +2,6 @@ package com.petbuddy.petbuddystore.service.impl;
 
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
-import com.petbuddy.petbuddystore.dto.request.ProductImportRequest;
 import com.petbuddy.petbuddystore.service.FileService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -33,20 +32,10 @@ public class FileServiceImpl implements FileService {
     @Value("${aws.s3.bucket}")
     String bucketName;
 
+
     @Override
-    public List<String> uploadProductImages(List<MultipartFile> files) {
-
-        if (files == null || files.isEmpty()) {
-            throw new AppException(ErrorCode.FILE_REQUIRED);
-        }
-
-        if (files.size() > 4) {
-            throw new AppException(ErrorCode.PRODUCT_IMAGE_LIMIT_EXCEEDED);
-        }
-
-        return files.stream()
-                .map(file -> uploadToS3(file, "products"))
-                .collect(Collectors.toCollection(ArrayList::new));
+    public String uploadProductImage(MultipartFile file) {
+        return uploadToS3(file, "products");
     }
 
     @Override

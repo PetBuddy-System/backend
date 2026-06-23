@@ -58,16 +58,9 @@ public class BlogServiceImpl implements BlogService {
     }
 
     @Override
-    public Page<BlogResponse> getBlogs(String keyword, int pageNumber, int pageSize) {
+    public Page<BlogResponse> getBlogs(String keyword, String label, int pageNumber, int pageSize) {
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("createdAt").descending());
-        Page<Blog> blogPage;
-
-        if (keyword != null && !keyword.trim().isEmpty()) {
-            blogPage = blogRepository.findByTitleContainingIgnoreCase(keyword, pageable);
-        }
-        else {
-            blogPage = blogRepository.findAll(pageable);
-        }
+        Page<Blog> blogPage = blogRepository.findBlogs(keyword, label, pageable);
         return blogPage.map(blogMapper::toBlogResponse);
     }
 

@@ -11,7 +11,7 @@ import java.util.List;
 
 public interface BlogService {
     BlogResponse createBlog(BlogCreationRequest request, List<MultipartFile> images);
-    Page<BlogResponse> getBlogs(String keyword, int pageNumber, int pageSize);
+    Page<BlogResponse> getBlogs(String keyword, String label, int pageNumber, int pageSize);
     BlogResponse getBlogById(String blogId);
     BlogResponse updateBlog(String blogId, BlogUpdateRequest request, List<MultipartFile> images);
 }

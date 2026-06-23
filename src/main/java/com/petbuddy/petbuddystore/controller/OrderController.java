@@ -4,6 +4,7 @@ import com.petbuddy.petbuddystore.common.enums.OrderStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.CreateOrderRequest;
 import com.petbuddy.petbuddystore.dto.response.OrderResponse;
+import com.petbuddy.petbuddystore.dto.response.PickingItemResponse;
 import com.petbuddy.petbuddystore.dto.response.StaffOrderResponse;
 import com.petbuddy.petbuddystore.service.OrderService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,6 +19,8 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -62,7 +65,7 @@ public class OrderController {
 
     @PreAuthorize("hasRole('STAFF')")
     @GetMapping("/{id}/picking-list")
-    public ResponseEntity<ApiResponse<?>> getPickingList(@PathVariable Long id){
+    public ResponseEntity<ApiResponse<List<PickingItemResponse>>> getPickingList(@PathVariable Long id){
         return ResponseEntity.ok(ApiResponse.success("Picking list retrieved successfully", orderService.getPickingList(id)));
     }
 

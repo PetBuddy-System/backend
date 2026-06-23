@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.service.impl;
 
+import com.petbuddy.petbuddystore.common.enums.VoucherStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.VoucherRequest;
@@ -72,5 +73,8 @@ public class VoucherServiceImpl implements VoucherService {
         voucher.setUpdatedAt(LocalDateTime.now());
 
         return voucherMapper.toVoucherResponse(voucherRepository.save(voucher));
+    }
+    public Page<VoucherResponse> getActiveVouchers(Pageable pageable) {
+        return voucherRepository.findByStatus(VoucherStatus.ACTIVE, pageable).map(voucherMapper::toVoucherResponse);
     }
 }

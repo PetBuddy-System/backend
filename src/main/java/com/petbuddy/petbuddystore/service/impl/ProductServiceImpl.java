@@ -48,18 +48,17 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ProductManagementResponse createProduct(ProductCreationRequest request, List<MultipartFile> images) {
-        validateImageLimit(images);
-        if (productRepository.existsByNameIgnoreCase(request.getName().trim())) {throw new AppException(ErrorCode.PRODUCT_EXISTED);}
+        String productName = request.getName().trim();
+        if (productRepository.existsByNameIgnoreCase(productName)) {throw new AppException(ErrorCode.PRODUCT_EXISTED);}
         Category category = categoryService.getActiveCategoryEntityById(request.getCategoryId());
         Product product = productMapper.toProduct(request);
-        product.setName(request.getName().trim());
+        product.setName(productName);
         product.setProductCode(generateProductCode());
         product.setCategory(category);
         product.setStatus(ProductStatus.ACTIVE);
-        product.setDeletedAt(null);
-        if (hasImages(images)) {product.setImageUrls(new ArrayList<>(fileService.uploadProductImages(images)));}
+        setProductImages(product, images);
         Product savedProduct = productRepository.save(product);
-        return buildManagementResponse(savedProduct);
+        return productMapper.toManagementResponse(savedProduct);
     }
 
     @Override
@@ -68,25 +67,34 @@ public class ProductServiceImpl implements ProductService {
         Pageable sortedPageable = buildPageable(pageable, sortBy);
         Specification<Product> spec = buildProductSpec(keyword, categoryId, brandName, ProductStatus.ACTIVE);
         return productRepository.findAll(spec, sortedPageable)
-                .map(this::buildPublicResponse);
+                .map(product -> {ProductPublicResponse response = productMapper.toPublicResponse(product);
+                    response.setTotalStock(getTotalStock(product));
+                    return response;});
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<ProductManagementResponse> getProductsForManagement(String keyword, Long categoryId, String brandName, ProductStatus status, String sortBy, Pageable pageable) {
         Pageable sortedPageable = buildPageable(pageable, sortBy);
-
         Specification<Product> spec = buildProductSpec(keyword, categoryId, brandName, status);
-
         return productRepository.findAll(spec, sortedPageable)
-                .map(this::buildManagementResponse);
+                .map(product -> {ProductManagementResponse response = productMapper.toManagementResponse(product);
+                    response.setTotalStock(getTotalStock(product));
+                    response.setBatchCount(getBatchCount(product));
+                    return response;});
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ProductDetailResponse getProductDetail(UUID productId) {
-        Product product = getProductEntityById(productId);
-        return buildDetailResponse(product);
+    public ProductDetailResponse getProductDetail(UUID productId) {Product product = getProductEntityById(productId);
+        ProductDetailResponse response = productMapper.toDetailResponse(product);
+        if (product.getCategory() != null) {
+            response.setCategoryId(product.getCategory().getCategoryId());
+            response.setCategoryName(product.getCategory().getName());
+        }
+        response.setTotalStock(getTotalStock(product));
+        response.setBatchCount(getBatchCount(product));
+        return response;
     }
 
     @Override
@@ -94,23 +102,19 @@ public class ProductServiceImpl implements ProductService {
     public ProductManagementResponse updateProduct(UUID productId, ProductUpdateRequest request, List<MultipartFile> images) {
         Product product = getProductEntityById(productId);
         List<MultipartFile> safeImages = images == null ? null : new ArrayList<>(images);
-        validateImageLimit(safeImages);
         if (request.getName() != null && !request.getName().isBlank()) {
             String newName = request.getName().trim();
-
             productRepository.findByNameIgnoreCase(newName)
                     .filter(existedProduct -> !existedProduct.getProductId().equals(productId))
                     .ifPresent(existedProduct -> {throw new AppException(ErrorCode.PRODUCT_EXISTED);});
-            product.setName(newName);
+            request.setName(newName);
         }
-        if (request.getDescription() != null) {product.setDescription(request.getDescription());}
-        if (request.getPrice() != null) {product.setPrice(request.getPrice());}
-        if (request.getBrandName() != null) {product.setBrandName(request.getBrandName());}
+        productMapper.updateProduct(product, request);
         if (request.getCategoryId() != null) {Category category = categoryService.getActiveCategoryEntityById(request.getCategoryId());product.setCategory(category);}
-        if (hasImages(safeImages)) {product.setImageUrls(fileService.uploadProductImages(safeImages));}
         if (request.getStatus() != null) {updateStatus(product, request.getStatus());}
+        setProductImages(product, safeImages);
         Product savedProduct = productRepository.save(product);
-        return buildManagementResponse(savedProduct);
+        return productMapper.toManagementResponse(savedProduct);
     }
 
     @Override
@@ -144,35 +148,21 @@ public class ProductServiceImpl implements ProductService {
         return productRepository.save(product);
     }
 
-    private boolean hasImages(List<MultipartFile> images) {
-        return images != null && images.stream().anyMatch(file -> file != null && !file.isEmpty());
-    }
-    private void validateImageLimit(List<MultipartFile> images) {
-        if (images == null || images.isEmpty()) {return;}
-        long validImageCount = images.stream().filter(file -> file != null && !file.isEmpty()).count();
-        if (validImageCount > 4) {throw new AppException(ErrorCode.PRODUCT_IMAGE_LIMIT_EXCEEDED);}
-    }
     private void updateStatus(Product product, ProductStatus status) {
 
         if (status == ProductStatus.DELETED
                 && productBatchRepository.existsByProduct_ProductIdAndStatusIn(
                 product.getProductId(),
                 List.of(ProductStatus.ACTIVE, ProductStatus.INACTIVE)
-        )) {
-            throw new AppException(ErrorCode.PRODUCT_HAS_BATCHES);
-        }
+        )) {throw new AppException(ErrorCode.PRODUCT_HAS_BATCHES);}
         product.setStatus(status);
-        if (status == ProductStatus.DELETED) {
-            product.setDeletedAt(LocalDateTime.now());
-        } else {product.setDeletedAt(null);}
+        if (status == ProductStatus.DELETED) {product.setDeletedAt(LocalDateTime.now());} else {product.setDeletedAt(null);}
     }
 
     private String generateProductCode() {
         String code;
         do {
-            code = "PRD" + UUID.randomUUID().toString()
-                    .replace("-", "")
-                    .substring(0, 6).toUpperCase();
+            code = "PRD" + UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase();
         } while (productRepository.existsByProductCode(code));
         return code;
     }
@@ -199,39 +189,6 @@ public class ProductServiceImpl implements ProductService {
         };
     }
 
-    private ProductPublicResponse buildPublicResponse(Product product) {
-        ProductPublicResponse response = productMapper.toPublicResponse(product);
-        response.setThumbnail(getThumbnail(product));
-        response.setTotalStock(getTotalStock(product));
-        return response;
-    }
-
-    private ProductManagementResponse buildManagementResponse(Product product) {
-        ProductManagementResponse response = productMapper.toManagementResponse(product);
-        response.setProductCode(product.getProductCode());
-        response.setThumbnail(getThumbnail(product));
-        response.setTotalStock(getTotalStock(product));
-        response.setBatchCount(getBatchCount(product));
-        return response;
-    }
-
-    private ProductDetailResponse buildDetailResponse(Product product) {
-        ProductDetailResponse response = productMapper.toDetailResponse(product);
-        response.setProductCode(product.getProductCode());
-        if (product.getCategory() != null) {
-            response.setCategoryId(product.getCategory().getCategoryId());
-            response.setCategoryName(product.getCategory().getName());
-        }
-        response.setTotalStock(getTotalStock(product));
-        response.setBatchCount(getBatchCount(product));
-        return response;
-    }
-
-    private String getThumbnail(Product product) {
-        if (product.getImageUrls() == null || product.getImageUrls().isEmpty()) {return null;}
-        return product.getImageUrls().getFirst();
-    }
-
     private Integer getTotalStock(Product product) {
         if (product.getBatches() == null) {return 0;}
         return product.getBatches()
@@ -240,6 +197,13 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private Integer getBatchCount(Product product) {if (product.getBatches() == null) {return 0;}
-        return (int) product.getBatches().stream().filter(batch -> batch.getStatus() != ProductStatus.DELETED).count();}
+        return (int) product.getBatches().stream().filter(batch -> batch.getStatus() != ProductStatus.DELETED).count();
+    }
 
+    private void setProductImages(Product product, List<MultipartFile> images) {
+        if (images == null || images.isEmpty()) {return;}
+        if (images.size() > 4) {throw new AppException(ErrorCode.PRODUCT_IMAGE_LIMIT_EXCEEDED);}
+        List<String> imageUrls = images.stream().filter(image -> image != null && !image.isEmpty()).map(fileService::uploadProductImage).toList();
+        if (!imageUrls.isEmpty()) {product.setImageUrls(imageUrls);}
+    }
 }

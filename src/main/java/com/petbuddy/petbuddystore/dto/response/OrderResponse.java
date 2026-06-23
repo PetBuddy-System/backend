@@ -22,4 +22,6 @@ public class OrderResponse {
      BigDecimal finalAmount;
 
      LocalDateTime createdAt;
+
+     LocalDateTime updatedAt;
 }

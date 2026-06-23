@@ -127,9 +127,13 @@ public class ProductBatchServiceImpl implements ProductBatchService {
     private String generateBatchCode(Product product, long nextNumber) {
         String code;
         do {
-            code = product.getProductCode() + "-B" + String.format("%02d", nextNumber++);
-        } while (productBatchRepository.existsByBatchCode(code));
-        return code;
+            long letterPart = (nextNumber - 1) / 999;
+            long numberPart = (nextNumber - 1) % 999 + 1;
+            char c1 = (char) ('A' + (letterPart / 26) % 26);
+            char c2 = (char) ('A' + letterPart % 26);
+            code = product.getProductCode() + "-" + c1 + c2 + String.format("%03d", numberPart);
+            nextNumber++;
+        } while (productBatchRepository.existsByBatchCode(code));return code;
     }
 
     private ProductBatch getBatchEntityById(UUID batchId) {
@@ -224,12 +228,7 @@ public class ProductBatchServiceImpl implements ProductBatchService {
             }
 
             if (!errors.isEmpty() || !confirm) {
-                return ProductImportResponse.builder()
-                        .canImport(errors.isEmpty())
-                        .createdProducts(0)
-                        .createdBatches(0)
-                        .warnings(warnings)
-                        .errors(errors).build();
+                return ProductImportResponse.builder().canImport(errors.isEmpty()).createdProducts(0).createdBatches(0).warnings(warnings).errors(errors).build();
             }
             int createdProducts = 0;
             int createdBatches = 0;
@@ -241,12 +240,7 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                     product = productService.createProductFromImport(row.name(),row.description(),row.price(),row.brandName(),row.category());
                     createdProducts++;
                 }
-
-                long nextNumber = batchCounter.computeIfAbsent(
-                        product.getProductId(),
-                        productId -> productBatchRepository.countByProduct_ProductId(productId) + 1
-                );
-
+                long nextNumber = batchCounter.computeIfAbsent(product.getProductId(), productId -> productBatchRepository.countByProduct_ProductId(productId) + 1);
                 ProductBatch batch = ProductBatch.builder()
                         .batchCode(generateBatchCode(product, nextNumber))
                         .product(product)

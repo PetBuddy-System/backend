@@ -35,7 +35,7 @@ public class ProductBatchController {
 
     ProductBatchService productBatchService;
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @PostMapping("/api/products/{productId}/batches")
     @Operation(summary = "Create product batches",
             description = "Tạo một hoặc nhiều lô hàng cho sản phẩm. Giới hạn tối đa 10 batch/lần tạo. BatchCode được backend tự sinh sau khi xác nhận."
@@ -73,7 +73,7 @@ public class ProductBatchController {
         return ResponseEntity.ok(ApiResponse.success(productBatchService.getBatchDetail(batchId)));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @PatchMapping("/api/batches/{batchId}")
     @Operation(summary = "Update product batch",
             description = "Cập nhật stock, expiryDate hoặc status của batch. Khi status = DELETED, batch được xóa mềm và có thể bị xóa vĩnh viễn sau 90 ngày."
@@ -82,7 +82,7 @@ public class ProductBatchController {
         return ResponseEntity.ok(ApiResponse.success("Product batch updated successfully", productBatchService.updateBatch(batchId, request)));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @PostMapping(value = "/api/products/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Import products and batches from Excel",
             description = "Import Excel theo cơ chế preview/confirm. confirm=false chỉ kiểm tra và trả warnings/errors, confirm=true mới tạo Product và ProductBatch thật."

@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.ProductCreationRequest;
@@ -24,6 +25,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,14 +37,12 @@ import java.util.UUID;
 public class ProductController {
 
     ProductService productService;
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    ObjectMapper objectMapper;
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Create product",
-            description = "Tạo mới thông tin sản phẩm. API này chỉ tạo phần Product, không xử lý lô hàng. Lô hàng sẽ được xử lý ở ProductBatch API.")
-    public ResponseEntity<ApiResponse<ProductManagementResponse>> createProduct(
-            @Valid @ModelAttribute ProductCreationRequest request,
-            @RequestPart(value = "images", required = false) List<MultipartFile> images
-    ) {
+    public ResponseEntity<ApiResponse<ProductManagementResponse>> createProduct(@RequestPart("data") String requestJson, @RequestPart(value = "images", required = false) List<MultipartFile> images) throws IOException {
+        ProductCreationRequest request = objectMapper.readValue(requestJson, ProductCreationRequest.class);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(
                         "Product created successfully",
@@ -91,14 +91,12 @@ public class ProductController {
         return ResponseEntity.ok( ApiResponse.success(productService.getProductDetail(productId)));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @PatchMapping(value = "/{productId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Update product", description = "Cập nhật thông tin sản phẩm.")
     public ResponseEntity<ApiResponse<ProductManagementResponse>> updateProduct(
-            @PathVariable UUID productId,
-            @Valid @ModelAttribute ProductUpdateRequest request,
-            @RequestPart(value = "images", required = false) List<MultipartFile> images
-    ) {
+            @PathVariable UUID productId, @RequestPart("data") String requestJson,
+            @RequestPart(value = "images", required = false) List<MultipartFile> images) throws IOException {
+        ProductUpdateRequest request = objectMapper.readValue(requestJson, ProductUpdateRequest.class);
         return ResponseEntity.ok(ApiResponse.success("Product updated successfully", productService.updateProduct(productId, request, images)));
     }
 }

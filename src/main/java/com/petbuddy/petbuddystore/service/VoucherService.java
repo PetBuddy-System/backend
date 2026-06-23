@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.service;
 
+import com.petbuddy.petbuddystore.common.enums.VoucherStatus;
 import com.petbuddy.petbuddystore.dto.request.VoucherRequest;
 import com.petbuddy.petbuddystore.dto.response.VoucherResponse;
 import org.springframework.data.domain.Page;
@@ -15,4 +16,6 @@ public interface VoucherService {
     Page<VoucherResponse> getAllVouchers(Pageable pageable);
 
     VoucherResponse getVoucherById(UUID id);
+
+    Page<VoucherResponse> getActiveVouchers(Pageable pageable);
 }

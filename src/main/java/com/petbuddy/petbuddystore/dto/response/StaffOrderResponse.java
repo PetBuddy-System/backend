@@ -15,11 +15,12 @@ import java.time.LocalDateTime;
 public class StaffOrderResponse {
     Long orderId;
     String orderCode;
-    String customerName;
-    String customerPhone;
+    String recipientName;
+    String phoneNumber;
     String address;
     String status;
     BigDecimal totalAmount;
-    LocalDateTime createAt;
+    LocalDateTime createdAt;
+    LocalDateTime updatedAt;
 
 }

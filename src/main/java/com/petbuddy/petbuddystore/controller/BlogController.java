@@ -42,11 +42,12 @@ public class BlogController {
 
     @GetMapping
     @Operation(description = "Phân trang danh sách blog")
-    public ResponseEntity<ApiResponse<Page<BlogResponse>>> getBlogs(
-            @RequestParam(required = false) String keyword, @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size ){
+    public ResponseEntity<ApiResponse<Page<BlogResponse>>> getBlogs(@RequestParam(required = false) String keyword,
+                                                                    @RequestParam(required = false) String label,
+                                                                    @RequestParam(defaultValue = "0") int page,
+                                                                    @RequestParam(defaultValue = "10") int size ){
         return ResponseEntity.status(HttpStatus.OK)
-                .body(ApiResponse.success(blogService.getBlogs(keyword, page, size)));
+                .body(ApiResponse.success(blogService.getBlogs(keyword, label, page, size)));
     }
 
     @GetMapping("/{blogId}")
