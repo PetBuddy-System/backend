@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @Transactional
@@ -84,7 +85,7 @@ public class OrderServiceImpl implements OrderService {
                     .order(order)
                     .product(product)
                     .productName(product.getName())
-//                    .productImage(product.getImageUrls().getFirst())
+                    .productImage(product.getImageUrls().getFirst())
                     .unitPrice(item.getPrice())
                     .quantity(item.getQuantity())
                     .totalPrice(item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
@@ -121,7 +122,8 @@ public class OrderServiceImpl implements OrderService {
         order.setTotalAmount(total);
         order.setFinalAmount(finalAmount);
         orderRepository.save(order);
-//        cartService.clearCart();
+        user.setCartData(null);
+        userRepository.save(user);
         return orderMapper.toOrderResponse(order);
     }
 
@@ -199,10 +201,10 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public Page<StaffOrderResponse> getAllOrder(Pageable pageable) {
+    public Page<OrderResponse> getAllOrder(Pageable pageable) {
         checkLogin();
         Page<Order> orders = orderRepository.findAll(pageable);
-        return orders.map(orderMapper::toStaffOrderResponse);
+        return orders.map(orderMapper::toOrderResponse);
     }
 
     @Override
@@ -232,24 +234,20 @@ public class OrderServiceImpl implements OrderService {
             if (remaining <= 0) {
                 break;
             }
-
             int picked = Math.min(batch.getStockQuantity(), remaining);
-
             result.add(PickingItemResponse.builder()
                             .productId(batch.getProduct().getProductId())
                             .name(batch.getProduct().getName())
+                            .imageUrl(batch.getProduct().getImageUrls().getFirst())
                             .expiryDate(batch.getExpiryDate())
                             .quantityToPick(picked)
                             .build()
             );
-
             remaining -= picked;
         }
-
         if(remaining > 0){
             throw new AppException(ErrorCode.PRODUCT_OUT_OF_STOCK);
         }
-
         return result;
     }
 
@@ -284,7 +282,9 @@ public class OrderServiceImpl implements OrderService {
                 );
     }
 
-    private String generateOrderCode() {return "OD" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));}
+    private String generateOrderCode() {
+        return "OD" + ThreadLocalRandom.current().nextInt(100000, 1000000);
+    }
 
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

@@ -18,6 +18,7 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -30,6 +31,7 @@ import java.time.LocalDate;
 public class WorkScheduleController {
     WorkScheduleService workScheduleService;
 
+    @PreAuthorize("hasRole('MANAGER')")
     @PostMapping()
     @Operation(description = "Tạo mới lịch làm việc")
     public ResponseEntity<ApiResponse<WorkScheduleResponse>> createWorkSchedule(@RequestBody @Valid WorkScheduleCreationRequest request) {
@@ -37,6 +39,7 @@ public class WorkScheduleController {
                 .body(ApiResponse.success("Work schedule created successfully", workScheduleService.createWorkSchedule(request)));
     }
 
+    @PreAuthorize("hasRole('MANAGER')")
     @GetMapping("/{workScheduleId}")
     @Operation(description = "Lấy thông tin chi tiết lịch làm việc theo id")
     public ResponseEntity<ApiResponse<WorkScheduleResponse>> getWorkScheduleById(@PathVariable String workScheduleId) {
@@ -44,6 +47,7 @@ public class WorkScheduleController {
                 .body(ApiResponse.success(workScheduleService.getWorkScheduleById(workScheduleId)));
     }
 
+    @PreAuthorize("hasRole('MANAGER')")
     @GetMapping()
     @Operation(description = "Lấy tất cả lịch làm việc có phân trang, filter theo date, theo shiftype")
     public ResponseEntity<ApiResponse<Page<WorkScheduleResponse>>> getWorkSchedules(@RequestParam(required = false) LocalDate fromDate,
@@ -55,6 +59,7 @@ public class WorkScheduleController {
                 .body(ApiResponse.success(workScheduleService.getWorkSchedules(fromDate, toDate, shiftType, page, size)));
     }
 
+    @PreAuthorize("hasRole('MANAGER')")
     @PutMapping("/{workScheduleId}")
     @Operation(description = "Update thông tin lịch làm việc theo id")
     public ResponseEntity<ApiResponse<WorkScheduleResponse>> updateWorkSchedule(@PathVariable String workScheduleId,
@@ -63,6 +68,7 @@ public class WorkScheduleController {
                 .body(ApiResponse.success("Work schedule updated successfully",workScheduleService.updateWorkSchedule(workScheduleId, request)));
     }
 
+    @PreAuthorize("hasRole('MANAGER')")
     @PostMapping("/{workScheduleId}/staff")
     @Operation(description = "Thêm các staff mới vào lịch làm việc đã có")
     public ResponseEntity<ApiResponse<WorkScheduleResponse>> assignStaffsToWorkSchedule(@PathVariable String workScheduleId,
@@ -71,6 +77,7 @@ public class WorkScheduleController {
                 .body(ApiResponse.success("Staffs assigned successfully",workScheduleService.assignStaffsToWorkSchedule(workScheduleId, request)));
     }
 
+    @PreAuthorize("hasRole('MANAGER')")
     @PatchMapping("/staff-schedules/{staffScheduleId}/remove")
     @Operation(description = "Xóa mềm staff khỏi lịch làm với status = CANCELLED")
     public ResponseEntity<ApiResponse<Void>> removeStaffFromWorkSchedule(@PathVariable String staffScheduleId) {
@@ -79,6 +86,7 @@ public class WorkScheduleController {
                 .body(ApiResponse.success("Staff removed successfully",null));
     }
 
+    @PreAuthorize("hasRole('MANAGER')")
     @PatchMapping("/staff-schedules/{staffScheduleId}/reassign")
     @Operation(description = "Thay staff mới cho staff cũ vào lịch làm việc")
     public ResponseEntity<ApiResponse<StaffScheduleResponse>> reassignStaffToWorkSchedule(@PathVariable String staffScheduleId,

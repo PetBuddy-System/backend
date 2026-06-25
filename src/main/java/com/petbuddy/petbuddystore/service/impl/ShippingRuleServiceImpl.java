@@ -19,9 +19,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ShippingRuleServiceImpl implements ShippingRuleService {
 
-    private static final double THU_DUC_CENTER_LAT = 10.850;
-    private static final double THU_DUC_CENTER_LON = 106.770;
-
     private static final double FREE_SHIP_RADIUS = 5.0;
 
     private static final double STORE_LAT = 10.776889;

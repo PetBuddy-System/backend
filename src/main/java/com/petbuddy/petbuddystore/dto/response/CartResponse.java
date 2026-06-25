@@ -13,7 +13,7 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ToString
 public class CartResponse {
-    private String userId;
+    String userId;
 
-    private List<CartItemResponse> items;
+    List<CartItemResponse> items;
 }

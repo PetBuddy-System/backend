@@ -1,19 +1,20 @@
-package com.petbuddy.petbuddystore.dto.response;
+package com.petbuddy.petbuddystore.dto.cart;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import org.springframework.boot.web.servlet.FilterRegistration;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ToString
-public class CartItemResponse {
+public class CartItemData {
     UUID cartItemId;
 
     UUID productId;

@@ -15,6 +15,7 @@ import java.util.UUID;
 public class PickingItemResponse  {
     UUID productId;
     String name;
+    String imageUrl;
     LocalDate expiryDate;
     Integer quantityToPick;
 }

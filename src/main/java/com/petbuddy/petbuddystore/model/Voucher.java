@@ -5,6 +5,7 @@ import com.petbuddy.petbuddystore.common.enums.DiscountType;
 import com.petbuddy.petbuddystore.common.enums.VoucherStatus;
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -18,57 +19,58 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class Voucher {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "voucher_id")
-    private UUID voucherId;
+     UUID voucherId;
 
     @Column(name = "voucher_code", nullable = false, unique = true)
-    private String voucherCode;
+     String voucherCode;
 
     @Column(name = "voucher_name")
-    private String voucherName;
+     String voucherName;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "discount_type")
-    private DiscountType discountType;
+     DiscountType discountType;
 
     @Column(name = "discount_value", precision = 10, scale = 2)
-    private BigDecimal discountValue;
+     BigDecimal discountValue;
 
     @Column(name = "max_discount", precision = 10, scale = 2)
-    private BigDecimal maxDiscount;
+     BigDecimal maxDiscount;
 
     @Column(name = "min_order_value", precision = 10, scale = 2)
-    private BigDecimal minOrderValue;
+     BigDecimal minOrderValue;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "apply_scope")
-    private ApplyScope applyScope;
+     ApplyScope applyScope;
 
     @Column(name = "usage_limit")
-    private Integer usageLimit;
+     Integer usageLimit;
 
     @Column(name = "used_count")
-    private Integer usedCount;
+     Integer usedCount;
 
     @Column(name = "per_user_limit")
-    private Integer perUserLimit;
+     Integer perUserLimit;
 
     @Column(name = "start_at")
-    private LocalDateTime startAt;
+     LocalDateTime startAt;
 
     @Column(name = "end_at")
-    private LocalDateTime expiredAt;
+     LocalDateTime expiredAt;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
-    private VoucherStatus status;
+     VoucherStatus status;
 
     @Column(name = "created_at")
-    private LocalDateTime createdAt;
+     LocalDateTime createdAt;
 
     @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+     LocalDateTime updatedAt;
 }

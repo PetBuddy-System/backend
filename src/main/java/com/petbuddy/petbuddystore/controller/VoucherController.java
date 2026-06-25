@@ -5,7 +5,9 @@ import com.petbuddy.petbuddystore.dto.request.VoucherRequest;
 import com.petbuddy.petbuddystore.dto.response.VoucherResponse;
 import com.petbuddy.petbuddystore.service.VoucherService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -21,8 +23,9 @@ import java.util.UUID;
 @RequestMapping("/api/vouchers")
 @RequiredArgsConstructor
 @Tag(name = "Voucher API", description = "Quản lý voucher giảm giá")
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class VoucherController {
-    private final VoucherService voucherService;
+    VoucherService voucherService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

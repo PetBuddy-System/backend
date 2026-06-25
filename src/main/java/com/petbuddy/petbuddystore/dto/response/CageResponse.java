@@ -17,8 +17,8 @@ public class CageResponse {
     Long cageId;
     String cageCode;
     CageSize cageSize;
-    Integer capacity;
     CageStatus cageStatus;
+    String note;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 }

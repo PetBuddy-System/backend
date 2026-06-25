@@ -5,7 +5,6 @@ import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.CreateOrderRequest;
 import com.petbuddy.petbuddystore.dto.response.OrderResponse;
 import com.petbuddy.petbuddystore.dto.response.PickingItemResponse;
-import com.petbuddy.petbuddystore.dto.response.StaffOrderResponse;
 import com.petbuddy.petbuddystore.service.OrderService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AccessLevel;
@@ -71,7 +70,7 @@ public class OrderController {
 
     @PreAuthorize("hasRole('STAFF')")
     @GetMapping("/all")
-    public ResponseEntity<ApiResponse<Page<StaffOrderResponse>>> getAllOrders(Pageable pageable) {
+    public ResponseEntity<ApiResponse<Page<OrderResponse>>> getAllOrders(Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success("Orders retrieved successfully", orderService.getAllOrder(pageable)));
     }
 }

@@ -5,6 +5,7 @@ import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -17,6 +18,10 @@ public class OrderResponse {
 
      String orderCode;
 
+    String recipientName;
+    String phoneNumber;
+    String address;
+
      String status;
 
      BigDecimal finalAmount;
@@ -24,4 +29,6 @@ public class OrderResponse {
      LocalDateTime createdAt;
 
      LocalDateTime updatedAt;
+
+     List<OrderDetailResponse> orderDetails;
 }

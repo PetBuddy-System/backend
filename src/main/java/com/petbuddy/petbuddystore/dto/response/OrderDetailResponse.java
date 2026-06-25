@@ -1,9 +1,13 @@
 package com.petbuddy.petbuddystore.dto.response;
 
+import com.petbuddy.petbuddystore.model.Order;
+import com.petbuddy.petbuddystore.model.Product;
+import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -12,19 +16,20 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@ToString
-public class CartItemResponse {
-    UUID cartItemId;
+public class OrderDetailResponse {
+    Long orderDetailId;
 
     UUID productId;
 
     String productName;
 
-    BigDecimal price;
+    String productImage;
+
+    BigDecimal unitPrice;
 
     Integer quantity;
 
-    String imageUrl;
+    BigDecimal totalPrice;
 
-    BigDecimal subtotal;
+    LocalDateTime createdAt;
 }

@@ -10,7 +10,9 @@ import com.petbuddy.petbuddystore.model.Voucher;
 import com.petbuddy.petbuddystore.repository.VoucherRepository;
 import com.petbuddy.petbuddystore.service.VoucherService;
 import jakarta.transaction.Transactional;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -21,10 +23,11 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class VoucherServiceImpl implements VoucherService {
 
-    private final VoucherRepository voucherRepository;
-    private final VoucherMapper voucherMapper;
+    VoucherRepository voucherRepository;
+    VoucherMapper voucherMapper;
 
 
     public VoucherResponse createVoucher(VoucherRequest request) {

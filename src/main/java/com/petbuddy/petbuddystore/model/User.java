@@ -46,6 +46,9 @@ public class User {
     @Enumerated(EnumType.STRING)
     Role role;
 
+    @Column(name = "cart_data", columnDefinition = "JSON")
+    String cartData;
+
     @Enumerated(EnumType.STRING)
     UserStatus status;
 

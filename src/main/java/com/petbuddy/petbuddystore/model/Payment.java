@@ -20,8 +20,7 @@ public class Payment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long paymentId;
 
-    @OneToOne(mappedBy = "payment",  cascade = CascadeType.ALL, orphanRemoval = true)
-    @JoinColumn(name = "order_id")
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
     Order order;
 
     @Enumerated(EnumType.STRING)

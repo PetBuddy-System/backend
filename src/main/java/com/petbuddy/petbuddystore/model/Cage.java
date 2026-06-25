@@ -30,11 +30,10 @@ public class Cage {
     @Enumerated(EnumType.STRING)
     CageSize cageSize;
 
-    @Column(nullable = false)
-    Integer capacity;
-
     @Enumerated(EnumType.STRING)
     CageStatus cageStatus;
+
+    String note;
 
     @CreationTimestamp
     @Column(updatable = false)

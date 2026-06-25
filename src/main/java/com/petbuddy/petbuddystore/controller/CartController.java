@@ -2,6 +2,7 @@ package com.petbuddy.petbuddystore.controller;
 
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.AddToCartRequest;
+import com.petbuddy.petbuddystore.dto.request.MergeCartRequest;
 import com.petbuddy.petbuddystore.dto.request.UpdateCartItemRequest;
 import com.petbuddy.petbuddystore.dto.response.CartResponse;
 import com.petbuddy.petbuddystore.service.CartService;
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -20,9 +22,10 @@ import java.util.UUID;
 @RequestMapping("/api/cart")
 @RequiredArgsConstructor
 @Tag(name = "Cart API", description = "Quản lý giỏ hàng")
+@FieldDefaults(level = lombok.AccessLevel.PRIVATE, makeFinal = true)
 public class CartController {
 
-    private final CartService cartService;
+    CartService cartService;
 
     @PreAuthorize("hasRole('CUSTOMER')")
     @PostMapping("/items")
@@ -72,5 +75,13 @@ public class CartController {
 
         return ResponseEntity.ok(
                 ApiResponse.success("Cart cleared successfully", null));
+    }
+
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @Operation(description = "Merge guest cart vào cart của user sau khi login")
+    @PostMapping("/merge")
+    public ResponseEntity<ApiResponse<CartResponse>> mergeCart(@RequestBody MergeCartRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.success("Cart merged successfully", cartService.mergeCart(request)));
     }
 }

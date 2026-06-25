@@ -2,13 +2,13 @@ package com.petbuddy.petbuddystore.mapper;
 
 import com.petbuddy.petbuddystore.dto.response.CartItemResponse;
 import com.petbuddy.petbuddystore.dto.response.CartResponse;
-import com.petbuddy.petbuddystore.session.CartItemSession;
-import com.petbuddy.petbuddystore.session.CartSession;
+import com.petbuddy.petbuddystore.dto.cart.CartItemData;
+import com.petbuddy.petbuddystore.dto.cart.CartData;
 import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")
 public interface CartMapper {
-    CartResponse toCartResponse(CartSession cartSession);
+    CartResponse toCartResponse(CartData cartData);
 
-    CartItemResponse toCartItemResponse(CartItemSession item);
+    CartItemResponse toCartItemResponse(CartItemData item);
 }
