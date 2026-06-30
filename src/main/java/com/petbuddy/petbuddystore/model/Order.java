@@ -61,7 +61,6 @@ public class Order {
     List<OrderDetail> orderDetails = new ArrayList<>();
 
     @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
-    @JoinColumn(name = "payment_id")
     Payment payment;
 
     @Enumerated(EnumType.STRING)

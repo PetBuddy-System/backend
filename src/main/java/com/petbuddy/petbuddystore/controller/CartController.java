@@ -57,11 +57,9 @@ public class CartController {
     @PreAuthorize("hasRole('CUSTOMER')")
     @Operation(description = "Remove product from cart")
     @DeleteMapping("/items/{productId}")
-    public ResponseEntity<ApiResponse<Void>> removeItem(
-            @PathVariable UUID productId) {
+    public ResponseEntity<ApiResponse<Void>> removeItem(@PathVariable UUID productId) {
 
         cartService.removeItem(productId);
-
         return ResponseEntity.ok(
                 ApiResponse.success("Product removed from cart successfully", null));
     }
@@ -72,7 +70,6 @@ public class CartController {
     public ResponseEntity<ApiResponse<Void>> clearCart() {
 
         cartService.clearCart();
-
         return ResponseEntity.ok(
                 ApiResponse.success("Cart cleared successfully", null));
     }

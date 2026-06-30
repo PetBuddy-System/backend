@@ -3,6 +3,7 @@ package com.petbuddy.petbuddystore.model;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -41,5 +42,7 @@ public class OrderDetail {
 
     BigDecimal totalPrice;
 
+    @CreationTimestamp
+    @Column(updatable = false)
     LocalDateTime createdAt;
 }

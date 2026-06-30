@@ -17,6 +17,5 @@ public interface CartService {
     void clearCart();
 
     void updateCart(UUID cartItemId, UpdateCartItemRequest request);
-
     CartResponse mergeCart(MergeCartRequest request);
 }

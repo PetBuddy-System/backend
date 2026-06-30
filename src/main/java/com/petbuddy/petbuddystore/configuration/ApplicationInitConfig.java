@@ -26,7 +26,7 @@ public class ApplicationInitConfig {
             if (userRepository.findByEmail("admin@gmail.com").isEmpty()) {
                 User user = User.builder()
                         .email("admin@gmail.com")
-                        .password(passwordEncoder.encode("admin"))
+                        .password(passwordEncoder.encode("Admin@1234"))
                         .fullName("Admin")
                         .role(Role.ADMIN)
                         .status(UserStatus.ACTIVE)
@@ -38,7 +38,7 @@ public class ApplicationInitConfig {
             if (userRepository.findByEmail("manager@gmail.com").isEmpty()) {
                 User user = User.builder()
                         .email("manager@gmail.com")
-                        .password(passwordEncoder.encode("manager"))
+                        .password(passwordEncoder.encode("Manager@1234"))
                         .fullName("Manager")
                         .role(Role.MANAGER)
                         .status(UserStatus.ACTIVE)
@@ -50,7 +50,7 @@ public class ApplicationInitConfig {
             if (userRepository.findByEmail("staff@gmail.com").isEmpty()) {
                 User user = User.builder()
                         .email("staff@gmail.com")
-                        .password(passwordEncoder.encode("staff"))
+                        .password(passwordEncoder.encode("Staff@1234"))
                         .fullName("Staff")
                         .role(Role.STAFF)
                         .status(UserStatus.ACTIVE)
@@ -62,7 +62,7 @@ public class ApplicationInitConfig {
             if (userRepository.findByEmail("user@gmail.com").isEmpty()) {
                 User user = User.builder()
                         .email("user@gmail.com")
-                        .password(passwordEncoder.encode("user"))
+                        .password(passwordEncoder.encode("User@1234"))
                         .fullName("User")
                         .role(Role.CUSTOMER)
                         .status(UserStatus.ACTIVE)

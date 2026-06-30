@@ -1,24 +1,27 @@
 package com.petbuddy.petbuddystore.model;
 
 import com.petbuddy.petbuddystore.common.enums.PetStatus;
-import com.petbuddy.petbuddystore.common.enums.UserStatus;
+import com.petbuddy.petbuddystore.common.enums.VaccinationStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
-@Table(name = "pets")
+@Table(name = "pet_profiles")
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
 @Setter
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class Pet {
+public class PetProfile {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "pet_id")
@@ -35,7 +38,8 @@ public class Pet {
 
     String gender;
 
-    Integer age;
+    @Column(name = "date_of_birth")
+    LocalDate dateOfBirth;
 
     Double weight;
 
@@ -44,10 +48,15 @@ public class Pet {
     @Column(name = "health_note", columnDefinition = "TEXT")
     String healthNote;
 
+    @Column(name = "allergy_note", columnDefinition = "TEXT")
+    String allergyNote;
+
     @Column(name = "behavior_note", columnDefinition = "TEXT")
     String behaviorNote;
 
-    String avatarUrl;
+    @Column(name = "vaccination_status")
+    @Enumerated(EnumType.STRING)
+    VaccinationStatus vaccinationStatus;
 
     @Enumerated(EnumType.STRING)
     PetStatus petStatus;
@@ -63,5 +72,6 @@ public class Pet {
     @JoinColumn(name = "user_id", nullable = false)
     User user;
 
-
+    @OneToMany(mappedBy = "petProfile", cascade = CascadeType.ALL, orphanRemoval = true)
+    List<MediaFile> mediaFiles = new ArrayList<>();
 }

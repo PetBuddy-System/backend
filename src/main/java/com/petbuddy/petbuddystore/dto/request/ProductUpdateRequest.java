@@ -18,10 +18,19 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProductUpdateRequest {
+    @Size(max = 255)
     String name;
 
+    @Size(max = 2000)
     String description;
 
+    @Size(max = 1000)
+    String ingredients;
+
+    @Size(max = 1000)
+    String usageInstructions;
+
+    @DecimalMin(value = "0.01")
     BigDecimal price;
 
     String brandName;

@@ -2,9 +2,9 @@ package com.petbuddy.petbuddystore.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
-import com.petbuddy.petbuddystore.dto.request.PetCreationRequest;
-import com.petbuddy.petbuddystore.dto.request.PetUpdateRequest;
-import com.petbuddy.petbuddystore.dto.response.PetResponse;
+import com.petbuddy.petbuddystore.dto.request.PetProfileCreationRequest;
+import com.petbuddy.petbuddystore.dto.request.PetProfileUpdateRequest;
+import com.petbuddy.petbuddystore.dto.response.PetProfileResponse;
 import com.petbuddy.petbuddystore.service.PetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -30,29 +31,29 @@ public class PetController {
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(description = "Tạo mới hồ sơ Pet")
-    public ResponseEntity<ApiResponse<PetResponse>> createPet(@RequestPart("data") String requestJson,
-                                                               @RequestPart(value = "image", required = false) MultipartFile image) throws IOException {
-        PetCreationRequest request = objectMapper.readValue(requestJson, PetCreationRequest.class);
-        PetResponse response = petService.createPet(request, image);
+    public ResponseEntity<ApiResponse<PetProfileResponse>> createPet(@RequestPart("data") String requestJson,
+                                                                     @RequestPart(value = "images", required = false) List<MultipartFile> images) throws IOException {
+        PetProfileCreationRequest request = objectMapper.readValue(requestJson, PetProfileCreationRequest.class);
+        PetProfileResponse response = petService.createPet(request, images);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Pet created successfully", response));
     }
 
     @GetMapping("/{petId}")
     @Operation(description = "Tìm pet theo id")
-    public ResponseEntity<ApiResponse<PetResponse>> getPetById(@PathVariable String petId){
+    public ResponseEntity<ApiResponse<PetProfileResponse>> getPetById(@PathVariable String petId){
         return ResponseEntity.status(HttpStatus.OK)
                 .body(ApiResponse.success(petService.getPetById(petId)));
     }
 
     @PutMapping(value = "/{petId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<PetResponse>> updatePet(
+    public ResponseEntity<ApiResponse<PetProfileResponse>> updatePet(
             @PathVariable String petId,
             @RequestPart("data") String requestJson,
-            @RequestPart(value = "image", required = false) MultipartFile image) throws IOException {
+            @RequestPart(value = "images", required = false) List<MultipartFile> images) throws IOException {
 
-        PetUpdateRequest request = objectMapper.readValue(requestJson, PetUpdateRequest.class);
-        PetResponse response = petService.updatePet(petId, request, image);
+        PetProfileUpdateRequest request = objectMapper.readValue(requestJson, PetProfileUpdateRequest.class);
+        PetProfileResponse response = petService.updatePet(petId, request, images);
         return ResponseEntity.status(HttpStatus.OK)
                 .body(ApiResponse.success("Pet updated successfully", response));
     }

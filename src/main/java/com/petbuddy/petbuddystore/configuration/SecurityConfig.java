@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -22,12 +23,12 @@ import java.util.List;
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
-    private final String[] PUBLIC_ENDPOINTS = {"/api/users", "/api/auth/signup", "/api/auth/login",
-            "/api/auth/logout", "/api/auth/introspect", "/api/auth/refresh", "/api/auth/verify-email",
-            "/api/auth/resend-otp", "/api/auth/forgot-password", "/api/auth/reset-password"};
+    private final String[] PUBLIC_POST_ENDPOINTS = {"/api/users", "/api/auth/signup", "/api/auth/login",
+            "/api/auth/introspect", "/api/auth/refresh", "/api/auth/verify-email", "/api/auth/resend-otp",
+            "/api/auth/forgot-password", "/api/auth/reset-password"};
 
-    private final String[] GET_ENDPOINTS = {"/api/categories", "/api/categories/{categoryId}", "/api/products",
-            "/api/products/{productId}", "/api/blogs", "/api/blogs/**"
+    private final String[] PUBLIC_GET_ENDPOINTS = {"/api/categories", "/api/categories/{categoryId}", "/api/products",
+            "/api/products/{productId}", "/api/blogs", "/api/blogs/**", "/api/auth/outbound/authentication"
     };
 
     private static final String[] PUBLIC_ENDPOINTS_SWAGGER = {
@@ -39,14 +40,17 @@ public class SecurityConfig {
             "/pet-buddy/swagger-ui.html",
     };
 
+    private static final String[] STRIPE_WEBHOOK_ENDPOINT = {"/api/payments/webhook"};
+
     private final CustomJwtDecoder customJwtDecoder;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity.authorizeHttpRequests(auth ->
-                auth.requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS).permitAll()
-                        .requestMatchers(HttpMethod.GET, GET_ENDPOINTS).permitAll()
+                auth.requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
+                        .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS_SWAGGER).permitAll()
+                        .requestMatchers(HttpMethod.POST, STRIPE_WEBHOOK_ENDPOINT).permitAll()
                         .anyRequest().authenticated());
 
         httpSecurity.oauth2ResourceServer(oauth2 ->
@@ -56,6 +60,8 @@ public class SecurityConfig {
                         )
                         .authenticationEntryPoint(new JwtAuthenticationEntryPoint())
         );
+
+//        httpSecurity.oauth2Login(Customizer.withDefaults());
 
         httpSecurity.csrf(AbstractHttpConfigurer::disable);
         httpSecurity.cors(cors -> cors.configurationSource(corsConfigurationSource()));

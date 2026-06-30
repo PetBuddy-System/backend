@@ -8,17 +8,18 @@ import com.petbuddy.petbuddystore.dto.response.AuthenticationResponse;
 import com.petbuddy.petbuddystore.service.AuthenticationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.util.UriComponentsBuilder;
 
+import java.io.IOException;
 import java.text.ParseException;
 
 @RestController
@@ -42,6 +43,20 @@ public class AuthenticationController {
     public ResponseEntity<ApiResponse<AuthenticationResponse>> authenticate(@RequestBody AuthenticationRequest request){
         return ResponseEntity.status(HttpStatus.OK)
                 .body(ApiResponse.success("Login successfully", authenticationService.authenticate(request)));
+    }
+
+    @GetMapping("/outbound/authentication")
+    @Operation(description = "Login with Google")
+    public void outboundAuthenticate(@RequestParam("code") String code, HttpServletResponse response) throws IOException {
+        AuthenticationResponse authResponse = authenticationService.outboundAuthenticate(code);
+        String redirectUrl = UriComponentsBuilder
+                .fromUriString("http://localhost:5173/oauth2/success")
+                .queryParam("accessToken", authResponse.getAccessToken())
+                .queryParam("refreshToken", authResponse.getRefreshToken())
+                .build()
+                .toUriString();
+
+        response.sendRedirect(redirectUrl);
     }
 
     @PostMapping("/logout")

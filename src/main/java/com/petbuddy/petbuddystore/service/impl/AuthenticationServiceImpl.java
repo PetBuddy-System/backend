@@ -5,13 +5,16 @@ import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import com.petbuddy.petbuddystore.common.enums.AuthProvider;
 import com.petbuddy.petbuddystore.common.enums.Role;
 import com.petbuddy.petbuddystore.common.enums.UserStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.*;
 import com.petbuddy.petbuddystore.dto.response.AuthenticationResponse;
+import com.petbuddy.petbuddystore.dto.response.GoogleUserInfoResponse;
 import com.petbuddy.petbuddystore.dto.response.IntrospectResponse;
+import com.petbuddy.petbuddystore.dto.response.OutboundTokenResponse;
 import com.petbuddy.petbuddystore.mapper.UserMapper;
 import com.petbuddy.petbuddystore.model.InvalidatedToken;
 import com.petbuddy.petbuddystore.model.User;
@@ -26,11 +29,14 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.text.ParseException;
 import java.time.Instant;
@@ -49,10 +55,31 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     InvalidatedTokenRepository invalidatedTokenRepository;
     OtpService otpService;
     EmailService emailService;
+    RestClient restClient;
 
     @NonFinal
     @Value("${jwt.signerKey}")
     protected String SIGNER_KEY;
+
+    @NonFinal
+    @Value("${outbound.identity.google.client-id}")
+    protected String GOOGLE_CLIENT_ID;
+
+    @NonFinal
+    @Value("${outbound.identity.google.client-secret}")
+    protected String GOOGLE_CLIENT_SECRET;
+
+    @NonFinal
+    @Value("${outbound.identity.google.redirect-uri}")
+    protected String GOOGLE_REDIRECT_URI;
+
+    @NonFinal
+    @Value("${outbound.identity.google.token-uri}")
+    protected String GOOGLE_TOKEN_URI;
+
+    @NonFinal
+    @Value("${outbound.identity.google.user-info-uri}")
+    protected String GOOGLE_USER_INFO_URI;
 
     private void validateUserCreation(UserCreationRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -82,6 +109,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         user.setStatus(UserStatus.PENDING);
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         user.setRole(role);
+        user.setAuthProvider(AuthProvider.LOCAL);
         userRepository.save(user);
 
         String otp = otpService.generateOtp(user.getEmail());
@@ -94,7 +122,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
         validateUserStatus(user);
-        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
         boolean authenticated = passwordEncoder.matches(request.getPassword(), user.getPassword());
 
         if (!authenticated) {
@@ -103,6 +130,81 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         var accessToken = generateAccessToken(user);
         var refreshToken = generateRefreshToken(user);
+        return AuthenticationResponse.builder()
+                .authenticated(true)
+                .userResponse(userMapper.toUserResponse(user))
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse outboundAuthenticate(String code) {
+        String requestBody = UriComponentsBuilder.newInstance()
+                .queryParam("code", code)
+                .queryParam("client_id", GOOGLE_CLIENT_ID)
+                .queryParam("client_secret", GOOGLE_CLIENT_SECRET)
+                .queryParam("redirect_uri", GOOGLE_REDIRECT_URI)
+                .queryParam("grant_type", "authorization_code")
+                .build()
+                .getQuery();
+
+        OutboundTokenResponse tokenResponse = restClient.post()
+                .uri(GOOGLE_TOKEN_URI)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(requestBody)
+                .retrieve()
+                .body(OutboundTokenResponse.class);
+
+        if (tokenResponse == null || tokenResponse.getAccessToken() == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        GoogleUserInfoResponse googleUser = restClient.get()
+                .uri(GOOGLE_USER_INFO_URI)
+                .headers(headers -> headers.setBearerAuth(tokenResponse.getAccessToken()))
+                .retrieve()
+                .body(GoogleUserInfoResponse.class);
+
+        if (googleUser == null || googleUser.getEmail() == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        if (!Boolean.TRUE.equals(googleUser.getEmailVerified())) {
+            throw new AppException(ErrorCode.USER_NOT_VERIFIED);
+        }
+
+        User user = userRepository.findByEmail(googleUser.getEmail())
+                .map(existingUser -> {
+                    switch (existingUser.getStatus()) {
+                        case SUSPENDED -> throw new AppException(ErrorCode.USER_SUSPENDED);
+                        case DELETED -> throw new AppException(ErrorCode.USER_DELETED);
+                        case INACTIVE -> throw new AppException(ErrorCode.USER_INACTIVE);
+                        case PENDING -> existingUser.setStatus(UserStatus.ACTIVE);
+                        case ACTIVE -> {}
+                        default -> throw new AppException(ErrorCode.UNAUTHENTICATED);
+                    }
+
+                    if (existingUser.getFullName() == null || existingUser.getFullName().isBlank()) {
+                        existingUser.setFullName(googleUser.getName());
+                    }
+                    return existingUser;
+                })
+                .orElseGet(() -> User.builder()
+                            .email(googleUser.getEmail())
+                            .fullName(googleUser.getName())
+                            .password(passwordEncoder.encode(UUID.randomUUID().toString()))
+                            .role(Role.CUSTOMER)
+                            .status(UserStatus.ACTIVE)
+                            .authProvider(AuthProvider.GOOGLE)
+                            .build()
+                );
+
+        userRepository.save(user);
+        String accessToken = generateAccessToken(user);
+        String refreshToken = generateRefreshToken(user);
+
         return AuthenticationResponse.builder()
                 .authenticated(true)
                 .userResponse(userMapper.toUserResponse(user))
@@ -256,7 +358,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         Date expirationTime = signedJWT.getJWTClaimsSet().getExpirationTime();
         var verified = signedJWT.verify(verifier);
 
-        if (!verified && expirationTime.after(new Date())){
+        if (!verified || expirationTime.before(new Date())){
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
 

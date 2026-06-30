@@ -14,21 +14,14 @@ import java.util.List;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class OrderResponse {
-     Long orderId;
-
-     String orderCode;
-
+    Long orderId;
+    String orderCode;
     String recipientName;
     String phoneNumber;
     String address;
-
-     String status;
-
-     BigDecimal finalAmount;
-
-     LocalDateTime createdAt;
-
-     LocalDateTime updatedAt;
-
-     List<OrderDetailResponse> orderDetails;
+    String status;
+    BigDecimal finalAmount;
+    LocalDateTime createdAt;
+    LocalDateTime updatedAt;
+    List<OrderDetailResponse> orderDetails;
 }

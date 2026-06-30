@@ -19,4 +19,5 @@ public interface AuthenticationService {
     void changePassword(PasswordUpdateRequest request);
     void resetPassword(ResetPasswordRequest request);
     void forgotPassword(OtpRequest request);
+    AuthenticationResponse outboundAuthenticate(String code);
 }

@@ -36,11 +36,17 @@ public class Product {
     String productCode;
 
     @NotBlank(message = "PRODUCT_NAME_REQUIRED")
-    @Column(nullable = false, unique = true, columnDefinition = "NVARCHAR(255)")
+    @Column(nullable = false, columnDefinition = "NVARCHAR(255)")
     String name;
 
     @Column(columnDefinition = "NVARCHAR(2000)")
     String description;
+
+    @Column(columnDefinition = "NVARCHAR(1000)")
+    private String ingredients;
+
+    @Column(columnDefinition = "NVARCHAR(1000)")
+    private String usageInstructions;
 
     @NotNull(message = "PRODUCT_PRICE_REQUIRED")
     @DecimalMin(value = "0.0", inclusive = false, message = "PRODUCT_PRICE_INVALID")
@@ -61,8 +67,11 @@ public class Product {
     @JoinColumn(name = "category_id")
     Category category;
 
+//    @Builder.Default
+//    List<String> imageUrls = new ArrayList<>();
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    List<String> imageUrls = new ArrayList<>();
+    List<MediaFile> mediaFiles = new ArrayList<>();
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
@@ -74,4 +83,11 @@ public class Product {
 
     @UpdateTimestamp
     LocalDateTime updatedAt;
+
+    @Builder.Default
+    Long lastBatchSequence = 0L;
+
+    @OneToMany(mappedBy = "product")
+    @Builder.Default
+    List<PromotionDetail> promotionDetails = new ArrayList<>();
 }

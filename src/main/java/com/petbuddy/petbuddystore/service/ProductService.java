@@ -3,10 +3,10 @@ package com.petbuddy.petbuddystore.service;
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import com.petbuddy.petbuddystore.dto.request.ProductCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductUpdateRequest;
-import com.petbuddy.petbuddystore.dto.response.ProductDetailResponse;
 import com.petbuddy.petbuddystore.dto.response.ProductManagementResponse;
 import com.petbuddy.petbuddystore.dto.response.ProductPublicResponse;
 import com.petbuddy.petbuddystore.model.Category;
+import com.petbuddy.petbuddystore.model.MediaFile;
 import com.petbuddy.petbuddystore.model.Product;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,9 +22,11 @@ public interface ProductService {
 
     Page<ProductPublicResponse> getProductsForUser(String keyword, Long categoryId, String brandName, String sortBy, Pageable pageable);
 
-    Page<ProductManagementResponse> getProductsForManagement(String keyword, Long categoryId, String brandName, ProductStatus status, String sortBy, Pageable pageable );
+    Page<ProductManagementResponse> getProductsForManagement(String keyword, Long categoryId, String brandName, ProductStatus status, String sortBy, Pageable pageable,Integer nearExpiredDays );
 
-    ProductDetailResponse getProductDetail(UUID productId);
+    ProductPublicResponse getProduct(UUID productId);
+
+    ProductManagementResponse getProductManagement(UUID productId);
 
     ProductManagementResponse updateProduct(UUID productId, ProductUpdateRequest request, List<MultipartFile> images);
 
@@ -34,4 +36,9 @@ public interface ProductService {
 
     Product getProductEntityByName(String name);
 
-    Product createProductFromImport(String name, String description, BigDecimal price, String brandName, Category category);}
+    Product createProductFromImport(String name, String description, BigDecimal price,
+                                    String brandName, Category category, String ingredients,
+                                    String usageInstructions, List<MediaFile> mediaFiles);
+
+    void updateLastBatchSequence(Product product, long lastBatchSequence);
+}

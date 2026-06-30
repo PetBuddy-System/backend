@@ -5,13 +5,11 @@ import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.ProductCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductUpdateRequest;
-import com.petbuddy.petbuddystore.dto.response.ProductDetailResponse;
 import com.petbuddy.petbuddystore.dto.response.ProductManagementResponse;
 import com.petbuddy.petbuddystore.dto.response.ProductPublicResponse;
 import com.petbuddy.petbuddystore.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -69,7 +67,7 @@ public class ProductController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @GetMapping("/management")
     @Operation(summary = "Get products for management",
-            description = "Lấy danh sách sản phẩm cho ADMIN/MANAGER/STAFF. API này có thể hiển thị cả ACTIVE, INACTIVE và DELETED, đồng thời có nhiều field quản lý hơn API user."
+            description = "Lấy danh sách sản phẩm cho ADMIN/MANAGER/STAFF. API này có thể hiển thị cả ACTIVE, INACTIVE, đồng thời có nhiều field quản lý hơn API user."
     )
     public ResponseEntity<ApiResponse<Page<ProductManagementResponse>>> getProductsForManagement(
             @RequestParam(required = false) String keyword,
@@ -78,17 +76,28 @@ public class ProductController {
             @RequestParam(required = false) ProductStatus status,
             @RequestParam(defaultValue = "date_desc") String sortBy,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) Integer nearExpiredDays //
     ) {
         Pageable pageable = PageRequest.of(page, size);
-        return ResponseEntity.ok(ApiResponse.success(productService.getProductsForManagement(keyword, categoryId, brandName, status, sortBy, pageable)));}
-
+        return ResponseEntity.ok(ApiResponse.success(
+                productService.getProductsForManagement(keyword, categoryId, brandName, status, sortBy, pageable, nearExpiredDays)
+        ));
+    }
     @GetMapping("/{productId}")
     @Operation(summary = "Get product detail",
             description = "Lấy chi tiết sản phẩm theo id. Dùng cho màn hình chi tiết sản phẩm hoặc form chỉnh sửa."
     )
-    public ResponseEntity<ApiResponse<ProductDetailResponse>> getProductDetail(@PathVariable UUID productId) {
-        return ResponseEntity.ok( ApiResponse.success(productService.getProductDetail(productId)));
+    public ResponseEntity<ApiResponse<ProductPublicResponse>> getProductDetail(@PathVariable UUID productId) {
+        return ResponseEntity.ok( ApiResponse.success(productService.getProduct(productId)));
+    }
+
+    @GetMapping("management/{productId}")
+    @Operation(summary = "Get product detail",
+            description = "Lấy chi tiết sản phẩm theo id. cha management Dùng cho màn hình chi tiết sản phẩm hoặc form chỉnh sửa."
+    )
+    public ResponseEntity<ApiResponse<ProductManagementResponse>> getManagementProductDetail(@PathVariable UUID productId) {
+        return ResponseEntity.ok( ApiResponse.success(productService.getProductManagement(productId)));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")

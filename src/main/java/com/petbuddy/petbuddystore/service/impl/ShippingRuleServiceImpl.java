@@ -40,14 +40,12 @@ public class ShippingRuleServiceImpl implements ShippingRuleService {
         }
 
         double distance = calculateDistance(STORE_LAT, STORE_LON, latitude, longitude);
-
         if(distance <= FREE_SHIP_RADIUS){
             return shippingMapper.toResponse(distance, BigDecimal.ZERO, true);
         }
 
         ShippingRule config = shippingRuleRepository.findRuleByDistance(distance)
                         .orElseThrow(() -> new AppException(ErrorCode.SHIPPING_CONFIG_NOT_FOUND));
-
         return shippingMapper.toResponse(distance, config.getFee(), false);
     }
 
@@ -63,7 +61,6 @@ public class ShippingRuleServiceImpl implements ShippingRuleService {
         }
 
         ShippingRule fee = shippingMapper.toShipping(request);
-
         return shippingMapper.toShippingResponse(shippingRuleRepository.save(fee));
     }
 
@@ -71,7 +68,6 @@ public class ShippingRuleServiceImpl implements ShippingRuleService {
     public ShippingRuleResponse updateRule(Long id, ShippingRuleRequest request) {
         ShippingRule rule = shippingRuleRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.SHIPPING_CONFIG_NOT_FOUND));
-
         rule.setMinDistance(request.getMinDistance());
         rule.setMaxDistance(request.getMaxDistance());
         rule.setFee(request.getFee());
@@ -104,17 +100,11 @@ public class ShippingRuleServiceImpl implements ShippingRuleService {
         double MIN_LON = 106.30;
         double MAX_LAT = 11.20;
         double MAX_LON = 107.10;
-
         return lat >= MIN_LAT && lat <= MAX_LAT && lon >= MIN_LON && lon <= MAX_LON;
     }
-    private double calculateDistance(
-                double lat1,
-                double lon1,
-                double lat2,
-                double lon2) {
+    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
 
             double dLat = Math.toRadians(lat2 - lat1);
-
             double dLon = Math.toRadians(lon2 - lon1);
 
             double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)

@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.dto.response;
 
+import com.petbuddy.petbuddystore.model.MediaFile;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -18,6 +19,6 @@ public class BlogResponse {
     String label;
     String snippet;
     String content;
-    List<String> imageUrls;
+    List<MediaFileResponse> mediaFiles;
     LocalDateTime createdAt;
 }

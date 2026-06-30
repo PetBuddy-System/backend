@@ -7,6 +7,7 @@ import com.petbuddy.petbuddystore.dto.request.BlogUpdateRequest;
 import com.petbuddy.petbuddystore.dto.response.BlogResponse;
 import com.petbuddy.petbuddystore.mapper.BlogMapper;
 import com.petbuddy.petbuddystore.model.Blog;
+import com.petbuddy.petbuddystore.model.MediaFile;
 import com.petbuddy.petbuddystore.model.User;
 import com.petbuddy.petbuddystore.repository.BlogRepository;
 import com.petbuddy.petbuddystore.service.BlogService;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -46,14 +48,16 @@ public class BlogServiceImpl implements BlogService {
         Blog blog = blogMapper.toBlog(request);
         blog.setUser(user);
 
-        if (images != null && !images.isEmpty()) {
-            List<String> imageUrls = images.stream()
-                    .filter(image -> image != null && !image.isEmpty())
-                    .map(fileService::uploadBlogImage)
-                    .toList();
+        List<MediaFile> mediaFiles = images.stream()
+                .filter(image -> image != null && !image.isEmpty())
+                .map(file -> {
+                    MediaFile mediaFile = fileService.uploadBlogImage(file);
+                    mediaFile.setBlog(blog);
+                    return mediaFile;
+                })
+                .collect(Collectors.toList());
 
-            blog.setImageUrls(imageUrls);
-        }
+        blog.setMediaFiles(mediaFiles);
         return blogMapper.toBlogResponse(blogRepository.save(blog));
     }
 
@@ -77,18 +81,19 @@ public class BlogServiceImpl implements BlogService {
                 orElseThrow(() -> new AppException(ErrorCode.BLOG_NOT_EXISTED));
         blogMapper.updateBlog(blog, request);
 
-        if (images != null && !images.isEmpty()) {
-            List<String> imageUrls = images.stream()
-                    .filter(image -> image != null && !image.isEmpty())
-                    .map(fileService::uploadBlogImage)
-                    .toList();
+        blog.getMediaFiles().clear();
+        List<MediaFile> mediaFiles = images.stream()
+                .filter(image -> image != null && !image.isEmpty())
+                .map(file -> {
+                    MediaFile mediaFile = fileService.uploadBlogImage(file);
+                    mediaFile.setBlog(blog);
+                    return mediaFile;
+                })
+                .toList();
 
-            if (!imageUrls.isEmpty()) {
-                blog.setImageUrls(imageUrls);
-            }
+        if (!mediaFiles.isEmpty()) {
+            blog.getMediaFiles().addAll(mediaFiles);
         }
-
-
         return blogMapper.toBlogResponse(blogRepository.save(blog));
     }
 }

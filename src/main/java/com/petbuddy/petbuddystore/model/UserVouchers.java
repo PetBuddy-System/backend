@@ -11,6 +11,7 @@ import java.util.UUID;
 @Getter
 @Setter
 @Data
+@Table(name = "user_vouchers")
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

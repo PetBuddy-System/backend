@@ -36,4 +36,9 @@ public interface ProductBatchRepository extends JpaRepository<ProductBatch, UUID
             Integer stockQuantity,
             ProductStatus status
     );
+
+    List<ProductBatch> findByProduct_ProductIdInAndStatusAndDeletedAtIsNull(
+            List<UUID> productIds,
+            ProductStatus status
+    );
 }

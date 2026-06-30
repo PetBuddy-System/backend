@@ -1,8 +1,7 @@
 package com.petbuddy.petbuddystore.model;
 
 
-import com.petbuddy.petbuddystore.common.enums.CatalogStatus;
-import com.petbuddy.petbuddystore.common.enums.WeightRange;
+import com.petbuddy.petbuddystore.common.enums.*;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
@@ -24,7 +23,6 @@ import java.time.LocalDateTime;
 public class Catalog {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-
     @Column (name = "catalog_id")
     Integer catalogId;
 
@@ -35,15 +33,14 @@ public class Catalog {
     @Column (name = "description")
     String description;
 
-    @Column (name = "catalog_type")
+    @Column (name = "catalog_type", nullable = false)
     String catalogType;
 
     @Column (name = "pet_species")
     String petSpecies;
 
-    @Column (name = "price")
-    @NotNull
-    BigDecimal price;
+    @Column(name = "base_price", nullable = false)
+    BigDecimal basePrice;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "weight_range")
@@ -63,8 +60,5 @@ public class Catalog {
     @Column (name = "updated_at")
     @UpdateTimestamp
     LocalDateTime updatedAt;
-
-
-
 
 }

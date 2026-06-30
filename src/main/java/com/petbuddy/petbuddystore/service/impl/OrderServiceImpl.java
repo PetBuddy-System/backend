@@ -1,9 +1,6 @@
 package com.petbuddy.petbuddystore.service.impl;
 
-import com.petbuddy.petbuddystore.common.enums.DiscountType;
-import com.petbuddy.petbuddystore.common.enums.OrderStatus;
-import com.petbuddy.petbuddystore.common.enums.ProductStatus;
-import com.petbuddy.petbuddystore.common.enums.VoucherStatus;
+import com.petbuddy.petbuddystore.common.enums.*;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.CreateOrderRequest;
@@ -13,11 +10,13 @@ import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.*;
 import com.petbuddy.petbuddystore.service.CartService;
 import com.petbuddy.petbuddystore.service.OrderService;
+import com.petbuddy.petbuddystore.service.PaymentService;
 import com.petbuddy.petbuddystore.service.ProductService;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
@@ -26,35 +25,43 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @Transactional
+@Slf4j
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class OrderServiceImpl implements OrderService {
 
     OrderRepository orderRepository;
     ProductBatchRepository productBatchRepository;
-    ProductService productService;
-    CartService cartService;
-    OrderMapper orderMapper;
     UserRepository userRepository;
     UserVoucherRepository userVoucherRepository;
     VoucherRepository voucherRepository;
+    ProductService productService;
+    CartService cartService;
+    PaymentService paymentService;
+    OrderMapper orderMapper;
+
+
 
     @Override
     public OrderResponse createOrder(CreateOrderRequest request) {
         checkLogin();
-
         User user = getCurrentUser();
 
-        List<CartItemResponse> cartItems = cartService.getCart().getItems();
+        PaymentMethod method;
+        try {
+            method = PaymentMethod.valueOf(request.getPaymentMethod().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new AppException(ErrorCode.PAYMENT_INVALID_METHOD);
+        }
+
+        List<CartItemResponse> cartItems = cartService.getCart().getCartItems();
 
         if (cartItems.isEmpty()) {
             throw new AppException(ErrorCode.CART_EMPTY);
@@ -63,7 +70,7 @@ public class OrderServiceImpl implements OrderService {
         Order order = Order.builder()
                 .orderCode(generateOrderCode())
                 .user(user)
-                .recipientName(request.getUserName())
+                .recipientName(request.getRecipientName())
                 .phoneNumber(request.getPhoneNumber())
                 .address(request.getAddress())
                 .note(request.getNote())
@@ -85,7 +92,7 @@ public class OrderServiceImpl implements OrderService {
                     .order(order)
                     .product(product)
                     .productName(product.getName())
-                    .productImage(product.getImageUrls().getFirst())
+                    .productImage(getFirstImage(product))
                     .unitPrice(item.getPrice())
                     .quantity(item.getQuantity())
                     .totalPrice(item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
@@ -122,8 +129,11 @@ public class OrderServiceImpl implements OrderService {
         order.setTotalAmount(total);
         order.setFinalAmount(finalAmount);
         orderRepository.save(order);
-        user.setCartData(null);
         userRepository.save(user);
+
+        PaymentInitResponse paymentResponse = paymentService.createPayment(order, method);
+
+        cartService.clearCart();
         return orderMapper.toOrderResponse(order);
     }
 
@@ -136,19 +146,19 @@ public class OrderServiceImpl implements OrderService {
 
         switch (currentStatus) {
             case PENDING -> {
-                if (newStatus != OrderStatus.CONFIRMED && newStatus != OrderStatus.CANCELED) {
+                if (newStatus != OrderStatus.CONFIRMED && newStatus != OrderStatus.CANCELLED) {
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
                 }
             }
 
             case CONFIRMED -> {
-                if (newStatus != OrderStatus.PICKING && newStatus != OrderStatus.CANCELED) {
+                if (newStatus != OrderStatus.PICKING && newStatus != OrderStatus.CANCELLED) {
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
                 }
             }
 
             case PICKING -> {
-                if (newStatus != OrderStatus.SHIPPING && newStatus != OrderStatus.CANCELED) {
+                if (newStatus != OrderStatus.SHIPPING && newStatus != OrderStatus.CANCELLED) {
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
                 }
 
@@ -174,7 +184,7 @@ public class OrderServiceImpl implements OrderService {
                 }
             }
 
-            case COMPLETED, CANCELED -> {
+            case COMPLETED, CANCELLED -> {
                 throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
             }
         }
@@ -238,7 +248,7 @@ public class OrderServiceImpl implements OrderService {
             result.add(PickingItemResponse.builder()
                             .productId(batch.getProduct().getProductId())
                             .name(batch.getProduct().getName())
-                            .imageUrl(batch.getProduct().getImageUrls().getFirst())
+                            .imageUrl(getFirstImage(batch.getProduct()))
                             .expiryDate(batch.getExpiryDate())
                             .quantityToPick(picked)
                             .build()
@@ -346,5 +356,12 @@ public class OrderServiceImpl implements OrderService {
         if (voucher.getPerUserLimit() != null && userUsedCount >= voucher.getPerUserLimit()) {
             throw new AppException(ErrorCode.VOUCHER_USER_LIMIT_EXCEEDED);
         }
+    }
+
+    private String getFirstImage(Product product) {
+        if (product == null || product.getMediaFiles() == null || product.getMediaFiles().isEmpty()) {
+            return null;
+        }
+        return product.getMediaFiles().getFirst().getFileUrl();
     }
 }

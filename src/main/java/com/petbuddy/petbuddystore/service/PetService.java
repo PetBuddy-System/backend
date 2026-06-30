@@ -1,12 +1,14 @@
 package com.petbuddy.petbuddystore.service;
 
-import com.petbuddy.petbuddystore.dto.request.PetCreationRequest;
-import com.petbuddy.petbuddystore.dto.request.PetUpdateRequest;
-import com.petbuddy.petbuddystore.dto.response.PetResponse;
+import com.petbuddy.petbuddystore.dto.request.PetProfileCreationRequest;
+import com.petbuddy.petbuddystore.dto.request.PetProfileUpdateRequest;
+import com.petbuddy.petbuddystore.dto.response.PetProfileResponse;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 public interface PetService {
-    PetResponse createPet(PetCreationRequest request, MultipartFile image);
-    PetResponse getPetById(String petId);
-    PetResponse updatePet(String petId, PetUpdateRequest request, MultipartFile image);
+    PetProfileResponse createPet(PetProfileCreationRequest request, List<MultipartFile> images);
+    PetProfileResponse getPetById(String petId);
+    PetProfileResponse updatePet(String petId, PetProfileUpdateRequest request, List<MultipartFile> images);
 }

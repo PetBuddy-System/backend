@@ -23,6 +23,12 @@ public class ProductCreationRequest {
 
     String description;
 
+    @Size(max = 1000)
+    String ingredients;
+
+    @Size(max = 1000)
+    String usageInstructions;
+
     @NotNull(message = "PRODUCT_PRICE_REQUIRED")
     @DecimalMin(value = "0.0", inclusive = false, message = "PRODUCT_PRICE_INVALID")
     BigDecimal price;
