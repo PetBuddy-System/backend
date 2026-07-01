@@ -98,6 +98,7 @@ public enum ErrorCode {
     INVALID_DISTANCE(5403,"Invalid distance",HttpStatus.BAD_REQUEST),
     SHIPPING_CONFIG_NOT_FOUND(5404,"Shipping configuration not found",HttpStatus.NOT_FOUND),
     SHIPPING_RULE_OVERLAP(5405,"Shipping rule overlaps with existing rules",HttpStatus.BAD_REQUEST),
+    INVALID_SHIPPING_FEE(5406,"Invalid shipping fee",HttpStatus.BAD_REQUEST),
 
     PAYMENT_NOT_FOUND(5501, "Payment not found", HttpStatus.NOT_FOUND),
     PAYMENT_ALREADY_EXISTS(5502, "Payment already exists", HttpStatus.CONFLICT),
@@ -106,6 +107,7 @@ public enum ErrorCode {
     PAYMENT_WEBHOOK_INVALID(5505, "Webhook signature invalid", HttpStatus.BAD_REQUEST),
     PAYMENT_INTENT_NOT_FOUND(5506, "PaymentIntent not found", HttpStatus.NOT_FOUND),
     PAYMENT_CANNOT_CANCEL(5507, "Payment can not cancelled", HttpStatus.CONFLICT),
+    PAYMENT_NOT_COMPLETED(5508, "Payment is not completed", HttpStatus.BAD_REQUEST),
 
     FILE_REQUIRED(7001, "File is required", HttpStatus.BAD_REQUEST),
     FILE_TOO_LARGE(7002, "File size is too large", HttpStatus.BAD_REQUEST),

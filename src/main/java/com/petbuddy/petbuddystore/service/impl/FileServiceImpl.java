@@ -99,6 +99,14 @@ public class FileServiceImpl implements FileService {
                 .build();
     }
 
+    @Override
+    public void validateExcelFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) throw new AppException(ErrorCode.FILE_REQUIRED);
+        if (file.getSize() > 10 * 1024 * 1024) throw new AppException(ErrorCode.FILE_TOO_LARGE);
+        String fileName = file.getOriginalFilename();
+        if (fileName == null || !fileName.toLowerCase().endsWith(".xlsx")) throw new AppException(ErrorCode.INVALID_FILE_TYPE);
+    }
+
     private String detectMimeType(byte[] data) {
         if (data == null || data.length < 4) return null;
         if (data[0] == (byte)0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47) {

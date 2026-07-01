@@ -9,6 +9,7 @@ import lombok.experimental.FieldDefaults;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -45,6 +46,10 @@ public class ProductBatch {
     ProductStatus status = ProductStatus.ACTIVE;
 
     LocalDateTime deletedAt;
+
+    @Column(name = "cost", precision = 19, scale = 2)
+    @Builder.Default
+    private BigDecimal cost = BigDecimal.ZERO;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)

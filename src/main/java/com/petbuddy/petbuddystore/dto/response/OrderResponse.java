@@ -19,9 +19,14 @@ public class OrderResponse {
     String recipientName;
     String phoneNumber;
     String address;
+    String note;
     String status;
     BigDecimal finalAmount;
+    BigDecimal shippingFee;
+    String clientSecret;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
     List<OrderDetailResponse> orderDetails;
+    PaymentResponse payment;
+    VoucherResponse voucher;
 }

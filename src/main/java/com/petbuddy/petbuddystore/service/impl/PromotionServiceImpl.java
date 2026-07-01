@@ -182,7 +182,7 @@ public class PromotionServiceImpl implements PromotionService {
         if (type == DiscountType.PERCENTAGE) {
             return price.multiply(value)
                     .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
-        } else if (type == DiscountType.FIXED) {
+        } else if (type == DiscountType.FIXED_AMOUNT) {
             return value.min(price);
         }
         return BigDecimal.ZERO;
@@ -222,7 +222,7 @@ public class PromotionServiceImpl implements PromotionService {
             if (value.compareTo(BigDecimal.valueOf(100)) > 0) {
                 throw new AppException(ErrorCode.PROMOTION_DISCOUNT_INVALID);
             }
-        } else if (type == DiscountType.FIXED) {
+        } else if (type == DiscountType.FIXED_AMOUNT) {
             if (value.compareTo(price) > 0) {
                 throw new AppException(ErrorCode.PROMOTION_DISCOUNT_INVALID);
             }

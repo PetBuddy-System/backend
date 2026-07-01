@@ -4,6 +4,7 @@ import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -20,13 +21,9 @@ public class ProductBatchResponse {
 
     String batchCode;
 
-    UUID productId;
-
-    String productCode;
-
-    String productName;
-
     Integer stockQuantity;
+
+    BigDecimal cost;
 
     LocalDate expiryDate;
 

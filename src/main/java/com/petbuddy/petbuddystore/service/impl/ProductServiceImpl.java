@@ -35,7 +35,6 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -350,7 +349,7 @@ public class ProductServiceImpl implements ProductService {
         if (type == DiscountType.PERCENTAGE) {
             return price.multiply(value)
                     .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
-        } else if (type == DiscountType.FIXED) {
+        } else if (type == DiscountType.FIXED_AMOUNT) {
             return value.min(price);
         }
         return BigDecimal.ZERO;

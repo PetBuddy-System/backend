@@ -24,5 +24,5 @@ public interface ProductBatchService {
 
     void deleteDeletedBatchesOlderThan90Days();
 
-    ProductImportResponse importProductsAndBatches(ProductImportRequest request);
+    ProductImportResponse importProductsAndBatches(MultipartFile file);
 }

@@ -23,5 +23,6 @@ public class ImportRowRequest {
     private LocalDate expiryDate;
     private String ingredients;
     private String usageInstructions;
+    private BigDecimal cost;
     private List<byte[]> images;
 }

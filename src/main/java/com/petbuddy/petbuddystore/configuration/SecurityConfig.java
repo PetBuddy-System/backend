@@ -25,7 +25,7 @@ import java.util.List;
 public class SecurityConfig {
     private final String[] PUBLIC_POST_ENDPOINTS = {"/api/users", "/api/auth/signup", "/api/auth/login",
             "/api/auth/introspect", "/api/auth/refresh", "/api/auth/verify-email", "/api/auth/resend-otp",
-            "/api/auth/forgot-password", "/api/auth/reset-password"};
+            "/api/auth/forgot-password", "/api/auth/reset-password,/api/payments/webhook","/api/payments/webhook"};
 
     private final String[] PUBLIC_GET_ENDPOINTS = {"/api/categories", "/api/categories/{categoryId}", "/api/products",
             "/api/products/{productId}", "/api/blogs", "/api/blogs/**", "/api/auth/outbound/authentication"
@@ -40,7 +40,6 @@ public class SecurityConfig {
             "/pet-buddy/swagger-ui.html",
     };
 
-    private static final String[] STRIPE_WEBHOOK_ENDPOINT = {"/api/payments/webhook"};
 
     private final CustomJwtDecoder customJwtDecoder;
 
@@ -50,7 +49,6 @@ public class SecurityConfig {
                 auth.requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS_SWAGGER).permitAll()
-                        .requestMatchers(HttpMethod.POST, STRIPE_WEBHOOK_ENDPOINT).permitAll()
                         .anyRequest().authenticated());
 
         httpSecurity.oauth2ResourceServer(oauth2 ->

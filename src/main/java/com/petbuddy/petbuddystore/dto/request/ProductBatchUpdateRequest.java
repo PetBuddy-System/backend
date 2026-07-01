@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Min;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Getter
@@ -17,6 +18,9 @@ public class ProductBatchUpdateRequest {
 
     @Min(value = 0, message = "PRODUCT_STOCK_INVALID")
     Integer stockQuantity;
+
+    @Min(value = 0, message = "COST_INVALID")
+    BigDecimal cost;
 
     LocalDate expiryDate;
 

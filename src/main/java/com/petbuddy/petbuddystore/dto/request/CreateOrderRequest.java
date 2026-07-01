@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -18,5 +19,6 @@ public class CreateOrderRequest {
     String address;
     String note;
     String voucherCode;
+    BigDecimal shippingFee;
     String paymentMethod;
 }

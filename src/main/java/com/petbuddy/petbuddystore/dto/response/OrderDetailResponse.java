@@ -18,18 +18,11 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class OrderDetailResponse {
     Long orderDetailId;
-
     UUID productId;
-
     String productName;
-
     String productImage;
-
     BigDecimal unitPrice;
-
     Integer quantity;
-
     BigDecimal totalPrice;
-
     LocalDateTime createdAt;
 }

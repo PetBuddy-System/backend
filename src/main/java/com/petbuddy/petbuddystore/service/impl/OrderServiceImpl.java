@@ -8,11 +8,12 @@ import com.petbuddy.petbuddystore.dto.response.*;
 import com.petbuddy.petbuddystore.mapper.OrderMapper;
 import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.*;
+import com.petbuddy.petbuddystore.repository.PaymentRepository;
 import com.petbuddy.petbuddystore.service.CartService;
 import com.petbuddy.petbuddystore.service.OrderService;
 import com.petbuddy.petbuddystore.service.PaymentService;
 import com.petbuddy.petbuddystore.service.ProductService;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -46,8 +47,7 @@ public class OrderServiceImpl implements OrderService {
     CartService cartService;
     PaymentService paymentService;
     OrderMapper orderMapper;
-
-
+    PaymentRepository paymentRepository;
 
     @Override
     public OrderResponse createOrder(CreateOrderRequest request) {
@@ -62,9 +62,12 @@ public class OrderServiceImpl implements OrderService {
         }
 
         List<CartItemResponse> cartItems = cartService.getCart().getCartItems();
-
         if (cartItems.isEmpty()) {
             throw new AppException(ErrorCode.CART_EMPTY);
+        }
+
+        if (request.getShippingFee() == null || request.getShippingFee().compareTo(BigDecimal.ZERO) < 0) {
+            throw new AppException(ErrorCode.INVALID_SHIPPING_FEE);
         }
 
         Order order = Order.builder()
@@ -74,6 +77,7 @@ public class OrderServiceImpl implements OrderService {
                 .phoneNumber(request.getPhoneNumber())
                 .address(request.getAddress())
                 .note(request.getNote())
+                .shippingFee(request.getShippingFee())
                 .status(OrderStatus.PENDING)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -83,10 +87,10 @@ public class OrderServiceImpl implements OrderService {
 
         for (CartItemResponse item : cartItems) {
             Product product = productService.getProductEntityById(item.getProductId());
-
             int availableStock = productBatchRepository.findAvailableStockByProductId(product.getProductId());
-
-            if (availableStock < item.getQuantity()) {throw new AppException(ErrorCode.PRODUCT_OUT_OF_STOCK);}
+            if (availableStock < item.getQuantity()) {
+                throw new AppException(ErrorCode.PRODUCT_OUT_OF_STOCK);
+            }
 
             OrderDetail detail = OrderDetail.builder()
                     .order(order)
@@ -103,10 +107,9 @@ public class OrderServiceImpl implements OrderService {
         }
 
         BigDecimal finalAmount = total;
-        Voucher voucher;
 
-        if(request.getVoucherCode() != null && !request.getVoucherCode().trim().isEmpty()){
-            voucher = voucherRepository.findByVoucherCode(request.getVoucherCode())
+        if (request.getVoucherCode() != null && !request.getVoucherCode().trim().isEmpty()) {
+            Voucher voucher = voucherRepository.findByVoucherCode(request.getVoucherCode())
                     .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
 
             validateVoucher(voucher, user, total);
@@ -131,7 +134,7 @@ public class OrderServiceImpl implements OrderService {
         orderRepository.save(order);
         userRepository.save(user);
 
-        PaymentInitResponse paymentResponse = paymentService.createPayment(order, method);
+        paymentService.createPayment(order, method);
 
         cartService.clearCart();
         return orderMapper.toOrderResponse(order);
@@ -140,53 +143,45 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public void updateOrderStatus(Long orderId, OrderStatus newStatus) {
         checkLogin();
-
         Order order = findOrder(orderId);
         OrderStatus currentStatus = order.getStatus();
 
         switch (currentStatus) {
             case PENDING -> {
-                if (newStatus != OrderStatus.CONFIRMED && newStatus != OrderStatus.CANCELLED) {
+                if (newStatus != OrderStatus.CONFIRMED && newStatus != OrderStatus.CANCELLED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
-                }
-            }
-
-            case CONFIRMED -> {
-                if (newStatus != OrderStatus.PICKING && newStatus != OrderStatus.CANCELLED) {
-                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
-                }
-            }
-
-            case PICKING -> {
-                if (newStatus != OrderStatus.SHIPPING && newStatus != OrderStatus.CANCELLED) {
-                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
-                }
-
-                if (newStatus == OrderStatus.SHIPPING) {
-                    for (OrderDetail detail : order.getOrderDetails()) {
-                        deductStockByFefo(
-                                detail.getProduct().getProductId(),
-                                detail.getQuantity()
-                        );
+                if (newStatus == OrderStatus.CONFIRMED) {
+                    PaymentMethod method = order.getPayment().getPaymentMethod();
+                    if (method == PaymentMethod.CASH) {
+                        paymentService.markPaymentSucceeded(order);
+                    } else if (order.getPayment().getStatus() != PaymentStatus.PAID) {
+                        throw new AppException(ErrorCode.PAYMENT_NOT_COMPLETED);
                     }
                 }
             }
-
+            case CONFIRMED -> {
+                if (newStatus != OrderStatus.PICKING && newStatus != OrderStatus.CANCELLED)
+                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+            }
+            case PICKING -> {
+                if (newStatus != OrderStatus.SHIPPING && newStatus != OrderStatus.CANCELLED)
+                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+            }
             case SHIPPING -> {
-                if (newStatus != OrderStatus.DELIVERED) {
+                if (newStatus != OrderStatus.DELIVERED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
-                }
             }
-
             case DELIVERED -> {
-                if (newStatus != OrderStatus.COMPLETED) {
+                if (newStatus != OrderStatus.COMPLETED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+                if(order.getPayment().getStatus() != PaymentStatus.PAID){
+                    Payment payment = order.getPayment();
+                    payment.setStatus(PaymentStatus.PAID);
+                    payment.setPaidAt(LocalDateTime.now());
+                    paymentRepository.save(payment);
                 }
             }
-
-            case COMPLETED, CANCELLED -> {
-                throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
-            }
+            case COMPLETED, CANCELLED -> throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
         }
         order.setStatus(newStatus);
         order.setUpdatedAt(LocalDateTime.now());
@@ -197,7 +192,7 @@ public class OrderServiceImpl implements OrderService {
     public List<PickingItemResponse> getPickingList(Long orderId) {
         checkLogin();
         Order order = findOrder(orderId);
-        if(order.getStatus() != OrderStatus.PICKING){
+        if (order.getStatus() != OrderStatus.PICKING) {
             throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
         }
         return buildPickingList(order);
@@ -220,76 +215,46 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderResponse getOrder(Long orderId) {
         getCurrentUser();
-        Order order = orderRepository.findById(orderId).orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
         return orderMapper.toOrderResponse(order);
     }
 
     private List<PickingItemResponse> buildPickingList(Order order) {
         List<PickingItemResponse> result = new ArrayList<>();
-
-        for(OrderDetail detail : order.getOrderDetails()) {
+        for (OrderDetail detail : order.getOrderDetails()) {
             result.addAll(calculatePickingItems(detail.getProduct().getProductId(), detail.getQuantity()));
         }
-
         return result;
     }
 
     private List<PickingItemResponse> calculatePickingItems(UUID productId, int quantity) {
         List<ProductBatch> batches = getActiveBatchesByFefo(productId);
-
         int remaining = quantity;
         List<PickingItemResponse> result = new ArrayList<>();
 
         for (ProductBatch batch : batches) {
-            if (remaining <= 0) {
-                break;
-            }
+            if (remaining <= 0) break;
             int picked = Math.min(batch.getStockQuantity(), remaining);
             result.add(PickingItemResponse.builder()
-                            .productId(batch.getProduct().getProductId())
-                            .name(batch.getProduct().getName())
-                            .imageUrl(getFirstImage(batch.getProduct()))
-                            .expiryDate(batch.getExpiryDate())
-                            .quantityToPick(picked)
-                            .build()
-            );
+                    .productId(batch.getProduct().getProductId())
+                    .name(batch.getProduct().getName())
+                    .imageUrl(getFirstImage(batch.getProduct()))
+                    .expiryDate(batch.getExpiryDate())
+                    .quantityToPick(picked)
+                    .build());
             remaining -= picked;
         }
-        if(remaining > 0){
-            throw new AppException(ErrorCode.PRODUCT_OUT_OF_STOCK);
-        }
+
+        if (remaining > 0) throw new AppException(ErrorCode.PRODUCT_OUT_OF_STOCK);
         return result;
     }
 
 
-
-    private void deductStockByFefo(UUID productId, int quantity) {
-        List<ProductBatch> batches = getActiveBatchesByFefo(productId);
-        List<ProductBatch> updatedBatches = new ArrayList<>();
-        int remaining = quantity;
-
-        for (ProductBatch batch : batches) {
-            if (remaining <= 0) break;
-
-            int picked = Math.min(batch.getStockQuantity(), remaining);
-            batch.setStockQuantity(batch.getStockQuantity() - picked);
-            updatedBatches.add(batch);
-            remaining -= picked;
-        }
-
-        if (remaining > 0) {
-            throw new AppException(ErrorCode.PRODUCT_OUT_OF_STOCK);
-        }
-        productBatchRepository.saveAll(updatedBatches);
-    }
-
     private List<ProductBatch> getActiveBatchesByFefo(UUID productId) {
         return productBatchRepository
                 .findByProduct_ProductIdAndStockQuantityGreaterThanAndStatusOrderByExpiryDateAscCreatedAtAscBatchCodeAsc(
-                        productId,
-                        0,
-                        ProductStatus.ACTIVE
-                );
+                        productId, 0, ProductStatus.ACTIVE);
     }
 
     private String generateOrderCode() {
@@ -298,14 +263,16 @@ public class OrderServiceImpl implements OrderService {
 
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null) {throw new AppException(ErrorCode.UNAUTHENTICATED);}
+        if (authentication == null) throw new AppException(ErrorCode.UNAUTHENTICATED);
         String userId = authentication.getName();
-        return userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     }
 
     private void checkLogin() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || authentication.getName().equals("anonymousUser")) {
+        if (authentication == null || !authentication.isAuthenticated()
+                || authentication.getName().equals("anonymousUser")) {
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
     }
@@ -317,7 +284,6 @@ public class OrderServiceImpl implements OrderService {
 
     private BigDecimal calculateDiscount(Voucher voucher, BigDecimal orderAmount) {
         BigDecimal discount;
-
         if (voucher.getDiscountType() == DiscountType.PERCENTAGE) {
             discount = orderAmount.multiply(voucher.getDiscountValue()).divide(BigDecimal.valueOf(100));
             if (voucher.getMaxDiscount() != null) {
@@ -326,36 +292,24 @@ public class OrderServiceImpl implements OrderService {
         } else {
             discount = voucher.getDiscountValue();
         }
-
         return discount.min(orderAmount);
     }
 
     private void validateVoucher(Voucher voucher, User user, BigDecimal totalAmount) {
         LocalDateTime now = LocalDateTime.now();
-        if (voucher.getStatus() != VoucherStatus.ACTIVE) {
+        if (voucher.getStatus() != VoucherStatus.ACTIVE)
             throw new AppException(ErrorCode.VOUCHER_INVALID_STATUS);
-        }
-
-        if (now.isBefore(voucher.getStartAt())) {
+        if (now.isBefore(voucher.getStartAt()))
             throw new AppException(ErrorCode.VOUCHER_NOT_STARTED);
-        }
-
-        if (now.isAfter(voucher.getExpiredAt())) {
+        if (now.isAfter(voucher.getExpiredAt()))
             throw new AppException(ErrorCode.VOUCHER_EXPIRED);
-        }
-
-        if (voucher.getUsageLimit() != null && voucher.getUsedCount() >= voucher.getUsageLimit()) {
+        if (voucher.getUsageLimit() != null && voucher.getUsedCount() >= voucher.getUsageLimit())
             throw new AppException(ErrorCode.VOUCHER_OUT_OF_USAGE);
-        }
-
-        if (voucher.getMinOrderValue() != null && totalAmount.compareTo(voucher.getMinOrderValue()) < 0) {
+        if (voucher.getMinOrderValue() != null && totalAmount.compareTo(voucher.getMinOrderValue()) < 0)
             throw new AppException(ErrorCode.VOUCHER_MIN_ORDER_NOT_MET);
-        }
-
         long userUsedCount = userVoucherRepository.countByUserAndVoucher(user, voucher);
-        if (voucher.getPerUserLimit() != null && userUsedCount >= voucher.getPerUserLimit()) {
+        if (voucher.getPerUserLimit() != null && userUsedCount >= voucher.getPerUserLimit())
             throw new AppException(ErrorCode.VOUCHER_USER_LIMIT_EXCEEDED);
-        }
     }
 
     private String getFirstImage(Product product) {
