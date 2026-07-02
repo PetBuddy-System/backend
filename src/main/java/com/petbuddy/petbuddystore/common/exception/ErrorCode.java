@@ -139,6 +139,8 @@ public enum ErrorCode {
     STAFF_LIST_EMPTY(9012, "Staff list is empty", HttpStatus.BAD_REQUEST),
     CANNOT_CHECKIN(9013, "Cannot check in", HttpStatus.BAD_REQUEST),
     CANNOT_CHECKOUT(9014, "Cannot check out", HttpStatus.BAD_REQUEST),
+    CATALOG_TIME_SLOT_NOT_FOUND(9015, "Catalog time slot not found", HttpStatus.NOT_FOUND),
+    CATALOG_TIME_SLOT_EXISTED(9016, "Catalog time slot already exists", HttpStatus.BAD_REQUEST),
 
     PROMOTION_NOT_FOUND(5501, "Promotion not found", HttpStatus.NOT_FOUND),
     PROMOTION_INVALID_DATE(5502, "Promotion date is invalid", HttpStatus.BAD_REQUEST),

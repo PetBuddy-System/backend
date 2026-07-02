@@ -70,7 +70,7 @@ public class BookingDetail {
 
     @ManyToOne
     @JoinColumn(name = "pet_id")
-    Pet pet;
+    PetProfile pet;
 
     @ManyToOne
     @JoinColumn(name = "catalog_id")

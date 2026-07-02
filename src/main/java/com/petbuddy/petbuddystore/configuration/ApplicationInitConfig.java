@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.configuration;
 
 import com.petbuddy.petbuddystore.common.enums.Role;
+import com.petbuddy.petbuddystore.common.enums.StaffTask;
 import com.petbuddy.petbuddystore.common.enums.UserStatus;
 import com.petbuddy.petbuddystore.model.User;
 import com.petbuddy.petbuddystore.repository.UserRepository;
@@ -47,16 +48,43 @@ public class ApplicationInitConfig {
                 log.warn("Manager has been created");
             }
 
-            if (userRepository.findByEmail("staff@gmail.com").isEmpty()) {
+            if (userRepository.findByEmail("staff1@gmail.com").isEmpty()) {
                 User user = User.builder()
-                        .email("staff@gmail.com")
-                        .password(passwordEncoder.encode("Staff@1234"))
-                        .fullName("Staff")
+                        .email("staff1@gmail.com")
+                        .password(passwordEncoder.encode("groomer"))
+                        .fullName("Groomer Staff")
                         .role(Role.STAFF)
+                        .staffTask(StaffTask.GROOMER)
                         .status(UserStatus.ACTIVE)
                         .build();
                 userRepository.save(user);
-                log.warn("Staff has been created");
+                log.warn("Groomer Staff has been created");
+            }
+
+            if (userRepository.findByEmail("staff2@gmail.com").isEmpty()) {
+                User user = User.builder()
+                        .email("staff2@gmail.com")
+                        .password(passwordEncoder.encode("cashier"))
+                        .fullName("Cashier Staff")
+                        .role(Role.STAFF)
+                        .staffTask(StaffTask.CASHIER)
+                        .status(UserStatus.ACTIVE)
+                        .build();
+                userRepository.save(user);
+                log.warn("Cashier Staff has been created");
+            }
+
+            if (userRepository.findByEmail("staff3@gmail.com").isEmpty()) {
+                User user = User.builder()
+                        .email("staff3@gmail.com")
+                        .password(passwordEncoder.encode("shipper"))
+                        .fullName("Shipper Staff")
+                        .role(Role.STAFF)
+                        .staffTask(StaffTask.SHIPPER)
+                        .status(UserStatus.ACTIVE)
+                        .build();
+                userRepository.save(user);
+                log.warn("Shipper Staff has been created");
             }
 
             if (userRepository.findByEmail("user@gmail.com").isEmpty()) {

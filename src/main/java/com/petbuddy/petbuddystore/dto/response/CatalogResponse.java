@@ -22,6 +22,7 @@ public class CatalogResponse {
     BigDecimal price;
     WeightRange weightRange;
     Integer durationMinute;
+    Integer bufferTime;
     CatalogStatus status;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
