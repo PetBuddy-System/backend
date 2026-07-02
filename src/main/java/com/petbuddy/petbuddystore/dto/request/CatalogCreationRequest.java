@@ -20,5 +20,6 @@ public class CatalogCreationRequest {
     BigDecimal price;
     WeightRange weightRange;
     Integer durationMinute;
+    Integer bufferTime;
     CatalogStatus status;
 }

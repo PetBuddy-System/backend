@@ -2,6 +2,7 @@ package com.petbuddy.petbuddystore.model;
 
 import com.petbuddy.petbuddystore.common.enums.AuthProvider;
 import com.petbuddy.petbuddystore.common.enums.Role;
+import com.petbuddy.petbuddystore.common.enums.StaffTask;
 import com.petbuddy.petbuddystore.common.enums.UserStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -46,6 +47,10 @@ public class User {
     @Column(columnDefinition = "VARCHAR(50)")
     @Enumerated(EnumType.STRING)
     Role role;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "staff_task")
+    StaffTask staffTask;
 
     @Enumerated(EnumType.STRING)
     UserStatus status;

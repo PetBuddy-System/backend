@@ -11,6 +11,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table (name = "catalogs")
@@ -33,14 +35,15 @@ public class Catalog {
     @Column (name = "description")
     String description;
 
+    @Enumerated(EnumType.STRING)
     @Column (name = "catalog_type", nullable = false)
-    String catalogType;
+    LocationType catalogType;
 
     @Column (name = "pet_species")
     String petSpecies;
 
-    @Column(name = "base_price", nullable = false)
-    BigDecimal basePrice;
+    @Column(name = "prices", nullable = false)
+    BigDecimal price;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "weight_range")
@@ -48,6 +51,9 @@ public class Catalog {
 
     @Column (name = "duration_minute")
     Integer durationMinute;
+
+    @Column(name = "buffer_time")
+    Integer bufferTime;
 
     @Column (name = "status")
     @Enumerated (EnumType.STRING)
@@ -60,5 +66,8 @@ public class Catalog {
     @Column (name = "updated_at")
     @UpdateTimestamp
     LocalDateTime updatedAt;
+
+    @OneToMany(mappedBy = "catalog", cascade = CascadeType.ALL, orphanRemoval = true)
+    List<CatalogTimeSlot> catalogTimeSlots = new ArrayList<>();
 
 }
