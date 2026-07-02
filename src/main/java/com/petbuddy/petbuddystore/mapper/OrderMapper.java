@@ -14,5 +14,6 @@ public interface OrderMapper {
     @Mapping(target = "payment", source = "payment")
     @Mapping(target = "voucher", source = "voucher")
     OrderResponse toOrderResponse(Order order);
+    @Mapping(target = "productId", source = "product.productId")
     OrderDetailResponse toOrderDetailResponse(OrderDetail orderDetail);
 }

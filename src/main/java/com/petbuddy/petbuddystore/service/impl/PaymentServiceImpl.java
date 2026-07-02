@@ -14,6 +14,7 @@ import com.petbuddy.petbuddystore.model.ProductBatch;
 import com.petbuddy.petbuddystore.repository.OrderRepository;
 import com.petbuddy.petbuddystore.repository.PaymentRepository;
 import com.petbuddy.petbuddystore.repository.ProductBatchRepository;
+import com.petbuddy.petbuddystore.service.CartService;
 import com.petbuddy.petbuddystore.service.PaymentService;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
@@ -43,6 +44,7 @@ public class PaymentServiceImpl implements PaymentService {
     final PaymentRepository paymentRepository;
     final OrderRepository orderRepository;
     final ProductBatchRepository productBatchRepository;
+    final CartService cartService;
     final PaymentMapper paymentMapper;
 
     @Value("${webhook.secret-key}")
@@ -67,11 +69,8 @@ public class PaymentServiceImpl implements PaymentService {
         if (method == PaymentMethod.CARD) {
             createStripePayment(payment);
         }
-
         paymentRepository.save(payment);
     }
-
-
 
     @Transactional
     @Override
@@ -111,10 +110,10 @@ public class PaymentServiceImpl implements PaymentService {
         if (payment.getStatus() == PaymentStatus.PAID) {
             return;
         }
-        payment.setStatus(PaymentStatus.PAID);
         for (OrderDetail detail : order.getOrderDetails()) {
             deductStockByFefo(detail.getProduct().getProductId(), detail.getQuantity());
         }
+        cartService.clearCart();
         paymentRepository.save(payment);
     }
 
@@ -198,7 +197,7 @@ public class PaymentServiceImpl implements PaymentService {
         paymentRepository.save(payment);
 
         Order order = payment.getOrder();
-
+        markPaymentSucceeded(order);
         log.info("Thanh toán thành công: PaymentIntent={}, Order={}", intentId, order.getOrderCode());
     }
 
