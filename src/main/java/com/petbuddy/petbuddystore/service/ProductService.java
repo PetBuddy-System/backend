@@ -19,7 +19,7 @@ import java.util.UUID;
 
 public interface ProductService {
 
-    ProductManagementResponse createProduct(ProductCreationRequest request, List<MultipartFile> images);
+    ProductManagementResponse createProduct(ProductCreationRequest request);
 
     Page<ProductPublicResponse> getProductsForUser(String keyword, Long categoryId, String brandName, String sortBy, Pageable pageable);
 
@@ -29,7 +29,7 @@ public interface ProductService {
 
     ProductManagementResponse getProductManagement(UUID productId);
 
-    ProductManagementResponse updateProduct(UUID productId, ProductUpdateRequest request, List<MultipartFile> images);
+    ProductManagementResponse updateProduct(UUID productId, ProductUpdateRequest request);
 
     Product getProductEntityById(UUID productId);
 

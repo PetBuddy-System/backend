@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.mapper;
 
+import com.petbuddy.petbuddystore.common.enums.FileType;
 import com.petbuddy.petbuddystore.dto.request.ProductCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductUpdateRequest;
 import com.petbuddy.petbuddystore.dto.response.ProductManagementResponse;
@@ -22,10 +23,6 @@ public interface ProductMapper {
 
     Product toProduct(ProductCreationRequest request);
 
-
-    @Mapping(target = "imageUrls", expression = "java(mapMediaFilesToUrls(product.getMediaFiles()))")
-    ProductPublicResponse toPublicResponse(Product product);
-
     @Mapping(target = "description", ignore = true)
     @Mapping(target = "ingredients", ignore = true)
     @Mapping(target = "usageInstructions", ignore = true)
@@ -35,25 +32,13 @@ public interface ProductMapper {
     @Mapping(target = "discountAmount", ignore = true)
     @Mapping(target = "promotionEndDate", ignore = true)
     @Mapping(target = "hasActivePromotion", ignore = true)
-    @Mapping(target = "imageUrls", expression = "java(mapMediaFilesToUrls(product.getMediaFiles()))")
     ProductManagementResponse toManagementResponse(Product product);
 
     @Mapping(target = "description", ignore = true)
     @Mapping(target = "ingredients", ignore = true)
     @Mapping(target = "usageInstructions", ignore = true)
     @Mapping(target = "totalStock", ignore = true)
-    @Mapping(target = "imageUrls", expression = "java(mapMediaFilesToUrls(product.getMediaFiles()))")
     ProductPublicResponse toListResponse(Product product);
 
-    @Mapping(target = "imageUrls", expression = "java(mapMediaFilesToUrls(product.getMediaFiles()))")
     ProductPublicResponse toDetailPublicResponse(Product product);
-
-    default List<String> mapMediaFilesToUrls(List<MediaFile> mediaFiles) {
-        if (mediaFiles == null || mediaFiles.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return mediaFiles.stream()
-                .map(MediaFile::getFileUrl)
-                .collect(Collectors.toList());
-    }
 }

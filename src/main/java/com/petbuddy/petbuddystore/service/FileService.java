@@ -7,6 +7,7 @@ import java.util.List;
 
 public interface FileService {
     MediaFile uploadProductImage(MultipartFile file);
+    MediaFile uploadProductVideo(MultipartFile file);
     MediaFile uploadPetImage(MultipartFile file);
     MediaFile uploadBlogImage(MultipartFile file);
     MediaFile uploadProductImageFromBytes(byte[] bytes);

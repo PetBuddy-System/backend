@@ -95,4 +95,6 @@ public class Product {
     @OneToMany(mappedBy = "product")
     @Builder.Default
     List<PromotionDetail> promotionDetails = new ArrayList<>();
+
+    Long thumbnailMediaId;
 }

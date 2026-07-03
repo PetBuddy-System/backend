@@ -42,5 +42,5 @@ public class ProductUpdateRequest {
 
     ProductStatus status;
 
-    Boolean mergeIfNameExists;
+    Long thumbnailMediaId;
 }

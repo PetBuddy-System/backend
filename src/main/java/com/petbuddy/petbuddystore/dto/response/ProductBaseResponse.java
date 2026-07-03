@@ -26,7 +26,9 @@ public abstract class ProductBaseResponse {
     BigDecimal price;
     String brandName;
     ProductUnit unit;
-    List<String> imageUrls;
+
+    String thumbnailUrl;
+
     Long categoryId;
     String categoryName;
     Integer totalStock;
