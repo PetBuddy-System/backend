@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.dto.request;
 
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
+import com.petbuddy.petbuddystore.common.enums.ProductUnit;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 import lombok.*;
@@ -32,6 +33,8 @@ public class ProductUpdateRequest {
 
     @DecimalMin(value = "0.01")
     BigDecimal price;
+
+    ProductUnit unit;
 
     String brandName;
 

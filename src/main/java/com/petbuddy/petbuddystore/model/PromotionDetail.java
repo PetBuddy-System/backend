@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.model;
 
 import com.petbuddy.petbuddystore.common.enums.DiscountType;
+import com.petbuddy.petbuddystore.common.enums.PromotionType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -31,7 +32,7 @@ public class PromotionDetail {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    DiscountType discountType;
+    PromotionType promotionType; //
 
     @Column(nullable = false)
     BigDecimal discountValue;

@@ -22,24 +22,14 @@ public interface ProductMapper {
 
     Product toProduct(ProductCreationRequest request);
 
-    @Mapping(target = "description", ignore = true)
-    @Mapping(target = "ingredients", ignore = true)
-    @Mapping(target = "usageInstructions", ignore = true)
-    @Mapping(target = "promotionId", ignore = true)
-    @Mapping(target = "promotionName", ignore = true)
-    @Mapping(target = "discountType", ignore = true)
-    @Mapping(target = "discountValue", ignore = true)
-    @Mapping(target = "salePrice", ignore = true)
-    @Mapping(target = "discountAmount", ignore = true)
-    @Mapping(target = "promotionEndDate", ignore = true)
-    @Mapping(target = "hasActivePromotion", ignore = true)
+
     @Mapping(target = "imageUrls", expression = "java(mapMediaFilesToUrls(product.getMediaFiles()))")
     ProductPublicResponse toPublicResponse(Product product);
 
     @Mapping(target = "description", ignore = true)
     @Mapping(target = "ingredients", ignore = true)
     @Mapping(target = "usageInstructions", ignore = true)
-    @Mapping(target = "discountType", ignore = true)
+    @Mapping(target = "promotionType", ignore = true)
     @Mapping(target = "discountValue", ignore = true)
     @Mapping(target = "salePrice", ignore = true)
     @Mapping(target = "discountAmount", ignore = true)
@@ -47,6 +37,13 @@ public interface ProductMapper {
     @Mapping(target = "hasActivePromotion", ignore = true)
     @Mapping(target = "imageUrls", expression = "java(mapMediaFilesToUrls(product.getMediaFiles()))")
     ProductManagementResponse toManagementResponse(Product product);
+
+    @Mapping(target = "description", ignore = true)
+    @Mapping(target = "ingredients", ignore = true)
+    @Mapping(target = "usageInstructions", ignore = true)
+    @Mapping(target = "totalStock", ignore = true)
+    @Mapping(target = "imageUrls", expression = "java(mapMediaFilesToUrls(product.getMediaFiles()))")
+    ProductPublicResponse toListResponse(Product product);
 
     @Mapping(target = "imageUrls", expression = "java(mapMediaFilesToUrls(product.getMediaFiles()))")
     ProductPublicResponse toDetailPublicResponse(Product product);

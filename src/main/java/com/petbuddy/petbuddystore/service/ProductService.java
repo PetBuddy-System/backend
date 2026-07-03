@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.service;
 
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
+import com.petbuddy.petbuddystore.common.enums.ProductUnit;
 import com.petbuddy.petbuddystore.dto.request.ProductCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductUpdateRequest;
 import com.petbuddy.petbuddystore.dto.response.ProductManagementResponse;
@@ -38,7 +39,7 @@ public interface ProductService {
 
     Product createProductFromImport(String name, String description, BigDecimal price,
                                     String brandName, Category category, String ingredients,
-                                    String usageInstructions, List<MediaFile> mediaFiles);
+                                    String usageInstructions, ProductUnit unit, List<MediaFile> mediaFiles);
 
     void updateLastBatchSequence(Product product, long lastBatchSequence);
 }

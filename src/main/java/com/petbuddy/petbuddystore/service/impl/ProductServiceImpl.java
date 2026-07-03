@@ -1,8 +1,9 @@
 package com.petbuddy.petbuddystore.service.impl;
 
-import com.petbuddy.petbuddystore.common.enums.DiscountType;
+import com.petbuddy.petbuddystore.common.enums.PromotionType;
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import com.petbuddy.petbuddystore.common.enums.PromotionStatus;
+import com.petbuddy.petbuddystore.common.enums.ProductUnit;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.ProductCreationRequest;
@@ -47,8 +48,6 @@ public class ProductServiceImpl implements ProductService {
     CategoryService categoryService;
     FileService fileService;
     ProductMapper productMapper;
-    PromotionMapper promotionMapper;
-    PromotionService promotionService;
 
     @Override
     @Transactional
@@ -61,6 +60,7 @@ public class ProductServiceImpl implements ProductService {
         Product product = productMapper.toProduct(request);
         product.setProductCode(generateProductCode());
         product.setCategory(category);
+        // unit sẽ được map tự động từ request qua mapper
         uploadProductMediaFiles(product, images);
         return productMapper.toManagementResponse(productRepository.save(product));
     }
@@ -85,7 +85,6 @@ public class ProductServiceImpl implements ProductService {
             updateStatus(product, request.getStatus());
         }
 
-        // SỬA: Upload images và set mediaFiles
         uploadProductMediaFiles(product, images);
 
         return productMapper.toManagementResponse(productRepository.save(product));
@@ -117,7 +116,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
-    public Product createProductFromImport(String name, String description, BigDecimal price, String brandName, Category category, String ingredients, String usageInstructions, List<MediaFile> mediaFiles) {
+    public Product createProductFromImport(String name, String description, BigDecimal price, String brandName, Category category, String ingredients, String usageInstructions, ProductUnit unit, List<MediaFile> mediaFiles) {
         Product product = Product.builder()
                 .name(name.trim())
                 .description(description)
@@ -126,6 +125,7 @@ public class ProductServiceImpl implements ProductService {
                 .category(category)
                 .ingredients(ingredients)
                 .usageInstructions(usageInstructions)
+                .unit(unit)
                 .productCode(generateProductCode())
                 .status(ProductStatus.ACTIVE)
                 .mediaFiles(mediaFiles != null ? mediaFiles : new ArrayList<>())
@@ -151,10 +151,8 @@ public class ProductServiceImpl implements ProductService {
         Pageable sortedPageable = buildPageable(pageable, sortBy);
         Specification<Product> spec = buildProductSpec(keyword, categoryId, brandName, ProductStatus.ACTIVE);
         return productRepository.findAll(spec, sortedPageable)
-                .map(product -> {ProductPublicResponse response = productMapper.toPublicResponse(product);
-                    response.setTotalStock(getTotalStock(product));
-                    response.setHasActivePromotion(promotionService.hasActivePromotion(product.getProductId()));
-                    return response;});
+                .map(product -> {ProductPublicResponse response = productMapper.toListResponse(product);
+                    return setPromotionInfo(response, product);});
     }
 
     @Override
@@ -168,8 +166,7 @@ public class ProductServiceImpl implements ProductService {
                     response.setTotalStock(getTotalStock(product));
                     response.setBatchCount(getBatchCount(product));
                     setNearExpiredInfo(product, response, nearExpiredDays);
-                    response.setHasActivePromotion(promotionService.hasActivePromotion(product.getProductId()));
-                    return response;
+                    return setPromotionInfo(response, product);
                 });
     }
 
@@ -312,8 +309,9 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private <T extends ProductBaseResponse> T setPromotionInfo(T response, Product product) {
+        Optional<PromotionDetail> detailOpt = promotionDetailRepository.findByProduct_ProductIdAndPromotion_Status(
+                product.getProductId(), PromotionStatus.ACTIVE);
 
-        Optional<PromotionDetail> detailOpt = promotionDetailRepository.findByProduct_ProductIdAndPromotion_Status(product.getProductId(), PromotionStatus.ACTIVE);
         if (detailOpt.isEmpty()) {
             response.setHasActivePromotion(false);
             return response;
@@ -330,26 +328,30 @@ public class ProductServiceImpl implements ProductService {
 
         BigDecimal discountAmount = calculateDiscountAmount(
                 product.getPrice(),
-                detail.getDiscountType(),
+                detail.getPromotionType(),
                 detail.getDiscountValue()
         );
 
-        promotionMapper.updatePromotionInfo(response, promotion, detail);
         response.setHasActivePromotion(true);
+        response.setPromotionName(promotion.getName());
+        response.setPromotionType(detail.getPromotionType());
+        response.setDiscountValue(detail.getDiscountValue());
         response.setDiscountAmount(discountAmount);
         response.setSalePrice(product.getPrice().subtract(discountAmount).max(BigDecimal.ZERO));
+        response.setPromotionEndDate(promotion.getEndDate());
+
         return response;
     }
 
-    private BigDecimal calculateDiscountAmount(BigDecimal price, DiscountType type, BigDecimal value) {
+    private BigDecimal calculateDiscountAmount(BigDecimal price, PromotionType type, BigDecimal value) {
         if (price == null || value == null) {
             return BigDecimal.ZERO;
         }
 
-        if (type == DiscountType.PERCENTAGE) {
+        if (type == PromotionType.PERCENTAGE) {
             return price.multiply(value)
                     .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
-        } else if (type == DiscountType.FIXED_AMOUNT) {
+        } else if (type == PromotionType.FIXED_AMOUNT) {
             return value.min(price);
         }
         return BigDecimal.ZERO;

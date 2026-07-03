@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.dto.request;
 
 import com.petbuddy.petbuddystore.common.enums.DiscountType;
+import com.petbuddy.petbuddystore.common.enums.PromotionType;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -19,7 +20,7 @@ public class PromotionDetailRequest {
     UUID productId;
 
     @NotNull(message = "PROMOTION_DISCOUNT_TYPE_REQUIRED")
-    DiscountType discountType;
+    PromotionType promotionType;
 
     @NotNull(message = "PROMOTION_DISCOUNT_VALUE_REQUIRED")
     BigDecimal discountValue;
