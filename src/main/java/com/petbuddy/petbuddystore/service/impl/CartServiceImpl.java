@@ -5,7 +5,9 @@ import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.AddToCartRequest;
 import com.petbuddy.petbuddystore.dto.request.MergeCartRequest;
 import com.petbuddy.petbuddystore.dto.request.UpdateCartItemRequest;
+import com.petbuddy.petbuddystore.dto.response.CartItemResponse;
 import com.petbuddy.petbuddystore.dto.response.CartResponse;
+import com.petbuddy.petbuddystore.dto.response.ProductPublicResponse;
 import com.petbuddy.petbuddystore.mapper.CartMapper;
 import com.petbuddy.petbuddystore.model.Cart;
 import com.petbuddy.petbuddystore.model.CartItem;
@@ -26,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -47,16 +48,21 @@ public class CartServiceImpl implements CartService {
         Cart cart = getOrCreateCart(user);
 
         Product product = productService.getProductEntityById(request.getProductId());
+
+        ProductPublicResponse response = productService.getProduct(request.getProductId());
         CartItem existingItem = findItemByProduct(cart, product.getProductId());
 
         int newQuantity = request.getQuantity() + (existingItem != null ? existingItem.getQuantity() : 0);
         validateStock(product.getProductId(), newQuantity);
 
         if (existingItem != null) {
+            BigDecimal unitPrice = existingItem.getSalePrice() != null
+                            ? existingItem.getSalePrice() : existingItem.getPrice();
+
             existingItem.setQuantity(newQuantity);
-            existingItem.setSubtotal(product.getPrice().multiply(BigDecimal.valueOf(newQuantity)));
+            existingItem.setSubtotal(unitPrice.multiply(BigDecimal.valueOf(newQuantity)));
         } else {
-            cart.getCartItems().add(buildCartItem(cart, product, request.getQuantity()));
+            cart.getCartItems().add(buildCartItem(cart, product,response,request.getQuantity()));
         }
         cartRepository.save(cart);
     }
@@ -97,8 +103,10 @@ public class CartServiceImpl implements CartService {
     }
 
     @Override
-    public void updateCart(UUID cartItemId, UpdateCartItemRequest request) {
+    public CartItemResponse updateCart(UUID cartItemId, UpdateCartItemRequest request) {
+
         User user = getCurrentUser();
+
         Cart cart = cartRepository.findByUser_UserId(user.getUserId())
                 .orElseThrow(() -> new AppException(ErrorCode.CART_ITEM_NOT_FOUND));
 
@@ -107,20 +115,30 @@ public class CartServiceImpl implements CartService {
                 .findFirst()
                 .orElseThrow(() -> new AppException(ErrorCode.CART_ITEM_NOT_FOUND));
 
-        Product product = productService.getProductEntityById(item.getProduct().getProductId());
-        validateStock(product.getProductId(), request.getQuantity());
+        int available = productBatchRepository.findAvailableStockByProductId(
+                item.getProduct().getProductId());
 
-        BigDecimal currentPrice = item.getSubtotal()
-                .divide(BigDecimal.valueOf(item.getQuantity()));
-        if (currentPrice.compareTo(product.getPrice()) != 0) {
-            if (Boolean.FALSE.equals(request.getAcceptPriceChange())) {
-                throw new AppException(ErrorCode.PRODUCT_PRICE_CHANGE);
-            }
+        boolean adjusted = false;
+        int quantity = request.getQuantity();
+
+        if (quantity > available) {
+            quantity = available;
+            adjusted = true;
         }
 
-        item.setQuantity(request.getQuantity());
-        item.setSubtotal(product.getPrice().multiply(BigDecimal.valueOf(request.getQuantity())));
+        BigDecimal unitPrice = item.getSalePrice() != null
+                ? item.getSalePrice()
+                : item.getPrice();
+
+        item.setQuantity(quantity);
+        item.setSubtotal(unitPrice.multiply(BigDecimal.valueOf(quantity)));
+
         cartRepository.save(cart);
+
+        CartItemResponse response = cartMapper.toCartItemResponse(item);
+        response.setAdjusted(adjusted);
+
+        return response;
     }
 
     @Override
@@ -131,6 +149,7 @@ public class CartServiceImpl implements CartService {
         if (request.getItems() != null) {
             for (AddToCartRequest guestItem : request.getItems()) {
                 Product product = productService.getProductEntityById(guestItem.getProductId());
+                ProductPublicResponse response = productService.getProduct(guestItem.getProductId());
                 int availableStock = productBatchRepository.findAvailableStockByProductId(product.getProductId());
 
                 CartItem existingItem = findItemByProduct(cart, product.getProductId());
@@ -142,9 +161,9 @@ public class CartServiceImpl implements CartService {
 
                 if (existingItem != null) {
                     existingItem.setQuantity(newQuantity);
-                    existingItem.setSubtotal(product.getPrice().multiply(BigDecimal.valueOf(newQuantity)));
+                    existingItem.setSubtotal(existingItem.getPrice().multiply(BigDecimal.valueOf(newQuantity)));
                 } else {
-                    cart.getCartItems().add(buildCartItem(cart, product, newQuantity));
+                    cart.getCartItems().add(buildCartItem(cart, product,response,newQuantity));
                 }
             }
         }
@@ -164,12 +183,22 @@ public class CartServiceImpl implements CartService {
                 });
     }
 
-    private CartItem buildCartItem(Cart cart, Product product, int quantity) {
+    private CartItem buildCartItem(Cart cart, Product product, ProductPublicResponse response, Integer quantity) {
+
+        BigDecimal unitPrice = response.getSalePrice() != null ? response.getSalePrice() : response.getPrice();
+
         return CartItem.builder()
                 .cart(cart)
                 .product(product)
+                .productName(response.getName())
+                .description(response.getDescription())
+                .price(response.getPrice())
+                .salePrice(response.getSalePrice())
+                .imageUrl(
+                        response.getImageUrls() == null || response.getImageUrls().isEmpty()
+                                ? null : response.getImageUrls().getFirst())
                 .quantity(quantity)
-                .subtotal(product.getPrice().multiply(BigDecimal.valueOf(quantity)))
+                .subtotal(unitPrice.multiply(BigDecimal.valueOf(quantity)))
                 .build();
     }
 
@@ -185,6 +214,7 @@ public class CartServiceImpl implements CartService {
         if (available < requiredQuantity) {
             throw new AppException(ErrorCode.PRODUCT_OUT_OF_STOCK);
         }
+
     }
 
     private User getCurrentUser() {

@@ -19,6 +19,7 @@ public class CreateOrderRequest {
     String address;
     String note;
     String voucherCode;
-    BigDecimal shippingFee;
+    Double latitude;
+    Double longitude;
     String paymentMethod;
 }

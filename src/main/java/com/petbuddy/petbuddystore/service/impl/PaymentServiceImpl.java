@@ -22,6 +22,8 @@ import com.stripe.model.Event;
 import com.stripe.model.PaymentIntent;
 import com.stripe.net.Webhook;
 import com.stripe.param.PaymentIntentCreateParams;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -107,14 +109,17 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     public void markPaymentSucceeded(Order order) {
         Payment payment = order.getPayment();
-        if (payment.getStatus() == PaymentStatus.PAID) {
-            return;
-        }
         for (OrderDetail detail : order.getOrderDetails()) {
             deductStockByFefo(detail.getProduct().getProductId(), detail.getQuantity());
         }
-        cartService.clearCart();
+        log.info("Trừ kho xong cho order {}", order.getOrderCode());
         paymentRepository.save(payment);
+    }
+
+    @Override
+    public Page<PaymentResponse> getAllPayments(Pageable pageable) {
+        Page<Payment> payments = paymentRepository.findAll(pageable);
+        return payments.map(paymentMapper::toPaymentResponse);
     }
 
     private void deductStockByFefo(UUID productId, int quantity) {
@@ -192,12 +197,12 @@ public class PaymentServiceImpl implements PaymentService {
             return;
         }
 
+        Order order = payment.getOrder();
+        markPaymentSucceeded(order);
+
         payment.setStatus(PaymentStatus.PAID);
         payment.setPaidAt(LocalDateTime.now());
         paymentRepository.save(payment);
-
-        Order order = payment.getOrder();
-        markPaymentSucceeded(order);
         log.info("Thanh toán thành công: PaymentIntent={}, Order={}", intentId, order.getOrderCode());
     }
 

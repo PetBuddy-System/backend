@@ -9,6 +9,8 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -41,5 +43,9 @@ public class PaymentController {
 
         paymentService.handleWebhook(payload, sigHeader);
         return ResponseEntity.ok(ApiResponse.success("Webhook xử lý thành công"));
+    }
+    @GetMapping("/all")
+    public ResponseEntity<ApiResponse<Page<PaymentResponse>>> getAllPayments(Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(paymentService.getAllPayments(pageable)));
     }
 }

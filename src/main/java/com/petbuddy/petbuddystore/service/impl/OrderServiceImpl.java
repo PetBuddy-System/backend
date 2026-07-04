@@ -9,10 +9,7 @@ import com.petbuddy.petbuddystore.mapper.OrderMapper;
 import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.*;
 import com.petbuddy.petbuddystore.repository.PaymentRepository;
-import com.petbuddy.petbuddystore.service.CartService;
-import com.petbuddy.petbuddystore.service.OrderService;
-import com.petbuddy.petbuddystore.service.PaymentService;
-import com.petbuddy.petbuddystore.service.ProductService;
+import com.petbuddy.petbuddystore.service.*;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +43,7 @@ public class OrderServiceImpl implements OrderService {
     ProductService productService;
     CartService cartService;
     PaymentService paymentService;
+    ShippingRuleService shippingRuleService;
     OrderMapper orderMapper;
     PaymentRepository paymentRepository;
 
@@ -53,7 +51,7 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse createOrder(CreateOrderRequest request) {
         checkLogin();
         User user = getCurrentUser();
-
+        Voucher appliedVoucher = null;
         PaymentMethod method;
         try {
             method = PaymentMethod.valueOf(request.getPaymentMethod().toUpperCase());
@@ -66,9 +64,8 @@ public class OrderServiceImpl implements OrderService {
             throw new AppException(ErrorCode.CART_EMPTY);
         }
 
-        if (request.getShippingFee() == null || request.getShippingFee().compareTo(BigDecimal.ZERO) < 0) {
-            throw new AppException(ErrorCode.INVALID_SHIPPING_FEE);
-        }
+       ShippingFeeResponse shippingFeeResponse = shippingRuleService.calculateFee(request.getLatitude(), request.getLongitude());
+        BigDecimal shippingFee =shippingFeeResponse.getShippingFee();
 
         Order order = Order.builder()
                 .orderCode(generateOrderCode())
@@ -77,7 +74,7 @@ public class OrderServiceImpl implements OrderService {
                 .phoneNumber(request.getPhoneNumber())
                 .address(request.getAddress())
                 .note(request.getNote())
-                .shippingFee(request.getShippingFee())
+                .shippingFee(shippingFee)
                 .status(OrderStatus.PENDING)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -86,6 +83,7 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal total = BigDecimal.ZERO;
 
         for (CartItemResponse item : cartItems) {
+            BigDecimal unitPrice = item.getSalePrice() != null ? item.getSalePrice() : item.getPrice();
             Product product = productService.getProductEntityById(item.getProductId());
             int availableStock = productBatchRepository.findAvailableStockByProductId(product.getProductId());
             if (availableStock < item.getQuantity()) {
@@ -97,9 +95,9 @@ public class OrderServiceImpl implements OrderService {
                     .product(product)
                     .productName(product.getName())
                     .productImage(getFirstImage(product))
-                    .unitPrice(item.getPrice())
+                    .unitPrice(unitPrice)
                     .quantity(item.getQuantity())
-                    .totalPrice(item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+                    .totalPrice(unitPrice.multiply(BigDecimal.valueOf(item.getQuantity())))
                     .build();
 
             total = total.add(detail.getTotalPrice());
@@ -126,18 +124,17 @@ public class OrderServiceImpl implements OrderService {
                     .usedAt(LocalDateTime.now())
                     .build();
             userVoucherRepository.save(userVoucher);
+            appliedVoucher = voucher;
         }
-
+        order.setVoucher(appliedVoucher);
         order.setOrderDetails(orderDetails);
         order.setTotalAmount(total);
-        order.setFinalAmount(finalAmount);
+        order.setFinalAmount(finalAmount.add(shippingFee));
         orderRepository.save(order);
         userRepository.save(user);
 
         paymentService.createPayment(order, method);
-        if(method == PaymentMethod.CASH){
-            cartService.clearCart();
-        }
+        cartService.clearCart();
         return orderMapper.toOrderResponse(order);
     }
 
