@@ -28,7 +28,7 @@ public interface ProductMapper {
     @Mapping(target = "usageInstructions", ignore = true)
     @Mapping(target = "promotionType", ignore = true)
     @Mapping(target = "discountValue", ignore = true)
-    @Mapping(target = "promotion_price", ignore = true)
+    @Mapping(target = "promotionPrice", ignore = true)
     @Mapping(target = "discountAmount", ignore = true)
     @Mapping(target = "promotionEndDate", ignore = true)
     @Mapping(target = "hasActivePromotion", ignore = true)

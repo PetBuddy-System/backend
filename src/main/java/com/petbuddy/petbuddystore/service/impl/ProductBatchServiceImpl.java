@@ -94,7 +94,7 @@ public class ProductBatchServiceImpl implements ProductBatchService {
         }
 
         if (request.getUnit_cost() != null) {
-            batch.setUnit_cost(request.getUnit_cost());
+            batch.setUnitCost(request.getUnit_cost());
         }
 
         if (request.getExpiryDate() != null) {
@@ -138,20 +138,20 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                 int rowNum = i + 1;
                 String name = getCellString(row, 0);
                 String description = getCellString(row, 1);
-                BigDecimal sale_price = getCellBigDecimal(row, 2);
+                BigDecimal salePrice = getCellBigDecimal(row, 2);
                 String brandName = getCellString(row, 3);
                 String categoryName = getCellString(row, 4);
                 Integer stockQuantity = getCellInteger(row, 5);
                 LocalDate expiryDate = getCellLocalDate(row, 6);
                 String ingredients = getCellString(row, 7);
                 String usageInstructions = getCellString(row, 8);
-                BigDecimal unit_cost = getCellBigDecimal(row, 9);
+                BigDecimal unitCost = getCellBigDecimal(row, 9);
                 String unitStr = getCellString(row, 10);
 
                 if (name == null || name.isBlank()) {
                     errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_NAME_REQUIRED"));
                 }
-                if (sale_price == null || sale_price.compareTo(BigDecimal.ZERO) <= 0) {
+                if (salePrice == null || salePrice.compareTo(BigDecimal.ZERO) <= 0) {
                     errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_PRICE_INVALID"));
                 }
                 if (categoryName == null || categoryName.isBlank()) {
@@ -163,7 +163,7 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                 if (expiryDate != null && !expiryDate.isAfter(LocalDate.now())) {
                     errors.add(new ProductImportResponse.Error(rowNum, "EXPIRY_DATE_INVALID"));
                 }
-                if (unit_cost != null && unit_cost.compareTo(BigDecimal.ZERO) < 0) {
+                if (unitCost != null && unitCost.compareTo(BigDecimal.ZERO) < 0) {
                     errors.add(new ProductImportResponse.Error(rowNum, "UNIT_COST_INVALID"));
                 }
                 if (unitStr == null || unitStr.isBlank()) {
@@ -197,8 +197,8 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                 }
 
                 List<byte[]> rowImages = rowImagesMap.getOrDefault(i, Collections.emptyList());
-                validRows.add(new ImportRowRequest(rowNum, name, description, sale_price, brandName, category,
-                        stockQuantity, expiryDate, ingredients, usageInstructions, unit_cost, unit, rowImages));
+                validRows.add(new ImportRowRequest(rowNum, name, description, salePrice, brandName, category,
+                        stockQuantity, expiryDate, ingredients, usageInstructions, unitCost, unit, rowImages));
             }
 
             if (!errors.isEmpty()) {
@@ -219,7 +219,7 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                 if (product == null) {
                     List<MediaFile> mediaFiles = uploadImages(rowData.getImages(), rowData.getName());
                     product = productService.createProductFromImport(
-                            rowData.getName(), rowData.getDescription(), rowData.getSale_price(), rowData.getBrandName(),
+                            rowData.getName(), rowData.getDescription(), rowData.getSalePrice(), rowData.getBrandName(),
                             rowData.getCategory(), rowData.getIngredients(), rowData.getUsageInstructions(),
                             rowData.getUnit(),
                             mediaFiles);
@@ -234,7 +234,7 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                         .product(product)
                         .stockQuantity(rowData.getStockQuantity())
                         .expiryDate(rowData.getExpiryDate())
-                        .unit_cost(rowData.getUnit_cost() != null ? rowData.getUnit_cost() : BigDecimal.ZERO)
+                        .unitCost(rowData.getUnitCost() != null ? rowData.getUnitCost() : BigDecimal.ZERO)
                         .status(ProductStatus.ACTIVE)
                         .build();
 

@@ -67,7 +67,7 @@ public class PromotionServiceImpl implements PromotionService {
                     throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
                 }
 
-                validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getSale_price());
+                validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getSalePrice());
 
                 PromotionDetail detail = PromotionDetail.builder()
                         .promotion(promotion)
@@ -145,8 +145,7 @@ public class PromotionServiceImpl implements PromotionService {
                     throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
                 }
 
-                validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getSale_price());  // Đổi từ getPrice() thành getSale_price()
-
+                validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getSalePrice());
                 PromotionDetail detail = PromotionDetail.builder()
                         .promotion(promotion)
                         .product(product)
@@ -189,11 +188,11 @@ public class PromotionServiceImpl implements PromotionService {
                         .orElse(null);
                 if (detail != null) {
                     BigDecimal discountAmount = calculateDiscountAmount(
-                            detailResponse.getSale_price(),
+                            detailResponse.getSalePrice(),
                             detail.getPromotionType(),
                             detail.getDiscountValue()
                     );
-                    BigDecimal promotionPrice = detailResponse.getSale_price().subtract(discountAmount);
+                    BigDecimal promotionPrice = detailResponse.getSalePrice().subtract(discountAmount);
                     if (promotionPrice.compareTo(BigDecimal.ZERO) < 0) {
                         promotionPrice = BigDecimal.ZERO;
                     }

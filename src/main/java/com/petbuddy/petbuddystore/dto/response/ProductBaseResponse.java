@@ -23,7 +23,7 @@ public abstract class ProductBaseResponse {
     String description;
     String ingredients;
     String usageInstructions;
-    BigDecimal sale_price;
+    BigDecimal salePrice;
     String brandName;
     ProductUnit unit;
 
@@ -38,6 +38,6 @@ public abstract class ProductBaseResponse {
     PromotionType promotionType;
     BigDecimal discountValue;
     BigDecimal discountAmount;
-    BigDecimal promotion_price;
+    BigDecimal promotionPrice;
     LocalDateTime promotionEndDate;
 }

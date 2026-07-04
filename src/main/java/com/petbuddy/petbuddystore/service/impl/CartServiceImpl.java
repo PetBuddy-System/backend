@@ -49,24 +49,21 @@ public class CartServiceImpl implements CartService {
 
         Product product = productService.getProductEntityById(request.getProductId());
 
+        ProductPublicResponse response = productService.getProduct(request.getProductId());
         CartItem existingItem = findItemByProduct(cart, product.getProductId());
 
-        int newQuantity = request.getQuantity()
-                + (existingItem != null ? existingItem.getQuantity() : 0);
-
+        int newQuantity = request.getQuantity() + (existingItem != null ? existingItem.getQuantity() : 0);
         validateStock(product.getProductId(), newQuantity);
 
         if (existingItem != null) {
             BigDecimal unitPrice = existingItem.getSalePrice() != null
-                    ? existingItem.getSalePrice()
-                    : existingItem.getPrice();
+                            ? existingItem.getSalePrice() : existingItem.getPrice();
 
             existingItem.setQuantity(newQuantity);
             existingItem.setSubtotal(unitPrice.multiply(BigDecimal.valueOf(newQuantity)));
         } else {
             cart.getCartItems().add(buildCartItem(cart, product, request.getQuantity()));
         }
-
         cartRepository.save(cart);
     }
 
@@ -149,34 +146,22 @@ public class CartServiceImpl implements CartService {
 
         if (request.getItems() != null) {
             for (AddToCartRequest guestItem : request.getItems()) {
-
                 Product product = productService.getProductEntityById(guestItem.getProductId());
-
-
-                int availableStock =
-                        productBatchRepository.findAvailableStockByProductId(product.getProductId());
+                ProductPublicResponse response = productService.getProduct(guestItem.getProductId());
+                int availableStock = productBatchRepository.findAvailableStockByProductId(product.getProductId());
 
                 CartItem existingItem = findItemByProduct(cart, product.getProductId());
 
-                int newQuantity = guestItem.getQuantity()
-                        + (existingItem != null ? existingItem.getQuantity() : 0);
-
+                int newQuantity = guestItem.getQuantity() + (existingItem != null ? existingItem.getQuantity() : 0);
                 newQuantity = Math.min(newQuantity, availableStock);
 
-                if (newQuantity <= 0) {
-                    continue;
-                }
+                if (newQuantity <= 0) continue;
 
                 if (existingItem != null) {
                     existingItem.setQuantity(newQuantity);
-
-                    BigDecimal unitPrice = existingItem.getSalePrice() != null
-                            ? existingItem.getSalePrice()
-                            : existingItem.getPrice();
-
-                    existingItem.setSubtotal(unitPrice.multiply(BigDecimal.valueOf(newQuantity)));
+                    existingItem.setSubtotal(existingItem.getPrice().multiply(BigDecimal.valueOf(newQuantity)));
                 } else {
-                    cart.getCartItems().add(buildCartItem(cart, product, newQuantity));
+                    cart.getCartItems().add(buildCartItem(cart, product,response,newQuantity));
                 }
             }
         }
@@ -209,7 +194,7 @@ public class CartServiceImpl implements CartService {
 //                .salePrice(unitPrice)
                 .imageUrl(getThumbnailUrl(product))
                 .quantity(quantity)
-//                .subtotal(unitPrice.multiply(BigDecimal.valueOf(quantity)))
+                .subtotal(unitPrice.multiply(BigDecimal.valueOf(quantity)))
                 .build();
     }
 

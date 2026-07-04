@@ -117,7 +117,7 @@ public class ProductServiceImpl implements ProductService {
         Product product = Product.builder()
                 .name(name.trim())
                 .description(description)
-                .sale_price(sale_price)
+                .salePrice(sale_price)
                 .brandName(brandName)
                 .category(category)
                 .ingredients(ingredients)
@@ -333,7 +333,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         BigDecimal discountAmount = calculateDiscountAmount(
-                product.getSale_price(),
+                product.getSalePrice(),
                 detail.getPromotionType(),
                 detail.getDiscountValue()
         );
@@ -343,8 +343,7 @@ public class ProductServiceImpl implements ProductService {
         response.setPromotionType(detail.getPromotionType());
         response.setDiscountValue(detail.getDiscountValue());
         response.setDiscountAmount(discountAmount);
-        response.setPromotion_price(product.getSale_price().subtract(discountAmount).max(BigDecimal.ZERO));  // Đổi từ setSalePrice thành setPromotion_price
-        response.setPromotionEndDate(promotion.getEndDate());
+        response.setPromotionPrice(product.getSalePrice().subtract(discountAmount).max(BigDecimal.ZERO));
 
         return response;
     }
