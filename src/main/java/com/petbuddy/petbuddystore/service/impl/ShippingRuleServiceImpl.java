@@ -1,127 +1,131 @@
-    package com.petbuddy.petbuddystore.service.impl;
+package com.petbuddy.petbuddystore.service.impl;
 
-    import com.petbuddy.petbuddystore.common.exception.AppException;
-    import com.petbuddy.petbuddystore.common.exception.ErrorCode;
-    import com.petbuddy.petbuddystore.dto.request.ShippingRuleRequest;
-    import com.petbuddy.petbuddystore.dto.response.ShippingFeeResponse;
-    import com.petbuddy.petbuddystore.dto.response.ShippingRuleResponse;
-    import com.petbuddy.petbuddystore.mapper.ShippingMapper;
-    import com.petbuddy.petbuddystore.model.ShippingRule;
-    import com.petbuddy.petbuddystore.repository.ShippingRuleRepository;
-    import com.petbuddy.petbuddystore.service.ShippingRuleService;
-    import lombok.AccessLevel;
-    import lombok.RequiredArgsConstructor;
-    import lombok.experimental.FieldDefaults;
-    import org.locationtech.jts.geom.Coordinate;
+import com.petbuddy.petbuddystore.common.exception.AppException;
+import com.petbuddy.petbuddystore.common.exception.ErrorCode;
+import com.petbuddy.petbuddystore.dto.request.ShippingRuleRequest;
+import com.petbuddy.petbuddystore.dto.response.ShippingFeeResponse;
+import com.petbuddy.petbuddystore.dto.response.ShippingRuleResponse;
+import com.petbuddy.petbuddystore.mapper.ShippingMapper;
+import com.petbuddy.petbuddystore.model.ShippingRule;
+import com.petbuddy.petbuddystore.repository.ShippingRuleRepository;
+import com.petbuddy.petbuddystore.service.ShippingRuleService;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.Point;
+import org.springframework.stereotype.Service;
+import com.petbuddy.petbuddystore.configuration.GeoBoundaryConfig.GeoBoundaries;
 
-    import org.locationtech.jts.geom.*;
-    import org.locationtech.jts.geom.Point;
-    import org.springframework.stereotype.Service;
+import java.math.BigDecimal;
+import java.util.List;
 
-    import java.math.BigDecimal;
-    import java.util.List;
+@Service
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+public class ShippingRuleServiceImpl implements ShippingRuleService {
 
-    @Service
-    @RequiredArgsConstructor
-    @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-    public class ShippingRuleServiceImpl implements ShippingRuleService {
+    static double FREE_SHIP_RADIUS = 5.0;
+    static double STORE_LAT = 10.776889;
+    static double STORE_LON = 106.700806;
 
-         static double FREE_SHIP_RADIUS = 5.0;
+    ShippingRuleRepository shippingRuleRepository;
+    ShippingMapper shippingMapper;
 
-         static  double STORE_LAT = 10.776889;
-         static  double STORE_LON = 106.700806;
+    GeoBoundaries geoBoundaries;
 
-          ShippingRuleRepository shippingRuleRepository;
-          ShippingMapper  shippingMapper;
-          Geometry  hcmBoundaryGeometry;
-          static GeometryFactory GEOMETRY_FACTORY = new GeometryFactory();
+    static GeometryFactory GEOMETRY_FACTORY = new GeometryFactory();
 
-        @Override
-        public ShippingFeeResponse calculateFee(Double latitude, Double longitude) {
-            if(latitude == null || ((latitude < -90 || latitude > 90)) ||
-                    longitude == null || ((longitude < -180 || longitude > 180))) {
-                throw new AppException(ErrorCode.INVALID_COORDINATES);
-            }
-
-            if(!isInsideHCM(latitude, longitude)){
-                throw new AppException(ErrorCode.LOCATION_OUTSIDE_HCM);
-            }
-
-            double distance = calculateDistance(STORE_LAT, STORE_LON, latitude, longitude);
-            if(distance <= FREE_SHIP_RADIUS){
-                return shippingMapper.toResponse(distance, BigDecimal.ZERO, true);
-            }
-
-            ShippingRule config = shippingRuleRepository.findRuleByDistance(distance)
-                            .orElseThrow(() -> new AppException(ErrorCode.SHIPPING_CONFIG_NOT_FOUND));
-            return shippingMapper.toResponse(distance, config.getFee(), false);
+    @Override
+    public ShippingFeeResponse calculateFee(Double latitude, Double longitude) {
+        if (latitude == null || (latitude < -90 || latitude > 90) ||
+                longitude == null || (longitude < -180 || longitude > 180)) {
+            throw new AppException(ErrorCode.INVALID_COORDINATES);
         }
 
-        @Override
-        public ShippingRuleResponse createRule(ShippingRuleRequest request) {
-            boolean exists = shippingRuleRepository.existsOverlap(request.getMinDistance(), request.getMaxDistance());
-            if(exists) {
-                throw new AppException(ErrorCode.SHIPPING_RULE_OVERLAP);
-            }
+        validateLocation(latitude, longitude);
 
-            if(request.getMinDistance() > request.getMaxDistance()) {
-                throw new AppException(ErrorCode.INVALID_DISTANCE);
-            }
-
-            ShippingRule fee = shippingMapper.toShipping(request);
-            return shippingMapper.toShippingResponse(shippingRuleRepository.save(fee));
+        double distance = calculateDistance(STORE_LAT, STORE_LON, latitude, longitude);
+        if (distance <= FREE_SHIP_RADIUS) {
+            return shippingMapper.toResponse(distance, BigDecimal.ZERO, true);
         }
 
-        @Override
-        public ShippingRuleResponse updateRule(Long id, ShippingRuleRequest request) {
-            ShippingRule rule = shippingRuleRepository.findById(id)
-                    .orElseThrow(() -> new AppException(ErrorCode.SHIPPING_CONFIG_NOT_FOUND));
-            rule.setMinDistance(request.getMinDistance());
-            rule.setMaxDistance(request.getMaxDistance());
-            rule.setFee(request.getFee());
-
-            return shippingMapper.toShippingResponse(shippingRuleRepository.save(shippingRuleRepository.save(rule)));
-        }
-
-        @Override
-        public List<ShippingRule> getAllShippingRules() {
-            return shippingRuleRepository.findAll();
-        }
-
-        @Override
-        public ShippingRule getShippingRuleById(Long id) {
-            return shippingRuleRepository.findById(id)
-                    .orElseThrow(() -> new AppException(ErrorCode.SHIPPING_CONFIG_NOT_FOUND));
-        }
-
-        @Override
-        public void deleteShippingRule(Long id) {
-            ShippingRule rule = shippingRuleRepository.findById(id)
-                    .orElseThrow(() -> new AppException(ErrorCode.SHIPPING_CONFIG_NOT_FOUND));
-
-            shippingRuleRepository.delete(rule);
-        }
-
-        private boolean isInsideHCM(double lat, double lon){
-            Point point = GEOMETRY_FACTORY.createPoint(new Coordinate(lon, lat));
-            return hcmBoundaryGeometry.covers(point);
-        }
-        private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-
-                double dLat = Math.toRadians(lat2 - lat1);
-                double dLon = Math.toRadians(lon2 - lon1);
-
-                double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-                                + Math.cos(Math.toRadians(lat1))
-                                * Math.cos(Math.toRadians(lat2))
-                                * Math.sin(dLon / 2)
-                                * Math.sin(dLon / 2);
-
-                double c = 2 * Math.atan2(
-                                Math.sqrt(a),
-                                Math.sqrt(1 - a));
-
-                double EARTH_RADIUS = 6371;
-                return EARTH_RADIUS * c;
-            }
+        ShippingRule config = shippingRuleRepository.findRuleByDistance(distance)
+                .orElseThrow(() -> new AppException(ErrorCode.SHIPPING_CONFIG_NOT_FOUND));
+        return shippingMapper.toResponse(distance, config.getFee(), false);
     }
+
+    @Override
+    public ShippingRuleResponse createRule(ShippingRuleRequest request) {
+        boolean exists = shippingRuleRepository.existsOverlap(request.getMinDistance(), request.getMaxDistance());
+        if (exists) {
+            throw new AppException(ErrorCode.SHIPPING_RULE_OVERLAP);
+        }
+
+        if (request.getMinDistance() > request.getMaxDistance()) {
+            throw new AppException(ErrorCode.INVALID_DISTANCE);
+        }
+
+        ShippingRule fee = shippingMapper.toShipping(request);
+        return shippingMapper.toShippingResponse(shippingRuleRepository.save(fee));
+    }
+
+    @Override
+    public ShippingRuleResponse updateRule(Long id, ShippingRuleRequest request) {
+        ShippingRule rule = shippingRuleRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.SHIPPING_CONFIG_NOT_FOUND));
+        rule.setMinDistance(request.getMinDistance());
+        rule.setMaxDistance(request.getMaxDistance());
+        rule.setFee(request.getFee());
+
+        return shippingMapper.toShippingResponse(shippingRuleRepository.save(rule));
+    }
+
+    @Override
+    public List<ShippingRule> getAllShippingRules() {
+        return shippingRuleRepository.findAll();
+    }
+
+    @Override
+    public ShippingRule getShippingRuleById(Long id) {
+        return shippingRuleRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.SHIPPING_CONFIG_NOT_FOUND));
+    }
+
+    @Override
+    public void deleteShippingRule(Long id) {
+        ShippingRule rule = shippingRuleRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.SHIPPING_CONFIG_NOT_FOUND));
+
+        shippingRuleRepository.delete(rule);
+    }
+
+    private void validateLocation(double lat, double lon) {
+        Point point = GEOMETRY_FACTORY.createPoint(new Coordinate(lon, lat));
+
+        if (!geoBoundaries.hcmBoundaryGeometry().covers(point)) {
+            throw new AppException(ErrorCode.LOCATION_OUTSIDE_HCM);
+        }
+
+        if (geoBoundaries.waterGeometry() != null && geoBoundaries.waterGeometry().covers(point)) {
+            throw new AppException(ErrorCode.LOCATION_ON_WATER);
+        }
+    }
+
+    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1))
+                * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2)
+                * Math.sin(dLon / 2);
+
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        double EARTH_RADIUS = 6371;
+        return EARTH_RADIUS * c;
+    }
+}
