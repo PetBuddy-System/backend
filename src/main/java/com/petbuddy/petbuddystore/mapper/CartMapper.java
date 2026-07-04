@@ -9,6 +9,7 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
 
+import java.awt.*;
 import java.util.List;
 
 @Mapper(componentModel = "spring")
@@ -17,5 +18,14 @@ public interface CartMapper {
     CartResponse toCartResponse(Cart cart);
 
     @Mapping(source = "product.productId",  target = "productId")
+    @Mapping(source = "product.mediaFiles", target = "imageUrl", qualifiedByName ="firstImage")
     CartItemResponse toCartItemResponse(CartItem item);
+
+    @Named("firstImage")
+    default String firstImage(List<MediaFile> mediaFiles) {
+        if (mediaFiles == null || mediaFiles.isEmpty()) {
+            return null;
+        }
+        return mediaFiles.getFirst().getFileUrl();
+    }
 }
