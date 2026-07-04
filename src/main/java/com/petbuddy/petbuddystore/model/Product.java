@@ -52,7 +52,7 @@ public class Product {
     @NotNull(message = "PRODUCT_PRICE_REQUIRED")
     @DecimalMin(value = "0.0", inclusive = false, message = "PRODUCT_PRICE_INVALID")
     @Column(nullable = false)
-    BigDecimal sale_price;
+    BigDecimal salePrice;
 
     @NotNull(message = "PRODUCT_UNIT_REQUIRED")
     @Enumerated(EnumType.STRING)

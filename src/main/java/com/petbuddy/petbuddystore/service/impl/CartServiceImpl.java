@@ -183,22 +183,26 @@ public class CartServiceImpl implements CartService {
                 });
     }
 
-    private CartItem buildCartItem(Cart cart, Product product, ProductPublicResponse response, Integer quantity) {
+    private CartItem buildCartItem(
+            Cart cart,
+            Product product,
+            ProductPublicResponse response,
+            Integer quantity) {
 
-//        BigDecimal unitPrice = response.getSalePrice() != null ? response.getSalePrice() : response.getPrice();
+        BigDecimal unitPrice = response.getPromotionPrice() != null
+                ? response.getPromotionPrice()
+                : response.getSalePrice();
 
         return CartItem.builder()
                 .cart(cart)
                 .product(product)
                 .productName(response.getName())
                 .description(response.getDescription())
-//                .price(response.getPrice())
-//                .salePrice(response.getSalePrice())
-//                .imageUrl(
-//                        response.getImageUrls() == null || response.getImageUrls().isEmpty()
-//                                ? null : response.getImageUrls().getFirst())
+                .price(response.getSalePrice())
+                .salePrice(unitPrice)
+                .imageUrl(response.getThumbnailUrl())
                 .quantity(quantity)
-//                .subtotal(unitPrice.multiply(BigDecimal.valueOf(quantity)))
+                .subtotal(unitPrice.multiply(BigDecimal.valueOf(quantity)))
                 .build();
     }
 

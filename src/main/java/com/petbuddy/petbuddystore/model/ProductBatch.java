@@ -49,7 +49,7 @@ public class ProductBatch {
 
     @Column(name = "unit_cost", precision = 19, scale = 2)
     @Builder.Default
-    private BigDecimal unit_cost = BigDecimal.ZERO;
+    private BigDecimal unitCost = BigDecimal.ZERO;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)
