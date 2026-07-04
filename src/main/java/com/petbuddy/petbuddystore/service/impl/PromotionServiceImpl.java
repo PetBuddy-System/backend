@@ -67,7 +67,7 @@ public class PromotionServiceImpl implements PromotionService {
                     throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
                 }
 
-                validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getPrice());
+                validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getSale_price());
 
                 PromotionDetail detail = PromotionDetail.builder()
                         .promotion(promotion)
@@ -145,7 +145,7 @@ public class PromotionServiceImpl implements PromotionService {
                     throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
                 }
 
-                validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getPrice());
+                validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getSale_price());  // Đổi từ getPrice() thành getSale_price()
 
                 PromotionDetail detail = PromotionDetail.builder()
                         .promotion(promotion)
@@ -189,16 +189,16 @@ public class PromotionServiceImpl implements PromotionService {
                         .orElse(null);
                 if (detail != null) {
                     BigDecimal discountAmount = calculateDiscountAmount(
-                            detailResponse.getPrice(),
+                            detailResponse.getSale_price(),
                             detail.getPromotionType(),
                             detail.getDiscountValue()
                     );
-                    BigDecimal salePrice = detailResponse.getPrice().subtract(discountAmount);
-                    if (salePrice.compareTo(BigDecimal.ZERO) < 0) {
-                        salePrice = BigDecimal.ZERO;
+                    BigDecimal promotionPrice = detailResponse.getSale_price().subtract(discountAmount);
+                    if (promotionPrice.compareTo(BigDecimal.ZERO) < 0) {
+                        promotionPrice = BigDecimal.ZERO;
                     }
                     detailResponse.setDiscountAmount(discountAmount);
-                    detailResponse.setSalePrice(salePrice);
+                    detailResponse.setPromotion_price(promotionPrice);
                     detailResponse.setPromotionType(detail.getPromotionType());
                 }
             }

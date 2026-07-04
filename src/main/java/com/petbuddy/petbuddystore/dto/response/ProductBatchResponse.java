@@ -23,7 +23,7 @@ public class ProductBatchResponse {
 
     Integer stockQuantity;
 
-    BigDecimal cost;
+    BigDecimal unit_cost;
 
     LocalDate expiryDate;
 

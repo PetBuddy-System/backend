@@ -113,11 +113,11 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
-    public Product createProductFromImport(String name, String description, BigDecimal price, String brandName, Category category, String ingredients, String usageInstructions, ProductUnit unit, List<MediaFile> mediaFiles) {
+    public Product createProductFromImport(String name, String description, BigDecimal sale_price, String brandName, Category category, String ingredients, String usageInstructions, ProductUnit unit, List<MediaFile> mediaFiles) {
         Product product = Product.builder()
                 .name(name.trim())
                 .description(description)
-                .price(price)
+                .sale_price(sale_price)
                 .brandName(brandName)
                 .category(category)
                 .ingredients(ingredients)
@@ -225,8 +225,8 @@ public class ProductServiceImpl implements ProductService {
 
     private Pageable buildPageable(Pageable pageable, String sortBy) {
         Sort sort = switch (sortBy == null ? "date_desc" : sortBy) {
-            case "price_asc" -> Sort.by(Sort.Direction.ASC, "price");
-            case "price_desc" -> Sort.by(Sort.Direction.DESC, "price");
+            case "price_asc" -> Sort.by(Sort.Direction.ASC, "sale_price");
+            case "price_desc" -> Sort.by(Sort.Direction.DESC, "sale_price");
             case "date_asc" -> Sort.by(Sort.Direction.ASC, "createdAt");
             case "date_desc" -> Sort.by(Sort.Direction.DESC, "createdAt");
             default -> throw new AppException(ErrorCode.INVALID_SORT_OPTION);
@@ -333,7 +333,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         BigDecimal discountAmount = calculateDiscountAmount(
-                product.getPrice(),
+                product.getSale_price(),
                 detail.getPromotionType(),
                 detail.getDiscountValue()
         );
@@ -343,7 +343,7 @@ public class ProductServiceImpl implements ProductService {
         response.setPromotionType(detail.getPromotionType());
         response.setDiscountValue(detail.getDiscountValue());
         response.setDiscountAmount(discountAmount);
-        response.setSalePrice(product.getPrice().subtract(discountAmount).max(BigDecimal.ZERO));
+        response.setPromotion_price(product.getSale_price().subtract(discountAmount).max(BigDecimal.ZERO));  // Đổi từ setSalePrice thành setPromotion_price
         response.setPromotionEndDate(promotion.getEndDate());
 
         return response;

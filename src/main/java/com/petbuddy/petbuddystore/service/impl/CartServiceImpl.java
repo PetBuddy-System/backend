@@ -185,20 +185,20 @@ public class CartServiceImpl implements CartService {
 
     private CartItem buildCartItem(Cart cart, Product product, ProductPublicResponse response, Integer quantity) {
 
-        BigDecimal unitPrice = response.getSalePrice() != null ? response.getSalePrice() : response.getPrice();
+//        BigDecimal unitPrice = response.getSalePrice() != null ? response.getSalePrice() : response.getPrice();
 
         return CartItem.builder()
                 .cart(cart)
                 .product(product)
                 .productName(response.getName())
                 .description(response.getDescription())
-                .price(response.getPrice())
-                .salePrice(response.getSalePrice())
-                .imageUrl(
-                        response.getImageUrls() == null || response.getImageUrls().isEmpty()
-                                ? null : response.getImageUrls().getFirst())
+//                .price(response.getPrice())
+//                .salePrice(response.getSalePrice())
+//                .imageUrl(
+//                        response.getImageUrls() == null || response.getImageUrls().isEmpty()
+//                                ? null : response.getImageUrls().getFirst())
                 .quantity(quantity)
-                .subtotal(unitPrice.multiply(BigDecimal.valueOf(quantity)))
+//                .subtotal(unitPrice.multiply(BigDecimal.valueOf(quantity)))
                 .build();
     }
 

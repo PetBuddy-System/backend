@@ -4,7 +4,6 @@ import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.ProductBatchCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductBatchUpdateRequest;
-import com.petbuddy.petbuddystore.dto.request.ProductImportRequest;
 import com.petbuddy.petbuddystore.dto.response.ProductBatchResponse;
 import com.petbuddy.petbuddystore.dto.response.ProductImportResponse;
 import com.petbuddy.petbuddystore.service.ProductBatchService;

@@ -19,9 +19,9 @@ public class PromotionDetailResponse {
     UUID productId;
     String productName;
     String productCode;
-    BigDecimal price;
+    BigDecimal sale_price;
     PromotionType promotionType;
     BigDecimal discountValue;
-    BigDecimal salePrice;
+    BigDecimal promotion_price;
     BigDecimal discountAmount;
 }
