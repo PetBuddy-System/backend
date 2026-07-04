@@ -1,10 +1,16 @@
 package com.petbuddy.petbuddystore.dto.response;
 
 import com.petbuddy.petbuddystore.common.enums.DiscountType;
-import lombok.*;
+import com.petbuddy.petbuddystore.common.enums.ProductUnit;
+import com.petbuddy.petbuddystore.common.enums.PromotionType;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -12,13 +18,26 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public abstract class ProductBaseResponse {
+    UUID productId;
+    String name;
+    String description;
+    String ingredients;
+    String usageInstructions;
+    BigDecimal price;
+    String brandName;
+    ProductUnit unit;
 
-    private UUID promotionId;
-    private String promotionName;
-    private DiscountType discountType;
-    private BigDecimal discountValue;
-    private LocalDateTime promotionEndDate;
-    private boolean hasActivePromotion;
-    private BigDecimal discountAmount;
-    private BigDecimal salePrice;
+    String thumbnailUrl;
+
+    Long categoryId;
+    String categoryName;
+    Integer totalStock;
+
+    boolean hasActivePromotion;
+    String promotionName;
+    PromotionType promotionType;
+    BigDecimal discountValue;
+    BigDecimal discountAmount;
+    BigDecimal salePrice;
+    LocalDateTime promotionEndDate;
 }

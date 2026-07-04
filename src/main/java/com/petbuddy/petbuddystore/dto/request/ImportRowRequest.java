@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.dto.request;
 
+import com.petbuddy.petbuddystore.common.enums.ProductUnit;
 import com.petbuddy.petbuddystore.model.Category;
 import lombok.*;
 
@@ -24,5 +25,6 @@ public class ImportRowRequest {
     private String ingredients;
     private String usageInstructions;
     private BigDecimal cost;
+    private ProductUnit unit;
     private List<byte[]> images;
 }

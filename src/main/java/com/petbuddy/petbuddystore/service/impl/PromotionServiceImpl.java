@@ -1,6 +1,6 @@
 package com.petbuddy.petbuddystore.service.impl;
 
-import com.petbuddy.petbuddystore.common.enums.DiscountType;
+import com.petbuddy.petbuddystore.common.enums.PromotionType;
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import com.petbuddy.petbuddystore.common.enums.PromotionStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
@@ -67,12 +67,12 @@ public class PromotionServiceImpl implements PromotionService {
                     throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
                 }
 
-                validateDiscount(detailReq.getDiscountType(), detailReq.getDiscountValue(), product.getPrice());
+                validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getPrice());
 
                 PromotionDetail detail = PromotionDetail.builder()
                         .promotion(promotion)
                         .product(product)
-                        .discountType(detailReq.getDiscountType())
+                        .promotionType(detailReq.getPromotionType())
                         .discountValue(detailReq.getDiscountValue())
                         .build();
 
@@ -109,7 +109,8 @@ public class PromotionServiceImpl implements PromotionService {
 
     @Override
     public PromotionResponse updatePromotion(UUID id, PromotionUpdateRequest request) {
-        Promotion promotion = promotionRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.PROMOTION_NOT_FOUND));
+        Promotion promotion = promotionRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.PROMOTION_NOT_FOUND));
 
         if (promotion.getStatus() == PromotionStatus.DELETED || promotion.getDeletedAt() != null) {
             throw new AppException(ErrorCode.PROMOTION_NOT_FOUND);
@@ -135,6 +136,7 @@ public class PromotionServiceImpl implements PromotionService {
         if (request.getPromotionDetails() != null) {
             promotionDetailRepository.deleteAll(promotion.getPromotionDetails());
             promotion.getPromotionDetails().clear();
+
             for (PromotionDetailRequest detailReq : request.getPromotionDetails()) {
                 Product product = productRepository.findById(detailReq.getProductId())
                         .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
@@ -143,12 +145,12 @@ public class PromotionServiceImpl implements PromotionService {
                     throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
                 }
 
-                validateDiscount(detailReq.getDiscountType(), detailReq.getDiscountValue(), product.getPrice());
+                validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getPrice());
 
                 PromotionDetail detail = PromotionDetail.builder()
                         .promotion(promotion)
                         .product(product)
-                        .discountType(detailReq.getDiscountType())
+                        .promotionType(detailReq.getPromotionType())
                         .discountValue(detailReq.getDiscountValue())
                         .build();
 
@@ -162,27 +164,16 @@ public class PromotionServiceImpl implements PromotionService {
         return convertToPromotionResponseWithCalculations(saved);
     }
 
-    @Override
-    public boolean hasActivePromotion(UUID productId) {
-        return promotionDetailRepository.existsByProduct_ProductIdAndPromotion_Status(productId, PromotionStatus.ACTIVE);
-    }
 
-    @Override
-    public BigDecimal calculateSalePrice(Product product, PromotionDetail detail) {
-        BigDecimal price = product.getPrice();
-        BigDecimal discountAmount = calculateDiscountAmount(price, detail.getDiscountType(), detail.getDiscountValue());
-        return price.subtract(discountAmount).max(BigDecimal.ZERO);
-    }
-
-    private BigDecimal calculateDiscountAmount(BigDecimal price, DiscountType type, BigDecimal value) {
+    private BigDecimal calculateDiscountAmount(BigDecimal price, PromotionType type, BigDecimal value) {
         if (price == null || value == null) {
             return BigDecimal.ZERO;
         }
 
-        if (type == DiscountType.PERCENTAGE) {
+        if (type == PromotionType.PERCENTAGE) {
             return price.multiply(value)
                     .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
-        } else if (type == DiscountType.FIXED_AMOUNT) {
+        } else if (type == PromotionType.FIXED_AMOUNT) {
             return value.min(price);
         }
         return BigDecimal.ZERO;
@@ -199,7 +190,7 @@ public class PromotionServiceImpl implements PromotionService {
                 if (detail != null) {
                     BigDecimal discountAmount = calculateDiscountAmount(
                             detailResponse.getPrice(),
-                            detail.getDiscountType(),
+                            detail.getPromotionType(),
                             detail.getDiscountValue()
                     );
                     BigDecimal salePrice = detailResponse.getPrice().subtract(discountAmount);
@@ -208,21 +199,22 @@ public class PromotionServiceImpl implements PromotionService {
                     }
                     detailResponse.setDiscountAmount(discountAmount);
                     detailResponse.setSalePrice(salePrice);
+                    detailResponse.setPromotionType(detail.getPromotionType());
                 }
             }
         }
         return response;
     }
 
-    private void validateDiscount(DiscountType type, BigDecimal value, BigDecimal price) {
+    private void validateDiscount(PromotionType type, BigDecimal value, BigDecimal price) {
         if (value == null || value.compareTo(BigDecimal.ZERO) <= 0) {
             throw new AppException(ErrorCode.PROMOTION_DISCOUNT_INVALID);
         }
-        if (type == DiscountType.PERCENTAGE) {
+        if (type == PromotionType.PERCENTAGE) {
             if (value.compareTo(BigDecimal.valueOf(100)) > 0) {
                 throw new AppException(ErrorCode.PROMOTION_DISCOUNT_INVALID);
             }
-        } else if (type == DiscountType.FIXED_AMOUNT) {
+        } else if (type == PromotionType.FIXED_AMOUNT) {
             if (value.compareTo(price) > 0) {
                 throw new AppException(ErrorCode.PROMOTION_DISCOUNT_INVALID);
             }

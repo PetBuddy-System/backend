@@ -62,7 +62,7 @@ public enum ErrorCode {
     EXPIRY_DATE_INVALID(4214, "Expiry date must be in the future", HttpStatus.BAD_REQUEST),
     PRODUCT_OUT_OF_STOCK(4215, "Product out of stock", HttpStatus.BAD_REQUEST),
     INVALID_SORT_OPTION(4216, "Invalid sort option", HttpStatus.BAD_REQUEST),
-    PRODUCT_IMAGE_LIMIT_EXCEEDED(4217, "Cannot upload more than 5 images for a product", HttpStatus.BAD_REQUEST),
+    PRODUCT_IMAGE_LIMIT_EXCEEDED(4217, "Cannot upload more than 4 images for a product", HttpStatus.BAD_REQUEST),
     BATCH_REQUIRED(4218, "Batch list is required", HttpStatus.BAD_REQUEST),
     BATCH_LIMIT_EXCEEDED(4219, "Cannot create more than 10 batches at once", HttpStatus.BAD_REQUEST),
     BATCH_NOT_FOUND(4220, "Batch not found", HttpStatus.NOT_FOUND),

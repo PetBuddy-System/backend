@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.service;
 
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
+import com.petbuddy.petbuddystore.common.enums.ProductUnit;
 import com.petbuddy.petbuddystore.dto.request.ProductCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductUpdateRequest;
 import com.petbuddy.petbuddystore.dto.response.ProductManagementResponse;
@@ -18,7 +19,7 @@ import java.util.UUID;
 
 public interface ProductService {
 
-    ProductManagementResponse createProduct(ProductCreationRequest request, List<MultipartFile> images);
+    ProductManagementResponse createProduct(ProductCreationRequest request);
 
     Page<ProductPublicResponse> getProductsForUser(String keyword, Long categoryId, String brandName, String sortBy, Pageable pageable);
 
@@ -28,7 +29,7 @@ public interface ProductService {
 
     ProductManagementResponse getProductManagement(UUID productId);
 
-    ProductManagementResponse updateProduct(UUID productId, ProductUpdateRequest request, List<MultipartFile> images);
+    ProductManagementResponse updateProduct(UUID productId, ProductUpdateRequest request);
 
     Product getProductEntityById(UUID productId);
 
@@ -38,7 +39,7 @@ public interface ProductService {
 
     Product createProductFromImport(String name, String description, BigDecimal price,
                                     String brandName, Category category, String ingredients,
-                                    String usageInstructions, List<MediaFile> mediaFiles);
+                                    String usageInstructions, ProductUnit unit, List<MediaFile> mediaFiles);
 
     void updateLastBatchSequence(Product product, long lastBatchSequence);
 }

@@ -14,8 +14,6 @@ import java.util.UUID;
 @Repository
 public interface PromotionDetailRepository extends JpaRepository<PromotionDetail, UUID> {
 
-    boolean existsByProduct_ProductIdAndPromotion_Status(UUID productId, PromotionStatus status);
-
     @Query("SELECT pd FROM PromotionDetail pd " + "JOIN pd.promotion p " + "WHERE pd.product.productId = :productId " + "AND p.status = :status " + "AND p.deletedAt IS NULL")
     Optional<PromotionDetail> findByProduct_ProductIdAndPromotion_Status(@Param("productId") UUID productId, @Param("status") PromotionStatus status);
 }

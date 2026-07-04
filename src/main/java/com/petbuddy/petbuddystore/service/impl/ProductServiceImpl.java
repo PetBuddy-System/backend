@@ -1,8 +1,10 @@
 package com.petbuddy.petbuddystore.service.impl;
 
-import com.petbuddy.petbuddystore.common.enums.DiscountType;
+import com.petbuddy.petbuddystore.common.enums.FileType;
+import com.petbuddy.petbuddystore.common.enums.PromotionType;
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import com.petbuddy.petbuddystore.common.enums.PromotionStatus;
+import com.petbuddy.petbuddystore.common.enums.ProductUnit;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.ProductCreationRequest;
@@ -11,15 +13,12 @@ import com.petbuddy.petbuddystore.dto.response.ProductBaseResponse;
 import com.petbuddy.petbuddystore.dto.response.ProductManagementResponse;
 import com.petbuddy.petbuddystore.dto.response.ProductPublicResponse;
 import com.petbuddy.petbuddystore.mapper.ProductMapper;
-import com.petbuddy.petbuddystore.mapper.PromotionMapper;
 import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.ProductBatchRepository;
 import com.petbuddy.petbuddystore.repository.ProductRepository;
 import com.petbuddy.petbuddystore.repository.PromotionDetailRepository;
 import com.petbuddy.petbuddystore.service.CategoryService;
-import com.petbuddy.petbuddystore.service.FileService;
 import com.petbuddy.petbuddystore.service.ProductService;
-import com.petbuddy.petbuddystore.service.PromotionService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +27,6 @@ import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -45,14 +43,11 @@ public class ProductServiceImpl implements ProductService {
     ProductBatchRepository productBatchRepository;
     PromotionDetailRepository promotionDetailRepository;
     CategoryService categoryService;
-    FileService fileService;
     ProductMapper productMapper;
-    PromotionMapper promotionMapper;
-    PromotionService promotionService;
 
     @Override
     @Transactional
-    public ProductManagementResponse createProduct(ProductCreationRequest request, List<MultipartFile> images) {
+    public ProductManagementResponse createProduct(ProductCreationRequest request) {
         String productName = normalizeName(request.getName());
         if (productRepository.existsByNameIgnoreCaseAndStatusNot(productName, ProductStatus.DELETED)) {
             throw new AppException(ErrorCode.PRODUCT_EXISTED);
@@ -61,14 +56,16 @@ public class ProductServiceImpl implements ProductService {
         Product product = productMapper.toProduct(request);
         product.setProductCode(generateProductCode());
         product.setCategory(category);
-        uploadProductMediaFiles(product, images);
-        return productMapper.toManagementResponse(productRepository.save(product));
+
+        Product savedProduct = productRepository.save(product);
+        return productMapper.toManagementResponse(savedProduct);
     }
 
     @Override
     @Transactional
-    public ProductManagementResponse updateProduct(UUID productId, ProductUpdateRequest request, List<MultipartFile> images) {
+    public ProductManagementResponse updateProduct(UUID productId, ProductUpdateRequest request) {
         Product product = getProductEntityById(productId);
+
         if (request.getName() != null && !request.getName().isBlank()) {
             String newName = normalizeName(request.getName());
             productRepository.findByNameIgnoreCaseAndStatusNot(newName, ProductStatus.DELETED)
@@ -76,19 +73,18 @@ public class ProductServiceImpl implements ProductService {
                     .ifPresent(existed -> { throw new AppException(ErrorCode.PRODUCT_EXISTED); });
             request.setName(newName);
         }
+
         productMapper.updateProduct(product, request);
 
         if (request.getCategoryId() != null) {
             product.setCategory(categoryService.getActiveCategoryEntityById(request.getCategoryId()));
         }
+
         if (request.getStatus() != null) {
             updateStatus(product, request.getStatus());
         }
-
-        // SỬA: Upload images và set mediaFiles
-        uploadProductMediaFiles(product, images);
-
-        return productMapper.toManagementResponse(productRepository.save(product));
+        Product updatedProduct = productRepository.save(product);
+        return productMapper.toManagementResponse(updatedProduct);
     }
 
     @Override
@@ -117,7 +113,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
-    public Product createProductFromImport(String name, String description, BigDecimal price, String brandName, Category category, String ingredients, String usageInstructions, List<MediaFile> mediaFiles) {
+    public Product createProductFromImport(String name, String description, BigDecimal price, String brandName, Category category, String ingredients, String usageInstructions, ProductUnit unit, List<MediaFile> mediaFiles) {
         Product product = Product.builder()
                 .name(name.trim())
                 .description(description)
@@ -126,6 +122,7 @@ public class ProductServiceImpl implements ProductService {
                 .category(category)
                 .ingredients(ingredients)
                 .usageInstructions(usageInstructions)
+                .unit(unit)
                 .productCode(generateProductCode())
                 .status(ProductStatus.ACTIVE)
                 .mediaFiles(mediaFiles != null ? mediaFiles : new ArrayList<>())
@@ -150,11 +147,14 @@ public class ProductServiceImpl implements ProductService {
     public Page<ProductPublicResponse> getProductsForUser(String keyword, Long categoryId, String brandName, String sortBy, Pageable pageable) {
         Pageable sortedPageable = buildPageable(pageable, sortBy);
         Specification<Product> spec = buildProductSpec(keyword, categoryId, brandName, ProductStatus.ACTIVE);
+
         return productRepository.findAll(spec, sortedPageable)
-                .map(product -> {ProductPublicResponse response = productMapper.toPublicResponse(product);
-                    response.setTotalStock(getTotalStock(product));
-                    response.setHasActivePromotion(promotionService.hasActivePromotion(product.getProductId()));
-                    return response;});
+                .map(product -> {
+                    ProductPublicResponse response = productMapper.toListResponse(product);
+                    setPromotionInfo(response, product);
+                    response.setThumbnailUrl(getThumbnailUrl(product));
+                    return response;
+                });
     }
 
     @Override
@@ -168,7 +168,8 @@ public class ProductServiceImpl implements ProductService {
                     response.setTotalStock(getTotalStock(product));
                     response.setBatchCount(getBatchCount(product));
                     setNearExpiredInfo(product, response, nearExpiredDays);
-                    response.setHasActivePromotion(promotionService.hasActivePromotion(product.getProductId()));
+                    setPromotionInfo(response, product);
+                    response.setThumbnailUrl(getThumbnailUrl(product));
                     return response;
                 });
     }
@@ -187,6 +188,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public ProductManagementResponse getProductManagement(UUID productId) {
         Product product = getProductEntityById(productId);
         ProductManagementResponse response = productMapper.toManagementResponse(product);
@@ -197,6 +199,28 @@ public class ProductServiceImpl implements ProductService {
         response.setTotalStock(getTotalStock(product));
         response.setBatchCount(getBatchCount(product));
         return setPromotionInfo(response, product);
+    }
+
+    private String getThumbnailUrl(Product product) {
+        if (product == null || product.getMediaFiles() == null || product.getMediaFiles().isEmpty()) {
+            return null;
+        }
+
+        // Ưu tiên lấy theo thumbnailMediaId
+        if (product.getThumbnailMediaId() != null) {
+            return product.getMediaFiles().stream()
+                    .filter(media -> Objects.equals(media.getMediaFileId(), product.getThumbnailMediaId()))
+                    .map(MediaFile::getFileUrl)
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        // Nếu không có thumbnailMediaId, lấy ảnh mới nhất (file có ID lớn nhất)
+        return product.getMediaFiles().stream()
+                .filter(media -> media.getFileType() == FileType.IMAGE && media.getMediaFileId() != null)
+                .max(Comparator.comparing(MediaFile::getMediaFileId))
+                .map(MediaFile::getFileUrl)
+                .orElse(null);
     }
 
     private Pageable buildPageable(Pageable pageable, String sortBy) {
@@ -286,34 +310,14 @@ public class ProductServiceImpl implements ProductService {
                 .count();
     }
 
-    private void uploadProductMediaFiles(Product product, List<MultipartFile> images) {
-        if (images == null || images.isEmpty()) return;
-        if (images.size() > 4) {
-            throw new AppException(ErrorCode.PRODUCT_IMAGE_LIMIT_EXCEEDED);
-        }
-
-        List<MediaFile> mediaFiles = images.stream()
-                .filter(img -> img != null && !img.isEmpty())
-                .map(fileService::uploadProductImage)
-                .toList();
-
-        if (!mediaFiles.isEmpty()) {
-            mediaFiles.forEach(mf -> mf.setProduct(product));
-
-            if (product.getMediaFiles() == null) {
-                product.setMediaFiles(new ArrayList<>());
-            }
-            product.getMediaFiles().addAll(mediaFiles);
-        }
-    }
-
     private String normalizeName(String name) {
         return name.trim().replaceAll("\\s+", " ");
     }
 
     private <T extends ProductBaseResponse> T setPromotionInfo(T response, Product product) {
+        Optional<PromotionDetail> detailOpt = promotionDetailRepository.findByProduct_ProductIdAndPromotion_Status(
+                product.getProductId(), PromotionStatus.ACTIVE);
 
-        Optional<PromotionDetail> detailOpt = promotionDetailRepository.findByProduct_ProductIdAndPromotion_Status(product.getProductId(), PromotionStatus.ACTIVE);
         if (detailOpt.isEmpty()) {
             response.setHasActivePromotion(false);
             return response;
@@ -330,26 +334,30 @@ public class ProductServiceImpl implements ProductService {
 
         BigDecimal discountAmount = calculateDiscountAmount(
                 product.getPrice(),
-                detail.getDiscountType(),
+                detail.getPromotionType(),
                 detail.getDiscountValue()
         );
 
-        promotionMapper.updatePromotionInfo(response, promotion, detail);
         response.setHasActivePromotion(true);
+        response.setPromotionName(promotion.getName());
+        response.setPromotionType(detail.getPromotionType());
+        response.setDiscountValue(detail.getDiscountValue());
         response.setDiscountAmount(discountAmount);
         response.setSalePrice(product.getPrice().subtract(discountAmount).max(BigDecimal.ZERO));
+        response.setPromotionEndDate(promotion.getEndDate());
+
         return response;
     }
 
-    private BigDecimal calculateDiscountAmount(BigDecimal price, DiscountType type, BigDecimal value) {
+    private BigDecimal calculateDiscountAmount(BigDecimal price, PromotionType type, BigDecimal value) {
         if (price == null || value == null) {
             return BigDecimal.ZERO;
         }
 
-        if (type == DiscountType.PERCENTAGE) {
+        if (type == PromotionType.PERCENTAGE) {
             return price.multiply(value)
                     .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
-        } else if (type == DiscountType.FIXED_AMOUNT) {
+        } else if (type == PromotionType.FIXED_AMOUNT) {
             return value.min(price);
         }
         return BigDecimal.ZERO;

@@ -38,15 +38,14 @@ public class ProductController {
     ObjectMapper objectMapper;
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<ProductManagementResponse>> createProduct(@RequestPart("data") String requestJson, @RequestPart(value = "images", required = false) List<MultipartFile> images) throws IOException {
-        ProductCreationRequest request = objectMapper.readValue(requestJson, ProductCreationRequest.class);
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ApiResponse<ProductManagementResponse>> createProduct(
+            @RequestBody ProductCreationRequest request
+    ) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(
-                        "Product created successfully",
-                        productService.createProduct(request, images)
-                ));
+                .body(ApiResponse.success("Product created successfully", productService.createProduct(request)));
     }
+
 
     @GetMapping
     @Operation(summary = "Get products for user",
@@ -101,11 +100,11 @@ public class ProductController {
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
-    @PatchMapping(value = "/{productId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PatchMapping(value = "/{productId}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ApiResponse<ProductManagementResponse>> updateProduct(
-            @PathVariable UUID productId, @RequestPart("data") String requestJson,
-            @RequestPart(value = "images", required = false) List<MultipartFile> images) throws IOException {
-        ProductUpdateRequest request = objectMapper.readValue(requestJson, ProductUpdateRequest.class);
-        return ResponseEntity.ok(ApiResponse.success("Product updated successfully", productService.updateProduct(productId, request, images)));
+            @PathVariable UUID productId,
+            @RequestBody ProductUpdateRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Product updated successfully", productService.updateProduct(productId, request)));
     }
 }

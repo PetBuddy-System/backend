@@ -37,6 +37,11 @@ public class FileServiceImpl implements FileService {
     public MediaFile uploadProductImage(MultipartFile file) {return uploadImage(file, MediaPurpose.PRODUCT, "products");}
 
     @Override
+    public MediaFile uploadProductVideo(MultipartFile file) {
+        return uploadVideo(file, MediaPurpose.PRODUCT, "products/videos");
+    }
+
+    @Override
     public MediaFile uploadPetImage(MultipartFile file) {
         return uploadImage(file, MediaPurpose.PET_PROFILE, "pets");
     }
@@ -73,6 +78,42 @@ public class FileServiceImpl implements FileService {
 
         } catch (Exception e) {
             log.error("Upload image failed: {}", e.getMessage());
+            throw new AppException(ErrorCode.UPLOAD_FAILED);
+        }
+    }
+
+    private MediaFile uploadVideo(
+            MultipartFile file,
+            MediaPurpose mediaPurpose,
+            String folder
+    ) {
+        validateVideo(file);
+
+        try {
+            String fileKey = folder + "/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
+
+            s3Client.putObject(
+                    PutObjectRequest.builder()
+                            .bucket(bucketName)
+                            .key(fileKey)
+                            .contentType(file.getContentType())
+                            .build(),
+                    RequestBody.fromBytes(file.getBytes())
+            );
+
+            String fileUrl = buildFileUrl(fileKey);
+
+            return MediaFile.builder()
+                    .fileUrl(fileUrl)
+                    .fileKey(fileKey)
+                    .fileSize(file.getSize())
+                    .fileType(FileType.VIDEO)
+                    .mediaPurpose(mediaPurpose)
+                    .mediaStatus(MediaStatus.ACTIVE)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Upload video failed: {}", e.getMessage());
             throw new AppException(ErrorCode.UPLOAD_FAILED);
         }
     }
@@ -125,6 +166,26 @@ public class FileServiceImpl implements FileService {
         return null;
     }    private String buildFileUrl(String fileKey){
         return "https://" + bucketName + ".s3.amazonaws.com/" + fileKey;
+    }
+
+    private void validateVideo(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new AppException(ErrorCode.FILE_REQUIRED);
+        }
+
+        // Giới hạn 20MB (có thể đổi thành 50MB nếu cần)
+        if (file.getSize() > 20 * 1024 * 1024) {
+            throw new AppException(ErrorCode.FILE_TOO_LARGE);
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || (
+                !contentType.equals("video/mp4") &&
+                        !contentType.equals("video/webm") &&
+                        !contentType.equals("video/quicktime"))) {
+
+            throw new AppException(ErrorCode.INVALID_FILE_TYPE);
+        }
     }
 
     private void validateFile(MultipartFile file) {

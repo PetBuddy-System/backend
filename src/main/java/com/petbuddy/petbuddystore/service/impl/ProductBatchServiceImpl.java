@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.service.impl;
 
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
+import com.petbuddy.petbuddystore.common.enums.ProductUnit;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.ImportRowRequest;
@@ -45,7 +46,7 @@ public class ProductBatchServiceImpl implements ProductBatchService {
 
     static final int MAX_BATCH_CREATE_LIMIT = 10;
     static final int IMAGE_COL_START = 10;
-    static final int IMAGE_COL_END = 13;
+    static final int IMAGE_COL_END = 14;
 
     ProductBatchRepository productBatchRepository;
     ProductService productService;
@@ -145,6 +146,7 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                 String ingredients = getCellString(row, 7);
                 String usageInstructions = getCellString(row, 8);
                 BigDecimal cost = getCellBigDecimal(row, 9);
+                String unitStr = getCellString(row, 10);
 
                 if (name == null || name.isBlank()) {
                     errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_NAME_REQUIRED"));
@@ -164,6 +166,9 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                 if (cost != null && cost.compareTo(BigDecimal.ZERO) < 0) {
                     errors.add(new ProductImportResponse.Error(rowNum, "COST_INVALID"));
                 }
+                if (unitStr == null || unitStr.isBlank()) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_UNIT_REQUIRED"));
+                }
 
                 boolean hasRowError = errors.stream().anyMatch(e -> e.row() == rowNum);
                 if (hasRowError) continue;
@@ -175,15 +180,25 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                     errors.add(new ProductImportResponse.Error(rowNum, "CATEGORY_NOT_FOUND"));
                     continue;
                 }
+
                 Product existingProduct = productService.getProductEntityByName(name);
                 if (existingProduct != null && existingProduct.getStatus() == ProductStatus.INACTIVE) {
                     errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_INACTIVE"));
                     continue;
                 }
 
+                // Parse unit
+                ProductUnit unit;
+                try {
+                    unit = ProductUnit.valueOf(unitStr.trim().toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_UNIT_INVALID"));
+                    continue;
+                }
+
                 List<byte[]> rowImages = rowImagesMap.getOrDefault(i, Collections.emptyList());
                 validRows.add(new ImportRowRequest(rowNum, name, description, price, brandName, category,
-                        stockQuantity, expiryDate, ingredients, usageInstructions, cost, rowImages));
+                        stockQuantity, expiryDate, ingredients, usageInstructions, cost, unit, rowImages)); // THÊM unit
             }
 
             if (!errors.isEmpty()) {
@@ -205,7 +220,9 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                     List<MediaFile> mediaFiles = uploadImages(rowData.getImages(), rowData.getName());
                     product = productService.createProductFromImport(
                             rowData.getName(), rowData.getDescription(), rowData.getPrice(), rowData.getBrandName(),
-                            rowData.getCategory(), rowData.getIngredients(), rowData.getUsageInstructions(), mediaFiles);
+                            rowData.getCategory(), rowData.getIngredients(), rowData.getUsageInstructions(),
+                            rowData.getUnit(), // THÊM unit
+                            mediaFiles);
                     createdProducts++;
                 }
 
@@ -241,6 +258,8 @@ public class ProductBatchServiceImpl implements ProductBatchService {
             throw new AppException(ErrorCode.IMPORT_FAILED);
         }
     }
+
+    // ... Các method helper giữ nguyên
 
     private Map<Integer, List<byte[]>> getImagesFromSheet(Workbook workbook) {
         Map<Integer, Map<Integer, byte[]>> rowColImageMap = new TreeMap<>();
@@ -316,7 +335,8 @@ public class ProductBatchServiceImpl implements ProductBatchService {
     }
 
     private boolean isEmpty(Row row) {
-        for (int i = 0; i <= 9; i++) {
+        // Kiểm tra đến column 11 (unit)
+        for (int i = 0; i <= 10; i++) {
             if (getCellString(row, i) != null) return false;
         }
         return true;
@@ -324,7 +344,8 @@ public class ProductBatchServiceImpl implements ProductBatchService {
 
     private void validateHeader(Row header) {
         if (header == null) throw new AppException(ErrorCode.INVALID_EXCEL_TEMPLATE);
-        String[] expected = {"Name","Description","Price","BrandName","CategoryName","StockQuantity","ExpiryDate","Ingredients","UsageInstructions","Cost","Image1","Image2","Image3","Image4"};
+        // Thêm Unit vào header
+        String[] expected = {"Name","Description","Price","BrandName","CategoryName","StockQuantity","ExpiryDate","Ingredients","UsageInstructions","Cost","Unit","Image1","Image2","Image3","Image4"};
         for (int i = 0; i < expected.length; i++) {
             if (!expected[i].equalsIgnoreCase(getCellString(header, i))) throw new AppException(ErrorCode.INVALID_EXCEL_TEMPLATE);
         }
