@@ -19,8 +19,8 @@ public class ProductBatchUpdateRequest {
     @Min(value = 0, message = "PRODUCT_STOCK_INVALID")
     Integer stockQuantity;
 
-    @Min(value = 0, message = "COST_INVALID")
-    BigDecimal cost;
+    @Min(value = 0, message = "UNIT_COST_INVALID")  // Đổi message
+    BigDecimal unit_cost;
 
     LocalDate expiryDate;
 

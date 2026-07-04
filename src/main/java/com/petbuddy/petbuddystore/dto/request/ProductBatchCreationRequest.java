@@ -21,10 +21,10 @@ public class ProductBatchCreationRequest {
     @Min(value = 0, message = "PRODUCT_STOCK_INVALID")
     Integer stockQuantity;
 
-    @NotNull(message = "COST_REQUIRED")
-    @Min(value = 0, message = "COST_INVALID")
-    @Digits(integer = 19, fraction = 2, message = "COST_FORMAT_INVALID")
-    BigDecimal cost;
+    @NotNull(message = "UNIT_COST_REQUIRED")
+    @Digits(integer = 19, fraction = 2, message = "UNIT_COST_FORMAT_INVALID")
+    @Min(value = 0, message = "UNIT_COST_INVALID")
+    BigDecimal unit_cost;
 
     LocalDate expiryDate;
 }

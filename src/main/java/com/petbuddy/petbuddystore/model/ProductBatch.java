@@ -47,9 +47,9 @@ public class ProductBatch {
 
     LocalDateTime deletedAt;
 
-    @Column(name = "cost", precision = 19, scale = 2)
+    @Column(name = "unit_cost", precision = 19, scale = 2)
     @Builder.Default
-    private BigDecimal cost = BigDecimal.ZERO;
+    private BigDecimal unit_cost = BigDecimal.ZERO;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)

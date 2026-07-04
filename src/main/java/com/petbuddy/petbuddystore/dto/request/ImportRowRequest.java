@@ -17,14 +17,14 @@ public class ImportRowRequest {
     private int rowNumber;
     private String name;
     private String description;
-    private BigDecimal price;
+    private BigDecimal sale_price;
     private String brandName;
     private Category category;
     private Integer stockQuantity;
     private LocalDate expiryDate;
     private String ingredients;
     private String usageInstructions;
-    private BigDecimal cost;
+    private BigDecimal unit_cost;
     private ProductUnit unit;
     private List<byte[]> images;
 }
