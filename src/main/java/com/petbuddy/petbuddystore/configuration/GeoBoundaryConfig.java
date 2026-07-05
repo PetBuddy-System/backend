@@ -3,6 +3,8 @@ package com.petbuddy.petbuddystore.configuration;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.locationtech.jts.geom.*;
+import org.locationtech.jts.geom.prep.PreparedGeometry;
+import org.locationtech.jts.geom.prep.PreparedGeometryFactory;
 import org.locationtech.jts.geom.util.GeometryFixer;
 import org.locationtech.jts.operation.union.UnaryUnionOp;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,7 +40,10 @@ public class GeoBoundaryConfig {
             water = parseFeatureCollection(is);
         }
 
-        return new GeoBoundaries(hcmBoundary, water);
+        PreparedGeometry preparedHcm = PreparedGeometryFactory.prepare(hcmBoundary);
+        PreparedGeometry preparedWater = water.isEmpty() ? null : PreparedGeometryFactory.prepare(water);
+
+        return new GeoBoundaries(preparedHcm, preparedWater);
     }
 
     private Geometry parseFeatureCollection(InputStream is) throws IOException {
@@ -99,9 +104,6 @@ public class GeoBoundaryConfig {
         return GEOMETRY_FACTORY.createLinearRing(coords);
     }
 
-    public record GeoBoundaries(
-            Geometry hcmBoundaryGeometry,
-            Geometry waterGeometry
-    ) {
+    public record GeoBoundaries(PreparedGeometry hcmBoundaryGeometry, PreparedGeometry waterGeometry) {
     }
 }

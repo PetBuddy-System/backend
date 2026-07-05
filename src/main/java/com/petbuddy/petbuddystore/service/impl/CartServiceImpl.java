@@ -62,7 +62,7 @@ public class CartServiceImpl implements CartService {
             existingItem.setQuantity(newQuantity);
             existingItem.setSubtotal(unitPrice.multiply(BigDecimal.valueOf(newQuantity)));
         } else {
-            cart.getCartItems().add(buildCartItem(cart, product, request.getQuantity()));
+            cart.getCartItems().add(buildCartItem(cart, product,response, request.getQuantity()));
         }
         cartRepository.save(cart);
     }
@@ -96,6 +96,14 @@ public class CartServiceImpl implements CartService {
     @Override
     public void clearCart() {
         User user = getCurrentUser();
+        cartRepository.findByUser_UserId(user.getUserId()).ifPresent(cart -> {
+            cart.getCartItems().clear();
+            cartRepository.save(cart);
+        });
+    }
+
+    @Override
+    public void clearCart(User user) {
         cartRepository.findByUser_UserId(user.getUserId()).ifPresent(cart -> {
             cart.getCartItems().clear();
             cartRepository.save(cart);
@@ -161,7 +169,7 @@ public class CartServiceImpl implements CartService {
                     existingItem.setQuantity(newQuantity);
                     existingItem.setSubtotal(existingItem.getPrice().multiply(BigDecimal.valueOf(newQuantity)));
                 } else {
-                    cart.getCartItems().add(buildCartItem(cart, product,response,newQuantity));
+                    cart.getCartItems().add(buildCartItem(cart, product,response, newQuantity));
                 }
             }
         }
@@ -181,36 +189,23 @@ public class CartServiceImpl implements CartService {
                 });
     }
 
-    private CartItem buildCartItem(Cart cart, Product product, Integer quantity) {
-//        BigDecimal price = productBatch.getUnit_cost();
-//        BigDecimal salePrice = product.getSale_price();
-//        BigDecimal unitPrice = salePrice != null ? salePrice : price;
-        return CartItem.builder()
-                .cart(cart)
-                .product(product)
-                .productName(product.getName())
-                .description(product.getDescription())
-//                .price(price)
-//                .salePrice(unitPrice)
-                .imageUrl(getThumbnailUrl(product))
-                .quantity(quantity)
-                .subtotal(unitPrice.multiply(BigDecimal.valueOf(quantity)))
-                .build();
-    }
-
-    private String getThumbnailUrl(Product product) {
-        return product.getMediaFiles().stream()
-                .filter(m -> m.getFileType() == FileType.IMAGE)
-                .filter(m -> Objects.equals(m.getMediaFileId(), product.getThumbnailMediaId()))
-                .map(MediaFile::getFileUrl)
-                .findFirst()
-                .orElse(
-                        product.getMediaFiles().stream()
-                                .filter(m -> m.getFileType() == FileType.IMAGE)
-                                .map(MediaFile::getFileUrl)
-                                .findFirst()
-                                .orElse(null)
-                );
+    private CartItem buildCartItem(Cart cart, Product product, ProductPublicResponse response, Integer quantity) {
+        {
+            BigDecimal unitPrice = response.getPromotionPrice() != null
+                    ? response.getPromotionPrice()
+                    : response.getSalePrice();
+            return CartItem.builder()
+                    .cart(cart)
+                    .product(product)
+                    .productName(product.getName())
+                    .description(product.getDescription())
+                    .price(response.getSalePrice())
+                    .salePrice(unitPrice)
+                    .imageUrl(response.getThumbnailUrl())
+                    .quantity(quantity)
+                    .subtotal(unitPrice.multiply(BigDecimal.valueOf(quantity)))
+                    .build();
+        }
     }
 
     private CartItem findItemByProduct(Cart cart, UUID productId) {

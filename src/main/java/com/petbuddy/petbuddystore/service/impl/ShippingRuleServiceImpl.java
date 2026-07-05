@@ -12,6 +12,7 @@ import com.petbuddy.petbuddystore.service.ShippingRuleService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
@@ -21,6 +22,7 @@ import com.petbuddy.petbuddystore.configuration.GeoBoundaryConfig.GeoBoundaries;
 import java.math.BigDecimal;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -102,6 +104,7 @@ public class ShippingRuleServiceImpl implements ShippingRuleService {
     }
 
     private void validateLocation(double lat, double lon) {
+        long start = System.nanoTime();
         Point point = GEOMETRY_FACTORY.createPoint(new Coordinate(lon, lat));
 
         if (!geoBoundaries.hcmBoundaryGeometry().covers(point)) {

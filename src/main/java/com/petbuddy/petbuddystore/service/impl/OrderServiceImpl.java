@@ -134,7 +134,11 @@ public class OrderServiceImpl implements OrderService {
         userRepository.save(user);
 
         paymentService.createPayment(order, method);
-        cartService.clearCart();
+
+        if(method == PaymentMethod.CASH){
+            cartService.clearCart();
+        }
+
         return orderMapper.toOrderResponse(order);
     }
 

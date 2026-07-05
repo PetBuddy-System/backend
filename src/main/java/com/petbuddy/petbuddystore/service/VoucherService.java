@@ -3,6 +3,7 @@ package com.petbuddy.petbuddystore.service;
 import com.petbuddy.petbuddystore.common.enums.VoucherStatus;
 import com.petbuddy.petbuddystore.dto.request.VoucherRequest;
 import com.petbuddy.petbuddystore.dto.response.VoucherResponse;
+import com.petbuddy.petbuddystore.model.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 

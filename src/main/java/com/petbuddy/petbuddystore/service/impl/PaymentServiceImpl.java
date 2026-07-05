@@ -202,6 +202,7 @@ public class PaymentServiceImpl implements PaymentService {
 
         payment.setStatus(PaymentStatus.PAID);
         payment.setPaidAt(LocalDateTime.now());
+        cartService.clearCart(order.getUser());
         paymentRepository.save(payment);
         log.info("Thanh toán thành công: PaymentIntent={}, Order={}", intentId, order.getOrderCode());
     }
