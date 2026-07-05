@@ -265,7 +265,8 @@ public class ProductServiceImpl implements ProductService {
             List<Predicate> predicates = new ArrayList<>();
 
             if (keyword != null && !keyword.isBlank()) {
-                predicates.add(cb.like(cb.lower(root.get("name")), "%" + keyword.trim().toLowerCase() + "%"));
+                String[] terms = keyword.trim().toLowerCase().split("\\s+");
+                for (String term : terms) {predicates.add(cb.like(cb.lower(root.get("name")), "%" + term + "%"));}
             }
             if (categoryId != null) {
                 predicates.add(cb.equal(root.get("category").get("categoryId"), categoryId));
