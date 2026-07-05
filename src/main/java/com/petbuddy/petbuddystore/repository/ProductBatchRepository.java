@@ -14,10 +14,6 @@ import java.util.UUID;
 @Repository
 public interface ProductBatchRepository extends JpaRepository<ProductBatch, UUID>, JpaSpecificationExecutor<ProductBatch> {
 
-    long countByProduct_ProductId(UUID productId);
-
-    boolean existsByBatchCode(String batchCode);
-
     List<ProductBatch> findByStatusAndDeletedAtBefore(ProductStatus status,LocalDateTime deletedAt);
 
     boolean existsByProduct_ProductIdAndStatusIn(UUID productId,List<ProductStatus> statuses);
@@ -34,11 +30,6 @@ public interface ProductBatchRepository extends JpaRepository<ProductBatch, UUID
     List<ProductBatch> findByProduct_ProductIdAndStockQuantityGreaterThanAndStatusOrderByExpiryDateAscCreatedAtAscBatchCodeAsc(
             UUID productId,
             Integer stockQuantity,
-            ProductStatus status
-    );
-
-    List<ProductBatch> findByProduct_ProductIdInAndStatusAndDeletedAtIsNull(
-            List<UUID> productIds,
             ProductStatus status
     );
 

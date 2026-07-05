@@ -45,7 +45,7 @@ import java.util.*;
 public class ProductBatchServiceImpl implements ProductBatchService {
 
     static final int MAX_BATCH_CREATE_LIMIT = 10;
-    static final int IMAGE_COL_START = 10;
+    static final int IMAGE_COL_START = 11;
     static final int IMAGE_COL_END = 14;
 
     ProductBatchRepository productBatchRepository;
@@ -93,8 +93,8 @@ public class ProductBatchServiceImpl implements ProductBatchService {
             batch.setStockQuantity(request.getStockQuantity());
         }
 
-        if (request.getUnit_cost() != null) {
-            batch.setUnitCost(request.getUnit_cost());
+        if (request.getBasePrice() != null) {
+            batch.setBasePrice(request.getBasePrice());
         }
 
         if (request.getExpiryDate() != null) {
@@ -145,31 +145,60 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                 LocalDate expiryDate = getCellLocalDate(row, 6);
                 String ingredients = getCellString(row, 7);
                 String usageInstructions = getCellString(row, 8);
-                BigDecimal unitCost = getCellBigDecimal(row, 9);
+                BigDecimal basePrice = getCellBigDecimal(row, 9);
                 String unitStr = getCellString(row, 10);
-
                 if (name == null || name.isBlank()) {
                     errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_NAME_REQUIRED"));
+                } else if (name.length() > 255) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_NAME_TOO_LONG"));
                 }
                 if (salePrice == null || salePrice.compareTo(BigDecimal.ZERO) <= 0) {
                     errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_PRICE_INVALID"));
+                } else if (salePrice.compareTo(new BigDecimal("999999999")) > 0) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_PRICE_TOO_HIGH"));
                 }
                 if (categoryName == null || categoryName.isBlank()) {
                     errors.add(new ProductImportResponse.Error(rowNum, "CATEGORY_NAME_REQUIRED"));
+                } else if (categoryName.length() > 100) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "CATEGORY_NAME_TOO_LONG"));
                 }
                 if (stockQuantity == null || stockQuantity < 0) {
                     errors.add(new ProductImportResponse.Error(rowNum, "STOCK_QUANTITY_INVALID"));
-                }
-                if (expiryDate != null && !expiryDate.isAfter(LocalDate.now())) {
-                    errors.add(new ProductImportResponse.Error(rowNum, "EXPIRY_DATE_INVALID"));
-                }
-                if (unitCost != null && unitCost.compareTo(BigDecimal.ZERO) < 0) {
-                    errors.add(new ProductImportResponse.Error(rowNum, "UNIT_COST_INVALID"));
+                } else if (stockQuantity > 999999) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "STOCK_QUANTITY_TOO_HIGH"));
                 }
                 if (unitStr == null || unitStr.isBlank()) {
                     errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_UNIT_REQUIRED"));
                 }
 
+                if (description != null && description.length() > 5000) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "DESCRIPTION_TOO_LONG"));
+                }
+
+                if (brandName != null && brandName.length() > 100) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "BRAND_NAME_TOO_LONG"));
+                }
+
+                if (ingredients != null && ingredients.length() > 2000) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "INGREDIENTS_TOO_LONG"));
+                }
+
+                if (usageInstructions != null && usageInstructions.length() > 2000) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "USAGE_INSTRUCTIONS_TOO_LONG"));
+                }
+
+                if (expiryDate != null && !expiryDate.isAfter(LocalDate.now())) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "EXPIRY_DATE_INVALID"));
+                }
+
+                if (basePrice != null) {
+                    if (basePrice.compareTo(BigDecimal.ZERO) < 0) {
+                        errors.add(new ProductImportResponse.Error(rowNum, "BASE_PRICE_INVALID"));
+                    }
+                    if (salePrice != null && basePrice.compareTo(salePrice) >= 0) {
+                        errors.add(new ProductImportResponse.Error(rowNum, "BASE_PRICE_MUST_BE_LESS_THAN_SALE_PRICE"));
+                    }
+                }
                 boolean hasRowError = errors.stream().anyMatch(e -> e.row() == rowNum);
                 if (hasRowError) continue;
 
@@ -198,7 +227,7 @@ public class ProductBatchServiceImpl implements ProductBatchService {
 
                 List<byte[]> rowImages = rowImagesMap.getOrDefault(i, Collections.emptyList());
                 validRows.add(new ImportRowRequest(rowNum, name, description, salePrice, brandName, category,
-                        stockQuantity, expiryDate, ingredients, usageInstructions, unitCost, unit, rowImages));
+                        stockQuantity, expiryDate, ingredients, usageInstructions, basePrice, unit, rowImages));
             }
 
             if (!errors.isEmpty()) {
@@ -234,7 +263,7 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                         .product(product)
                         .stockQuantity(rowData.getStockQuantity())
                         .expiryDate(rowData.getExpiryDate())
-                        .unitCost(rowData.getUnitCost() != null ? rowData.getUnitCost() : BigDecimal.ZERO)
+                        .basePrice(rowData.getBasePrice() != null ? rowData.getBasePrice() : BigDecimal.ZERO)
                         .status(ProductStatus.ACTIVE)
                         .build();
 
@@ -309,13 +338,19 @@ public class ProductBatchServiceImpl implements ProductBatchService {
     private BigDecimal getCellBigDecimal(Row row, int index) {
         String value = getCellString(row, index);
         if (value == null) return null;
-        try { return new BigDecimal(value.replace(",", "").replace(" ", "")); } catch (Exception e) { return null; }
+        try {return new BigDecimal(value.replace(",", "").replace(" ", ""));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private Integer getCellInteger(Row row, int index) {
         String value = getCellString(row, index);
         if (value == null) return null;
-        try { return Integer.parseInt(value.replace(",", "").replace(" ", "").split("\\.")[0]); } catch (Exception e) { return null; }
+        try {return Integer.parseInt(value.replace(",", "").replace(" ", "").split("\\.")[0]);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private LocalDate getCellLocalDate(Row row, int index) {
@@ -326,8 +361,13 @@ public class ProductBatchServiceImpl implements ProductBatchService {
         }
         String value = getCellString(row, index);
         if (value == null) return null;
-        for (DateTimeFormatter df : List.of(DateTimeFormatter.ofPattern("dd/MM/yyyy"), DateTimeFormatter.ofPattern("MM/dd/yyyy"), DateTimeFormatter.ofPattern("yyyy-MM-dd"))) {
-            try { return LocalDate.parse(value, df); } catch (Exception ignored) {}
+        for (DateTimeFormatter df : List.of(
+                DateTimeFormatter.ofPattern("dd/MM/yyyy"),
+                DateTimeFormatter.ofPattern("MM/dd/yyyy"),
+                DateTimeFormatter.ofPattern("yyyy-MM-dd"))) {
+            try {
+                return LocalDate.parse(value, df);
+            } catch (Exception ignored) {}
         }
         return null;
     }
@@ -341,9 +381,9 @@ public class ProductBatchServiceImpl implements ProductBatchService {
 
     private void validateHeader(Row header) {
         if (header == null) throw new AppException(ErrorCode.INVALID_EXCEL_TEMPLATE);
-        String[] expected = {"Name","Description","SalePrice","BrandName","CategoryName","StockQuantity","ExpiryDate","Ingredients","UsageInstructions","UnitCost","Unit","Image1","Image2","Image3","Image4"};
-        for (int i = 0; i < expected.length; i++) {
-            if (!expected[i].equalsIgnoreCase(getCellString(header, i))) throw new AppException(ErrorCode.INVALID_EXCEL_TEMPLATE);
+        String[] expected = {"Name","Description","SalePrice","BrandName","CategoryName","StockQuantity","ExpiryDate","Ingredients","UsageInstructions","BasePrice","Unit","Image1","Image2","Image3","Image4"};
+        for (int i = 0; i < expected.length; i++) {if (!expected[i].equalsIgnoreCase(getCellString(header, i)))
+                throw new AppException(ErrorCode.INVALID_EXCEL_TEMPLATE);
         }
     }
 

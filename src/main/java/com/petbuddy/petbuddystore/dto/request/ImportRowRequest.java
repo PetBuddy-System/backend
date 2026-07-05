@@ -24,7 +24,7 @@ public class ImportRowRequest {
     private LocalDate expiryDate;
     private String ingredients;
     private String usageInstructions;
-    private BigDecimal unitCost;
+    private BigDecimal basePrice;
     private ProductUnit unit;
     private List<byte[]> images;
 }
