@@ -34,4 +34,9 @@ public class AppConfig {
     public RestClient restClient() {
         return RestClient.builder().build();
     }
+
+//    @Bean
+//    public ChatClient chatClient() {
+//        return ChatClient.builder().build();
+//    }
 }

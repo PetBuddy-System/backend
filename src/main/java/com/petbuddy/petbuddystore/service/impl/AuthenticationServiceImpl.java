@@ -11,10 +11,7 @@ import com.petbuddy.petbuddystore.common.enums.UserStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.*;
-import com.petbuddy.petbuddystore.dto.response.AuthenticationResponse;
-import com.petbuddy.petbuddystore.dto.response.GoogleUserInfoResponse;
-import com.petbuddy.petbuddystore.dto.response.IntrospectResponse;
-import com.petbuddy.petbuddystore.dto.response.OutboundTokenResponse;
+import com.petbuddy.petbuddystore.dto.response.*;
 import com.petbuddy.petbuddystore.mapper.UserMapper;
 import com.petbuddy.petbuddystore.model.InvalidatedToken;
 import com.petbuddy.petbuddystore.model.User;
@@ -320,7 +317,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         try {
             jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes()));
         } catch (JOSEException e) {
-            log.error("Cannot create token", e);
+            log.error("Cannot create access token", e);
             throw new RuntimeException(e);
         }
         return jwsObject.serialize();
@@ -345,7 +342,31 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         try {
             jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes()));
         } catch (JOSEException e) {
-            log.error("Cannot create token", e);
+            log.error("Cannot create refresh token", e);
+            throw new RuntimeException(e);
+        }
+        return jwsObject.serialize();
+    }
+
+    private String generateResetPasswordToken(User user){
+        JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
+        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .subject(user.getUserId())
+                .issuer("petbuddy.com")
+                .issueTime(new Date())
+                .expirationTime(new Date(
+                        Instant.now().plus(4, ChronoUnit.MINUTES).toEpochMilli()
+                ))
+                .jwtID(UUID.randomUUID().toString())
+                .claim("scope", "RESET_PASSWORD")
+                .build();
+
+        JWSObject jwsObject = new JWSObject(header, new Payload(claims.toJSONObject()));
+
+        try {
+            jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes()));
+        } catch (JOSEException e) {
+            log.error("Cannot create reset password token", e);
             throw new RuntimeException(e);
         }
         return jwsObject.serialize();
@@ -395,14 +416,31 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     @Override
-    public void resetPassword(ResetPasswordRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
+    public void resetPassword(ResetPasswordRequest request) throws ParseException, JOSEException {
+        SignedJWT signedJWT = verifyResetPasswordToken(request.getResetToken());
+        String userId;
+
+        try {
+            userId = signedJWT.getJWTClaimsSet().getSubject();
+        } catch (ParseException e) {
+            throw new AppException(ErrorCode.INVALID_TOKEN);
+        }
+
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-        otpService.verifyOtp(request.getEmail(), request.getOtp());
         validateNewPassword(request.getNewPassword(), request.getConfirmNewPassword(), user.getPassword());
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+
+        String jwtTokenId = signedJWT.getJWTClaimsSet().getJWTID();
+        Date expirationTime = signedJWT.getJWTClaimsSet().getExpirationTime();
+        InvalidatedToken invalidatedToken = InvalidatedToken.builder()
+                .id(jwtTokenId)
+                .expiryTime(expirationTime)
+                .build();
+
+        invalidatedTokenRepository.save(invalidatedToken);
     }
 
     @Override
@@ -414,5 +452,32 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         emailService.sendForgotPasswordOtp(user.getEmail(), otp);
     }
 
+    @Override
+    public ResetOtpResponse verifyResetOtp(VerifyEmailRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        otpService.verifyOtp(request.getEmail(), request.getOtp());
+        String resetToken = generateResetPasswordToken(user);
+        return ResetOtpResponse.builder()
+                .resetToken(resetToken)
+                .build();
+    }
 
+    private SignedJWT verifyResetPasswordToken(String token) throws ParseException, JOSEException {
+        SignedJWT signedJWT = verifyToken(token);
+
+        try {
+            String scope = signedJWT.getJWTClaimsSet().getStringClaim("scope");
+            if (!"RESET_PASSWORD".equals(scope)) {
+                log.warn("Reset password token invalid scope: {}", scope);
+                throw new AppException(ErrorCode.INVALID_TOKEN);
+            }
+
+            return signedJWT;
+
+        } catch (ParseException e) {
+            log.warn("Invalid token: {}", e.getMessage(), e);
+            throw new AppException(ErrorCode.INVALID_TOKEN);
+        }
+    }
 }

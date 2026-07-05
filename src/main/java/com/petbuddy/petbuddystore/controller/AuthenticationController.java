@@ -5,6 +5,7 @@ import com.petbuddy.petbuddystore.common.enums.Role;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.*;
 import com.petbuddy.petbuddystore.dto.response.AuthenticationResponse;
+import com.petbuddy.petbuddystore.dto.response.ResetOtpResponse;
 import com.petbuddy.petbuddystore.service.AuthenticationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -14,6 +15,7 @@ import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -27,6 +29,7 @@ import java.text.ParseException;
 @RequestMapping("/api/auth")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Authentication API", description = "Bảo mật user")
+@Slf4j
 public class AuthenticationController {
     AuthenticationService authenticationService;
 
@@ -55,7 +58,6 @@ public class AuthenticationController {
                 .queryParam("refreshToken", authResponse.getRefreshToken())
                 .build()
                 .toUriString();
-
         response.sendRedirect(redirectUrl);
     }
 
@@ -102,8 +104,14 @@ public class AuthenticationController {
                 .body(ApiResponse.success("Otp forgot password has been sent to your email"));
     }
 
+    @PostMapping("/verify-reset-otp")
+    public ResponseEntity<ApiResponse<ResetOtpResponse>> verifyResetOtp(@Valid @RequestBody VerifyEmailRequest request){
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(ApiResponse.success("Otp verify successfully", authenticationService.verifyResetOtp(request)));
+    }
+
     @PostMapping("/reset-password")
-    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request){
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) throws ParseException, JOSEException {
         authenticationService.resetPassword(request);
         return ResponseEntity.status(HttpStatus.OK)
                 .body(ApiResponse.success("Password reset successfully"));

@@ -28,6 +28,10 @@ public enum ErrorCode {
     USER_DELETED(2004, "User has been deleted", HttpStatus.GONE),
     UNAUTHENTICATED(2005, "Unauthenticated", HttpStatus.UNAUTHORIZED),
     UNAUTHORIZED(2006, "You do not have permission to access", HttpStatus.FORBIDDEN),
+    INVALID_TOKEN(2007, "Invalid token", HttpStatus.UNAUTHORIZED),
+    TOKEN_EXPIRED(2008, "Token has expired", HttpStatus.UNAUTHORIZED),
+
+    MESSAGE_EXCEED_LIMIT(2101, "Message must be less than 2000 characters", HttpStatus.BAD_REQUEST),
 
     OTP_EXPIRED(3001, "OTP has expired", HttpStatus.BAD_REQUEST),
     OTP_INVALID(3002, "OTP is invalid", HttpStatus.BAD_REQUEST),

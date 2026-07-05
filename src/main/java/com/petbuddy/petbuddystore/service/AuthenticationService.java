@@ -5,6 +5,7 @@ import com.petbuddy.petbuddystore.common.enums.Role;
 import com.petbuddy.petbuddystore.dto.request.*;
 import com.petbuddy.petbuddystore.dto.response.AuthenticationResponse;
 import com.petbuddy.petbuddystore.dto.response.IntrospectResponse;
+import com.petbuddy.petbuddystore.dto.response.ResetOtpResponse;
 
 import java.text.ParseException;
 
@@ -17,7 +18,8 @@ public interface AuthenticationService {
     void verifyEmail(String email, String otp);
     void resendOtp(String email);
     void changePassword(PasswordUpdateRequest request);
-    void resetPassword(ResetPasswordRequest request);
+    void resetPassword(ResetPasswordRequest request) throws ParseException, JOSEException;
     void forgotPassword(OtpRequest request);
+    ResetOtpResponse verifyResetOtp(VerifyEmailRequest request);
     AuthenticationResponse outboundAuthenticate(String code);
 }

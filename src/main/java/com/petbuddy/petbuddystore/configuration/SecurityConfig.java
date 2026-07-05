@@ -25,7 +25,7 @@ import java.util.List;
 public class SecurityConfig {
     private final String[] PUBLIC_POST_ENDPOINTS = {"/api/users", "/api/auth/signup", "/api/auth/login",
             "/api/auth/introspect", "/api/auth/refresh", "/api/auth/verify-email", "/api/auth/resend-otp",
-            "/api/auth/forgot-password", "/api/auth/reset-password"};
+            "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/verify-reset-otp"};
 
     private final String[] PUBLIC_GET_ENDPOINTS = {"/api/categories", "/api/categories/{categoryId}", "/api/products",
             "/api/products/{productId}", "/api/blogs", "/api/blogs/**", "/api/auth/outbound/authentication"
