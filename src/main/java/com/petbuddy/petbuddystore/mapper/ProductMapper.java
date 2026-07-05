@@ -24,8 +24,6 @@ public interface ProductMapper {
     Product toProduct(ProductCreationRequest request);
 
     @Mapping(target = "description", ignore = true)
-    @Mapping(target = "ingredients", ignore = true)
-    @Mapping(target = "usageInstructions", ignore = true)
     @Mapping(target = "promotionType", ignore = true)
     @Mapping(target = "discountValue", ignore = true)
     @Mapping(target = "promotionPrice", ignore = true)

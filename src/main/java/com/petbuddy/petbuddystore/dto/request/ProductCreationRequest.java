@@ -32,7 +32,7 @@ public class ProductCreationRequest {
 
     @NotNull(message = "PRODUCT_PRICE_REQUIRED")
     @DecimalMin(value = "0.0", inclusive = false, message = "PRODUCT_PRICE_INVALID")
-    private BigDecimal sale_price;
+    private BigDecimal salePrice;
 
     @NotNull(message = "PRODUCT_UNIT_REQUIRED")
     private ProductUnit unit;
