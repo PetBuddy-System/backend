@@ -32,7 +32,7 @@ public class ProductUpdateRequest {
     String usageInstructions;
 
     @DecimalMin(value = "0.01")
-    BigDecimal sale_price;
+    BigDecimal salePrice;
 
     ProductUnit unit;
 
