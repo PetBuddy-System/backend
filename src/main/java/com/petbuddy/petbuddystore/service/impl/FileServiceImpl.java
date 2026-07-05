@@ -34,8 +34,11 @@ public class FileServiceImpl implements FileService {
     String bucketName;
 
     @Override
-    public String uploadProductImage(MultipartFile file) {
-        return uploadToS3(file, "products");
+    public MediaFile uploadProductImage(MultipartFile file) {return uploadImage(file, MediaPurpose.PRODUCT, "products");}
+
+    @Override
+    public MediaFile uploadProductVideo(MultipartFile file) {
+        return uploadVideo(file, MediaPurpose.PRODUCT, "products/videos");
     }
 
     @Override
@@ -79,40 +82,110 @@ public class FileServiceImpl implements FileService {
         }
     }
 
-    @Override
-    public String uploadProductImageFromBytes(byte[] bytes, String mimeType) {
-        validateBytes(bytes, mimeType);
-        String extension = getExtensionFromMimeType(mimeType);
-        String imageKey = "products/" + UUID.randomUUID() + "." + extension;
-        return uploadToS3(bytes, mimeType, imageKey);
-    }
-
-
-    private String uploadToS3(MultipartFile file, String folder) {
-        validateFile(file);
+    private MediaFile uploadVideo(
+            MultipartFile file,
+            MediaPurpose mediaPurpose,
+            String folder
+    ) {
+        validateVideo(file);
 
         try {
-            String imageKey = folder + "/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
+            String fileKey = folder + "/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
 
             s3Client.putObject(
                     PutObjectRequest.builder()
                             .bucket(bucketName)
-                            .key(imageKey)
+                            .key(fileKey)
                             .contentType(file.getContentType())
                             .build(),
                     RequestBody.fromBytes(file.getBytes())
             );
 
-            return "https://" + bucketName + ".s3.amazonaws.com/" + imageKey;
+            String fileUrl = buildFileUrl(fileKey);
+
+            return MediaFile.builder()
+                    .fileUrl(fileUrl)
+                    .fileKey(fileKey)
+                    .fileSize(file.getSize())
+                    .fileType(FileType.VIDEO)
+                    .mediaPurpose(mediaPurpose)
+                    .mediaStatus(MediaStatus.ACTIVE)
+                    .build();
 
         } catch (Exception e) {
-            log.error(e.getMessage());
+            log.error("Upload video failed: {}", e.getMessage());
             throw new AppException(ErrorCode.UPLOAD_FAILED);
         }
     }
 
-    private String buildFileUrl(String fileKey){
+    @Override
+    public MediaFile uploadProductImageFromBytes(byte[] bytes) {
+        String detectedMimeType = detectMimeType(bytes);
+        if (detectedMimeType == null) {throw new AppException(ErrorCode.INVALID_FILE_TYPE);}
+
+        validateBytes(bytes, detectedMimeType);
+        String extension = getExtensionFromMimeType(detectedMimeType);
+        String fileKey = "products/" + UUID.randomUUID() + "." + extension;
+        String fileUrl = buildFileUrl(fileKey);
+
+        uploadToS3(bytes, detectedMimeType, fileKey);
+
+        return MediaFile.builder()
+                .fileUrl(fileUrl)
+                .fileKey(fileKey)
+                .fileSize((long) bytes.length)
+                .fileType(FileType.IMAGE)
+                .mediaPurpose(MediaPurpose.PRODUCT)
+                .mediaStatus(MediaStatus.ACTIVE)
+                .build();
+    }
+
+    @Override
+    public void validateExcelFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) throw new AppException(ErrorCode.FILE_REQUIRED);
+        if (file.getSize() > 10 * 1024 * 1024) throw new AppException(ErrorCode.FILE_TOO_LARGE);
+        String fileName = file.getOriginalFilename();
+        if (fileName == null || !fileName.toLowerCase().endsWith(".xlsx")) throw new AppException(ErrorCode.INVALID_FILE_TYPE);
+    }
+
+    private String detectMimeType(byte[] data) {
+        if (data == null || data.length < 4) return null;
+        if (data[0] == (byte)0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47) {
+            return "image/png";
+        }
+        if (data[0] == (byte)0xFF && data[1] == (byte)0xD8 && data[2] == (byte)0xFF) {
+            return "image/jpeg";
+        }
+        if (data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
+                data.length > 12 && data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50) {
+            return "image/webp";
+        }
+        if (data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x38) {
+            return "image/gif";
+        }
+        return null;
+    }    private String buildFileUrl(String fileKey){
         return "https://" + bucketName + ".s3.amazonaws.com/" + fileKey;
+    }
+
+    private void validateVideo(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new AppException(ErrorCode.FILE_REQUIRED);
+        }
+
+        // Giới hạn 20MB (có thể đổi thành 50MB nếu cần)
+        if (file.getSize() > 20 * 1024 * 1024) {
+            throw new AppException(ErrorCode.FILE_TOO_LARGE);
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || (
+                !contentType.equals("video/mp4") &&
+                        !contentType.equals("video/webm") &&
+                        !contentType.equals("video/quicktime"))) {
+
+            throw new AppException(ErrorCode.INVALID_FILE_TYPE);
+        }
     }
 
     private void validateFile(MultipartFile file) {

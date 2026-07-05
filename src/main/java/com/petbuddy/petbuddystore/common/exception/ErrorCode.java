@@ -66,7 +66,7 @@ public enum ErrorCode {
     EXPIRY_DATE_INVALID(4214, "Expiry date must be in the future", HttpStatus.BAD_REQUEST),
     PRODUCT_OUT_OF_STOCK(4215, "Product out of stock", HttpStatus.BAD_REQUEST),
     INVALID_SORT_OPTION(4216, "Invalid sort option", HttpStatus.BAD_REQUEST),
-    PRODUCT_IMAGE_LIMIT_EXCEEDED(4217, "Cannot upload more than 5 images for a product", HttpStatus.BAD_REQUEST),
+    PRODUCT_IMAGE_LIMIT_EXCEEDED(4217, "Cannot upload more than 4 images for a product", HttpStatus.BAD_REQUEST),
     BATCH_REQUIRED(4218, "Batch list is required", HttpStatus.BAD_REQUEST),
     BATCH_LIMIT_EXCEEDED(4219, "Cannot create more than 10 batches at once", HttpStatus.BAD_REQUEST),
     BATCH_NOT_FOUND(4220, "Batch not found", HttpStatus.NOT_FOUND),
@@ -102,6 +102,8 @@ public enum ErrorCode {
     INVALID_DISTANCE(5403,"Invalid distance",HttpStatus.BAD_REQUEST),
     SHIPPING_CONFIG_NOT_FOUND(5404,"Shipping configuration not found",HttpStatus.NOT_FOUND),
     SHIPPING_RULE_OVERLAP(5405,"Shipping rule overlaps with existing rules",HttpStatus.BAD_REQUEST),
+    INVALID_SHIPPING_FEE(5406,"Invalid shipping fee",HttpStatus.BAD_REQUEST),
+    LOCATION_ON_WATER(5407,"Location is on water",HttpStatus.BAD_REQUEST),
 
     PAYMENT_NOT_FOUND(5501, "Payment not found", HttpStatus.NOT_FOUND),
     PAYMENT_ALREADY_EXISTS(5502, "Payment already exists", HttpStatus.CONFLICT),
@@ -110,6 +112,7 @@ public enum ErrorCode {
     PAYMENT_WEBHOOK_INVALID(5505, "Webhook signature invalid", HttpStatus.BAD_REQUEST),
     PAYMENT_INTENT_NOT_FOUND(5506, "PaymentIntent not found", HttpStatus.NOT_FOUND),
     PAYMENT_CANNOT_CANCEL(5507, "Payment can not cancelled", HttpStatus.CONFLICT),
+    PAYMENT_NOT_COMPLETED(5508, "Payment is not completed", HttpStatus.BAD_REQUEST),
 
     FILE_REQUIRED(7001, "File is required", HttpStatus.BAD_REQUEST),
     FILE_TOO_LARGE(7002, "File size is too large", HttpStatus.BAD_REQUEST),
@@ -141,6 +144,8 @@ public enum ErrorCode {
     STAFF_LIST_EMPTY(9012, "Staff list is empty", HttpStatus.BAD_REQUEST),
     CANNOT_CHECKIN(9013, "Cannot check in", HttpStatus.BAD_REQUEST),
     CANNOT_CHECKOUT(9014, "Cannot check out", HttpStatus.BAD_REQUEST),
+    CATALOG_TIME_SLOT_NOT_FOUND(9015, "Catalog time slot not found", HttpStatus.NOT_FOUND),
+    CATALOG_TIME_SLOT_EXISTED(9016, "Catalog time slot already exists", HttpStatus.BAD_REQUEST),
 
     PROMOTION_NOT_FOUND(5501, "Promotion not found", HttpStatus.NOT_FOUND),
     PROMOTION_INVALID_DATE(5502, "Promotion date is invalid", HttpStatus.BAD_REQUEST),

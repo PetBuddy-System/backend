@@ -1,17 +1,20 @@
 package com.petbuddy.petbuddystore.service.impl;
 
-import com.petbuddy.petbuddystore.common.enums.OrderStatus;
 import com.petbuddy.petbuddystore.common.enums.PaymentMethod;
 import com.petbuddy.petbuddystore.common.enums.PaymentStatus;
+import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
-import com.petbuddy.petbuddystore.dto.response.PaymentInitResponse;
 import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
 import com.petbuddy.petbuddystore.mapper.PaymentMapper;
 import com.petbuddy.petbuddystore.model.Order;
+import com.petbuddy.petbuddystore.model.OrderDetail;
 import com.petbuddy.petbuddystore.model.Payment;
+import com.petbuddy.petbuddystore.model.ProductBatch;
 import com.petbuddy.petbuddystore.repository.OrderRepository;
 import com.petbuddy.petbuddystore.repository.PaymentRepository;
+import com.petbuddy.petbuddystore.repository.ProductBatchRepository;
+import com.petbuddy.petbuddystore.service.CartService;
 import com.petbuddy.petbuddystore.service.PaymentService;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
@@ -19,7 +22,9 @@ import com.stripe.model.Event;
 import com.stripe.model.PaymentIntent;
 import com.stripe.net.Webhook;
 import com.stripe.param.PaymentIntentCreateParams;
-import jakarta.transaction.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -28,24 +33,27 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
-@Transactional
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class PaymentServiceImpl implements PaymentService {
 
     final PaymentRepository paymentRepository;
     final OrderRepository orderRepository;
+    final ProductBatchRepository productBatchRepository;
+    final CartService cartService;
     final PaymentMapper paymentMapper;
 
     @Value("${webhook.secret-key}")
     String webhookSecret;
 
     @Override
-    public PaymentInitResponse createPayment(Order order, PaymentMethod method) {
-
+    public void createPayment(Order order, PaymentMethod method) {
         if (paymentRepository.existsByOrder_OrderId(order.getOrderId())) {
             throw new AppException(ErrorCode.PAYMENT_ALREADY_EXISTS);
         }
@@ -57,42 +65,16 @@ public class PaymentServiceImpl implements PaymentService {
                 .status(PaymentStatus.PENDING)
                 .build();
 
-        if (method == PaymentMethod.CARD) {
-            return createStripePayment(payment);
-        }
-
+        order.setPayment(payment);
         paymentRepository.save(payment);
-        return paymentMapper.toPaymentInitResponse(payment);
-    }
 
-    private PaymentInitResponse createStripePayment(Payment payment) {
-        try {
-            PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
-                    .setAmount(payment.getAmount().longValue())
-                    .setCurrency("vnd")
-                    .addPaymentMethodType("card")
-                    .putMetadata("order_id",   String.valueOf(payment.getOrder().getOrderId()))
-                    .putMetadata("order_code", payment.getOrder().getOrderCode())
-                    .build();
-
-            PaymentIntent intent = PaymentIntent.create(params);
-
-            payment.setStripePaymentIntentId(intent.getId());
-            payment.setStripeClientSecret(intent.getClientSecret());
-            payment.setStatus(PaymentStatus.PROCESSING);
-            paymentRepository.save(payment);
-
-            PaymentInitResponse response = paymentMapper.toPaymentInitResponse(payment);
-            response.setClientSecret(intent.getClientSecret());
-            return response;
-
-        } catch (StripeException ex) {
-            log.error("Stripe error khi tạo PaymentIntent cho order {}: {}",
-                    payment.getOrder().getOrderId(), ex.getMessage());
-            throw new AppException(ErrorCode.PAYMENT_STRIPE_ERROR);
+        if (method == PaymentMethod.CARD) {
+            createStripePayment(payment);
         }
+        paymentRepository.save(payment);
     }
 
+    @Transactional
     @Override
     public void handleWebhook(String payload, String sigHeader) {
         Event event;
@@ -113,20 +95,116 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    @Transactional
+    @Override
+    public PaymentResponse getPaymentByOrderId(Long orderId) {
+        if (!orderRepository.existsById(orderId)) {
+            throw new AppException(ErrorCode.ORDER_NOT_FOUND);
+        }
+        Payment payment = paymentRepository.findByOrder_OrderId(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
+        return paymentMapper.toPaymentResponse(payment);
+    }
+
+    @Override
+    public void markPaymentSucceeded(Order order) {
+        Payment payment = order.getPayment();
+        for (OrderDetail detail : order.getOrderDetails()) {
+            deductStockByFefo(detail.getProduct().getProductId(), detail.getQuantity());
+        }
+        log.info("Trừ kho xong cho order {}", order.getOrderCode());
+        paymentRepository.save(payment);
+    }
+
+    @Override
+    public Page<PaymentResponse> getAllPayments(Pageable pageable) {
+        Page<Payment> payments = paymentRepository.findAll(pageable);
+        return payments.map(paymentMapper::toPaymentResponse);
+    }
+
+    private void deductStockByFefo(UUID productId, int quantity) {
+        List<ProductBatch> batches = productBatchRepository.findActiveBatchesForUpdate(productId, ProductStatus.ACTIVE);
+        List<ProductBatch> updatedBatches = new ArrayList<>();
+        int remaining = quantity;
+
+        for (ProductBatch batch : batches) {
+            if (remaining <= 0) break;
+            int picked = Math.min(batch.getStockQuantity(), remaining);
+            batch.setStockQuantity(batch.getStockQuantity() - picked);
+            updatedBatches.add(batch);
+            remaining -= picked;
+        }
+
+        if (remaining > 0) throw new AppException(ErrorCode.PRODUCT_OUT_OF_STOCK);
+        productBatchRepository.saveAll(updatedBatches);
+    }
+
+    private String extractPaymentIntentId(Event event) {
+        var deserializer = event.getDataObjectDeserializer();
+
+        log.info("Event type: {}, deserializer present: {}",
+                event.getType(), deserializer.getObject().isPresent());
+
+        if (deserializer.getObject().isPresent()) {
+            String id = ((PaymentIntent) deserializer.getObject().get()).getId();
+            log.info("Extracted PaymentIntent ID (object): {}", id);
+            return id;
+        }
+
+        log.warn("Dùng raw JSON fallback cho event: {}", event.getId());
+        try {
+            String rawJson = deserializer.getRawJson();
+            log.info("Raw JSON: {}", rawJson);
+            com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser
+                    .parseString(rawJson)
+                    .getAsJsonObject();
+            String id = jsonObject.get("id").getAsString();
+            log.info("Extracted PaymentIntent ID (raw): {}", id);
+            return id;
+        } catch (Exception e) {
+            log.error("Không thể parse PaymentIntent id: {}", e.getMessage());
+            throw new AppException(ErrorCode.PAYMENT_INTENT_NOT_FOUND);
+        }
+    }
+
+    private void createStripePayment(Payment payment) {
+        try {
+            PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
+                    .setAmount(payment.getAmount().longValue())
+                    .setCurrency("vnd")
+                    .putMetadata("order_id",   String.valueOf(payment.getOrder().getOrderId()))
+                    .putMetadata("order_code", payment.getOrder().getOrderCode())
+                    .build();
+
+            PaymentIntent intent = PaymentIntent.create(params);
+
+            payment.setStripePaymentIntentId(intent.getId());
+            payment.setStripeClientSecret(intent.getClientSecret());
+            payment.setStatus(PaymentStatus.PROCESSING);
+        } catch (StripeException ex) {
+            log.error("Stripe error khi tạo PaymentIntent cho order {}: {}",
+                    payment.getOrder().getOrderId(), ex.getMessage());
+            throw new AppException(ErrorCode.PAYMENT_STRIPE_ERROR);
+        }
+    }
+
     private void handlePaymentSucceeded(Event event) {
         String intentId = extractPaymentIntentId(event);
         Payment payment = findByStripeIntentId(intentId);
 
-        payment.setStatus(PaymentStatus.PAID);
-        payment.setPaidAt(LocalDateTime.now());
-        paymentRepository.save(payment);
+        if (payment.getStatus() == PaymentStatus.PAID) {
+            log.info("Webhook trùng lặp, bỏ qua: PaymentIntent={}", intentId);
+            return;
+        }
 
         Order order = payment.getOrder();
-        order.setStatus(OrderStatus.CONFIRMED);
-        orderRepository.save(order);
+        markPaymentSucceeded(order);
 
-        log.info("Thanh toán thành công: PaymentIntent={}, Order={}",
-                intentId, order.getOrderCode());
+        payment.setStatus(PaymentStatus.PAID);
+        payment.setPaidAt(LocalDateTime.now());
+        cartService.clearCart(order.getUser());
+        paymentRepository.save(payment);
+        log.info("Thanh toán thành công: PaymentIntent={}, Order={}", intentId, order.getOrderCode());
     }
 
     private void handlePaymentFailed(Event event) {
@@ -148,25 +226,6 @@ public class PaymentServiceImpl implements PaymentService {
         paymentRepository.save(payment);
 
         log.info("PaymentIntent bị huỷ: {}", intentId);
-    }
-
-
-    @Override
-    public PaymentResponse getPaymentByOrderId(Long orderId) {
-        if (!orderRepository.existsById(orderId)) {
-            throw new AppException(ErrorCode.ORDER_NOT_FOUND);
-        }
-        Payment payment = paymentRepository.findByOrder_OrderId(orderId)
-                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
-        return paymentMapper.toPaymentResponse(payment);
-    }
-
-
-    private String extractPaymentIntentId(Event event) {
-        return event.getDataObjectDeserializer()
-                .getObject()
-                .map(obj -> ((PaymentIntent) obj).getId())
-                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_INTENT_NOT_FOUND));
     }
 
     private Payment findByStripeIntentId(String intentId) {

@@ -4,7 +4,6 @@ import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.ProductBatchCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductBatchUpdateRequest;
-import com.petbuddy.petbuddystore.dto.request.ProductImportRequest;
 import com.petbuddy.petbuddystore.dto.response.ProductBatchResponse;
 import com.petbuddy.petbuddystore.dto.response.ProductImportResponse;
 import com.petbuddy.petbuddystore.service.ProductBatchService;
@@ -77,16 +76,12 @@ public class ProductBatchController {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @PostMapping(value = "/api/products/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Import products and batches from Excel",
-            description = "Import Excel theo cơ chế preview/confirm. confirm=false chỉ kiểm tra và trả warnings/errors, confirm=true mới tạo Product và ProductBatch thật."
-    )
+    @Operation(summary = "Import products and batches from Excel")
     public ResponseEntity<ApiResponse<ProductImportResponse>> importProductsAndBatches(
-            @RequestPart("file") MultipartFile file,
-            @RequestParam(defaultValue = "false") boolean confirm
+            @RequestPart("file") MultipartFile file
     ) {
-        ProductImportRequest request = new ProductImportRequest(file, confirm);
-        ProductImportResponse response = productBatchService.importProductsAndBatches(request);
-        String message = confirm ? "Import completed successfully" : "Import preview completed";
-        return ResponseEntity.ok(ApiResponse.success(message, response));
+        ProductImportResponse response = productBatchService.importProductsAndBatches(file);
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(ApiResponse.success("Import successfully", response));
     }
 }

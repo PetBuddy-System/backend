@@ -4,6 +4,7 @@ import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.AddToCartRequest;
 import com.petbuddy.petbuddystore.dto.request.MergeCartRequest;
 import com.petbuddy.petbuddystore.dto.request.UpdateCartItemRequest;
+import com.petbuddy.petbuddystore.dto.response.CartItemResponse;
 import com.petbuddy.petbuddystore.dto.response.CartResponse;
 import com.petbuddy.petbuddystore.service.CartService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,11 +48,11 @@ public class CartController {
     @PreAuthorize("hasRole('CUSTOMER')")
     @Operation(description = "Update product quantity in cart")
     @PutMapping("/items/{cartItemId}")
-    public ResponseEntity<ApiResponse<Void>> updateItemQuantity(@PathVariable UUID cartItemId,
-                                                                @RequestBody @Valid UpdateCartItemRequest request){
-        cartService.updateCart(cartItemId, request);
+    public ResponseEntity<ApiResponse<CartItemResponse>> updateItemQuantity(@PathVariable UUID cartItemId,
+                                                                            @RequestBody @Valid UpdateCartItemRequest request){
         return ResponseEntity.ok(
-                ApiResponse.success("Cart item quantity updated successfully", null));
+                ApiResponse.success("Cart item quantity updated successfully",
+                        cartService.updateCart(cartItemId, request)));
     }
 
     @PreAuthorize("hasRole('CUSTOMER')")
@@ -62,16 +63,6 @@ public class CartController {
         cartService.removeItem(productId);
         return ResponseEntity.ok(
                 ApiResponse.success("Product removed from cart successfully", null));
-    }
-
-    @PreAuthorize("hasRole('CUSTOMER')")
-    @Operation(description = "Clear cart")
-    @DeleteMapping
-    public ResponseEntity<ApiResponse<Void>> clearCart() {
-
-        cartService.clearCart();
-        return ResponseEntity.ok(
-                ApiResponse.success("Cart cleared successfully", null));
     }
 
     @PreAuthorize("hasRole('CUSTOMER')")

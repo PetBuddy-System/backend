@@ -12,14 +12,10 @@ import java.util.List;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ProductImportResponse {
+    private boolean success;
+    private int createdProducts;
+    private int createdBatches;
+    private List<Error> errors;
 
-    boolean canImport;
-
-    int createdProducts;
-
-    int createdBatches;
-
-    List<String> warnings;
-
-    List<String> errors;
+    public record Error(int row, String errorKey) {}
 }

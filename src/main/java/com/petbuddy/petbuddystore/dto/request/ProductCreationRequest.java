@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.dto.request;
 
+import com.petbuddy.petbuddystore.common.enums.ProductUnit;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -31,7 +32,10 @@ public class ProductCreationRequest {
 
     @NotNull(message = "PRODUCT_PRICE_REQUIRED")
     @DecimalMin(value = "0.0", inclusive = false, message = "PRODUCT_PRICE_INVALID")
-    BigDecimal price;
+    private BigDecimal salePrice;
+
+    @NotNull(message = "PRODUCT_UNIT_REQUIRED")
+    private ProductUnit unit;
 
     String brandName;
 

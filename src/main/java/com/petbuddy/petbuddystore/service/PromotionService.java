@@ -21,8 +21,4 @@ public interface PromotionService {
     PromotionResponse getPromotionById(UUID id);
 
     PromotionResponse updatePromotion(UUID id, PromotionUpdateRequest request);
-
-    boolean hasActivePromotion(UUID productId);
-
-    BigDecimal calculateSalePrice(Product product, PromotionDetail detail);
 }

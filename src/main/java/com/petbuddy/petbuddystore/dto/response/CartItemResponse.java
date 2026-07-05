@@ -15,16 +15,13 @@ import java.util.UUID;
 @ToString
 public class CartItemResponse {
     UUID cartItemId;
-
     UUID productId;
-
     String productName;
-
+    String description;
     BigDecimal price;
-
     Integer quantity;
-
+    BigDecimal salePrice;
     String imageUrl;
-
     BigDecimal subtotal;
+    Boolean adjusted;
 }

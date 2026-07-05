@@ -2,9 +2,9 @@ package com.petbuddy.petbuddystore.repository;
 
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import com.petbuddy.petbuddystore.model.ProductBatch;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
-import org.springframework.data.jpa.repository.Query;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.*;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -13,10 +13,6 @@ import java.util.UUID;
 
 @Repository
 public interface ProductBatchRepository extends JpaRepository<ProductBatch, UUID>, JpaSpecificationExecutor<ProductBatch> {
-
-    long countByProduct_ProductId(UUID productId);
-
-    boolean existsByBatchCode(String batchCode);
 
     List<ProductBatch> findByStatusAndDeletedAtBefore(ProductStatus status,LocalDateTime deletedAt);
 
@@ -37,8 +33,13 @@ public interface ProductBatchRepository extends JpaRepository<ProductBatch, UUID
             ProductStatus status
     );
 
-    List<ProductBatch> findByProduct_ProductIdInAndStatusAndDeletedAtIsNull(
-            List<UUID> productIds,
-            ProductStatus status
-    );
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT b FROM ProductBatch b
+        WHERE b.product.productId = :productId
+          AND b.stockQuantity > 0
+          AND b.status = :status
+        ORDER BY b.expiryDate ASC, b.createdAt ASC, b.batchCode ASC
+        """)
+    List<ProductBatch> findActiveBatchesForUpdate(@Param("productId") UUID productId, @Param("status") ProductStatus status);
 }

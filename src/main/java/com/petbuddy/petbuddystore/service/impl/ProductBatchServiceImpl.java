@@ -1,16 +1,17 @@
 package com.petbuddy.petbuddystore.service.impl;
 
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
+import com.petbuddy.petbuddystore.common.enums.ProductUnit;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.ImportRowRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductBatchCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductBatchUpdateRequest;
-import com.petbuddy.petbuddystore.dto.request.ProductImportRequest;
 import com.petbuddy.petbuddystore.dto.response.ProductBatchResponse;
 import com.petbuddy.petbuddystore.dto.response.ProductImportResponse;
 import com.petbuddy.petbuddystore.mapper.ProductBatchMapper;
 import com.petbuddy.petbuddystore.model.Category;
+import com.petbuddy.petbuddystore.model.MediaFile;
 import com.petbuddy.petbuddystore.model.Product;
 import com.petbuddy.petbuddystore.model.ProductBatch;
 import com.petbuddy.petbuddystore.repository.ProductBatchRepository;
@@ -24,22 +25,18 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.ss.util.CellReference;
+import org.apache.poi.xssf.usermodel.*;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.xml.parsers.DocumentBuilderFactory;
-import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 @Slf4j
 @Service
@@ -48,8 +45,8 @@ import java.util.zip.ZipInputStream;
 public class ProductBatchServiceImpl implements ProductBatchService {
 
     static final int MAX_BATCH_CREATE_LIMIT = 10;
-    static final int IMAGE_COL_START = 9;
-    static final int IMAGE_COL_END = 12;
+    static final int IMAGE_COL_START = 11;
+    static final int IMAGE_COL_END = 14;
 
     ProductBatchRepository productBatchRepository;
     ProductService productService;
@@ -72,7 +69,9 @@ public class ProductBatchServiceImpl implements ProductBatchService {
             batches.add(batch);
         }
         product.setLastBatchSequence(sequence);
-        return productBatchRepository.saveAllAndFlush(batches).stream().map(this::buildBatchResponse).toList();
+        return productBatchRepository.saveAllAndFlush(batches).stream()
+                .map(productBatchMapper::toProductBatchResponse)
+                .toList();
     }
 
     @Override
@@ -81,20 +80,32 @@ public class ProductBatchServiceImpl implements ProductBatchService {
         Product product = productService.getProductEntityById(productId);
         Pageable sortedPageable = buildPageable(pageable, sortBy);
         Specification<ProductBatch> spec = buildBatchSpec(product.getProductId(), keyword, status);
-        return productBatchRepository.findAll(spec, sortedPageable).map(this::buildBatchResponse);
+        return productBatchRepository.findAll(spec, sortedPageable)
+                .map(productBatchMapper::toProductBatchResponse);
     }
 
     @Override
     @Transactional
     public ProductBatchResponse updateBatch(UUID batchId, ProductBatchUpdateRequest request) {
         ProductBatch batch = getBatchEntityById(batchId);
+
         if (request.getStockQuantity() != null) {
-            if (request.getStockQuantity() < 0) throw new AppException(ErrorCode.PRODUCT_STOCK_INVALID);
             batch.setStockQuantity(request.getStockQuantity());
         }
-        if (request.getExpiryDate() != null) batch.setExpiryDate(request.getExpiryDate());
-        if (request.getStatus() != null) updateStatus(batch, request.getStatus());
-        return buildBatchResponse(productBatchRepository.save(batch));
+
+        if (request.getBasePrice() != null) {
+            batch.setBasePrice(request.getBasePrice());
+        }
+
+        if (request.getExpiryDate() != null) {
+            batch.setExpiryDate(request.getExpiryDate());
+        }
+
+        if (request.getStatus() != null) {
+            updateStatus(batch, request.getStatus());
+        }
+
+        return productBatchMapper.toProductBatchResponse(productBatchRepository.save(batch));
     }
 
     @Override
@@ -105,25 +116,20 @@ public class ProductBatchServiceImpl implements ProductBatchService {
         productBatchRepository.deleteAll(oldDeletedBatches);
     }
 
-    // ==================== IMPORT ====================
     @Override
     @Transactional
-    public ProductImportResponse importProductsAndBatches(ProductImportRequest request) {
-        MultipartFile file = request.getFile();
-        boolean confirm = request.isConfirm();
-        validateExcelFile(file);
+    public ProductImportResponse importProductsAndBatches(MultipartFile file) {
+        fileService.validateExcelFile(file);
         log.info("Import file size: {}", file.getSize());
 
-        List<String> warnings = new ArrayList<>();
-        List<String> errors = new ArrayList<>();
+        List<ProductImportResponse.Error> errors = new ArrayList<>();
         List<ImportRowRequest> validRows = new ArrayList<>();
 
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
             validateHeader(sheet.getRow(0));
 
-            byte[] excelBytes = file.getBytes();
-            Map<Integer, List<byte[]>> rowImagesMap = getAllImagesByRow(excelBytes);
+            Map<Integer, List<byte[]>> rowImagesMap = getImagesFromSheet(workbook);
 
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
@@ -132,66 +138,135 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                 int rowNum = i + 1;
                 String name = getCellString(row, 0);
                 String description = getCellString(row, 1);
-                BigDecimal price = getCellBigDecimal(row, 2);
+                BigDecimal salePrice = getCellBigDecimal(row, 2);
                 String brandName = getCellString(row, 3);
                 String categoryName = getCellString(row, 4);
                 Integer stockQuantity = getCellInteger(row, 5);
                 LocalDate expiryDate = getCellLocalDate(row, 6);
                 String ingredients = getCellString(row, 7);
                 String usageInstructions = getCellString(row, 8);
+                BigDecimal basePrice = getCellBigDecimal(row, 9);
+                String unitStr = getCellString(row, 10);
+                if (name == null || name.isBlank()) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_NAME_REQUIRED"));
+                } else if (name.length() > 255) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_NAME_TOO_LONG"));
+                }
+                if (salePrice == null || salePrice.compareTo(BigDecimal.ZERO) <= 0) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_PRICE_INVALID"));
+                } else if (salePrice.compareTo(new BigDecimal("999999999")) > 0) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_PRICE_TOO_HIGH"));
+                }
+                if (categoryName == null || categoryName.isBlank()) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "CATEGORY_NAME_REQUIRED"));
+                } else if (categoryName.length() > 100) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "CATEGORY_NAME_TOO_LONG"));
+                }
+                if (stockQuantity == null || stockQuantity < 0) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "STOCK_QUANTITY_INVALID"));
+                } else if (stockQuantity > 999999) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "STOCK_QUANTITY_TOO_HIGH"));
+                }
+                if (unitStr == null || unitStr.isBlank()) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_UNIT_REQUIRED"));
+                }
 
-                if (name == null || name.isBlank()) { errors.add("Row " + rowNum + ": Product name is required."); continue; }
-                if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) { errors.add("Row " + rowNum + ": Product price is invalid."); continue; }
-                if (categoryName == null || categoryName.isBlank()) { errors.add("Row " + rowNum + ": Category name is required."); continue; }
-                if (stockQuantity == null || stockQuantity < 0) { errors.add("Row " + rowNum + ": Stock quantity is invalid."); continue; }
-                if (expiryDate != null && !expiryDate.isAfter(LocalDate.now())) { errors.add("Row " + rowNum + ": Expiry date is invalid."); continue; }
+                if (description != null && description.length() > 5000) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "DESCRIPTION_TOO_LONG"));
+                }
+
+                if (brandName != null && brandName.length() > 100) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "BRAND_NAME_TOO_LONG"));
+                }
+
+                if (ingredients != null && ingredients.length() > 2000) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "INGREDIENTS_TOO_LONG"));
+                }
+
+                if (usageInstructions != null && usageInstructions.length() > 2000) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "USAGE_INSTRUCTIONS_TOO_LONG"));
+                }
+
+                if (expiryDate != null && !expiryDate.isAfter(LocalDate.now())) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "EXPIRY_DATE_INVALID"));
+                }
+
+                if (basePrice != null) {
+                    if (basePrice.compareTo(BigDecimal.ZERO) < 0) {
+                        errors.add(new ProductImportResponse.Error(rowNum, "BASE_PRICE_INVALID"));
+                    }
+                    if (salePrice != null && basePrice.compareTo(salePrice) >= 0) {
+                        errors.add(new ProductImportResponse.Error(rowNum, "BASE_PRICE_MUST_BE_LESS_THAN_SALE_PRICE"));
+                    }
+                }
+                boolean hasRowError = errors.stream().anyMatch(e -> e.row() == rowNum);
+                if (hasRowError) continue;
 
                 Category category;
                 try {
                     category = categoryService.getActiveCategoryEntityByName(categoryName);
                 } catch (AppException e) {
-                    errors.add("Row " + rowNum + ": Category '" + categoryName + "' does not exist or is inactive."); continue;
+                    errors.add(new ProductImportResponse.Error(rowNum, "CATEGORY_NOT_FOUND"));
+                    continue;
                 }
+
                 Product existingProduct = productService.getProductEntityByName(name);
-                if (existingProduct != null) {
-                    if (existingProduct.getStatus() == ProductStatus.INACTIVE) {
-                        errors.add("Row " + rowNum + ": Product '" + name + "' is inactive. Please activate it first.");continue;
-                    }
-                    if (hasDifferentInfo(existingProduct, description, price, brandName, category, ingredients, usageInstructions)) {
-                        warnings.add("Row " + rowNum + ": Product '" + name + "' already exists. Old info kept.");
-                    }
+                if (existingProduct != null && existingProduct.getStatus() == ProductStatus.INACTIVE) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_INACTIVE"));
+                    continue;
+                }
+
+                // Parse unit
+                ProductUnit unit;
+                try {
+                    unit = ProductUnit.valueOf(unitStr.trim().toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_UNIT_INVALID"));
+                    continue;
                 }
 
                 List<byte[]> rowImages = rowImagesMap.getOrDefault(i, Collections.emptyList());
-                validRows.add(new ImportRowRequest(rowNum, name, description, price, brandName, category,
-                        stockQuantity, expiryDate, ingredients, usageInstructions, rowImages));
+                validRows.add(new ImportRowRequest(rowNum, name, description, salePrice, brandName, category,
+                        stockQuantity, expiryDate, ingredients, usageInstructions, basePrice, unit, rowImages));
             }
 
-            if (!errors.isEmpty() || !confirm) {
+            if (!errors.isEmpty()) {
                 return ProductImportResponse.builder()
-                        .canImport(errors.isEmpty()).createdProducts(0).createdBatches(0)
-                        .warnings(warnings).errors(errors).build();
+                        .success(false)
+                        .createdProducts(0)
+                        .createdBatches(0)
+                        .errors(errors)
+                        .build();
             }
 
-            int createdProducts = 0, createdBatches = 0;
+            int createdProducts = 0;
+            int createdBatches = 0;
             Map<UUID, Long> batchCounter = new HashMap<>();
 
             for (ImportRowRequest rowData : validRows) {
                 Product product = productService.getProductEntityByName(rowData.getName());
                 if (product == null) {
-                    List<String> imageUrls = uploadImages(rowData.getImages(), rowData.getName());
+                    List<MediaFile> mediaFiles = uploadImages(rowData.getImages(), rowData.getName());
                     product = productService.createProductFromImport(
-                            rowData.getName(), rowData.getDescription(), rowData.getPrice(), rowData.getBrandName(),
-                            rowData.getCategory(), rowData.getIngredients(), rowData.getUsageInstructions(), imageUrls);
+                            rowData.getName(), rowData.getDescription(), rowData.getSalePrice(), rowData.getBrandName(),
+                            rowData.getCategory(), rowData.getIngredients(), rowData.getUsageInstructions(),
+                            rowData.getUnit(),
+                            mediaFiles);
                     createdProducts++;
                 }
 
                 Product finalProduct = product;
                 long nextNumber = batchCounter.computeIfAbsent(product.getProductId(), id -> finalProduct.getLastBatchSequence() + 1);
+
                 ProductBatch batch = ProductBatch.builder()
                         .batchCode(generateBatchCode(product, nextNumber))
-                        .product(product).stockQuantity(rowData.getStockQuantity())
-                        .expiryDate(rowData.getExpiryDate()).status(ProductStatus.ACTIVE).build();
+                        .product(product)
+                        .stockQuantity(rowData.getStockQuantity())
+                        .expiryDate(rowData.getExpiryDate())
+                        .basePrice(rowData.getBasePrice() != null ? rowData.getBasePrice() : BigDecimal.ZERO)
+                        .status(ProductStatus.ACTIVE)
+                        .build();
+
                 productBatchRepository.save(batch);
                 productService.updateLastBatchSequence(product, nextNumber);
                 batchCounter.put(product.getProductId(), nextNumber + 1);
@@ -199,8 +274,11 @@ public class ProductBatchServiceImpl implements ProductBatchService {
             }
 
             return ProductImportResponse.builder()
-                    .canImport(true).createdProducts(createdProducts).createdBatches(createdBatches)
-                    .warnings(warnings).errors(errors).build();
+                    .success(true)
+                    .createdProducts(createdProducts)
+                    .createdBatches(createdBatches)
+                    .errors(Collections.emptyList())
+                    .build();
 
         } catch (AppException e) {
             throw e;
@@ -210,68 +288,46 @@ public class ProductBatchServiceImpl implements ProductBatchService {
         }
     }
 
-    private Map<Integer, List<byte[]>> getAllImagesByRow(byte[] excelBytes) throws Exception {
-        Map<Integer, List<byte[]>> imageMap = new HashMap<>();
-        Map<String, byte[]> zipEntries = readZipEntries(excelBytes);
+    private Map<Integer, List<byte[]>> getImagesFromSheet(Workbook workbook) {
+        Map<Integer, Map<Integer, byte[]>> rowColImageMap = new TreeMap<>();
 
-        byte[] relsBytes = zipEntries.get("xl/_rels/cellimages.xml.rels");
-        byte[] cellImagesBytes = zipEntries.get("xl/cellimages.xml");
-        byte[] sheetBytes = zipEntries.get("xl/worksheets/sheet1.xml");
-        if (relsBytes == null || cellImagesBytes == null || sheetBytes == null) return imageMap;
-
-        // rId → path
-        Map<String, String> rIdToPath = new HashMap<>();
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("Id=\"(rId\\d+)\"[^>]*Target=\"([^\"]+)\"").matcher(new String(relsBytes));
-        while (m.find()) rIdToPath.put(m.group(1), "xl/" + m.group(2));
-
-        // imageId → rId
-        String xml = new String(cellImagesBytes);
-        List<String> ids = new ArrayList<>(), rids = new ArrayList<>();
-        java.util.regex.Matcher nm = java.util.regex.Pattern.compile("name=\"(ID_[A-F0-9]+)\"").matcher(xml);
-        java.util.regex.Matcher em = java.util.regex.Pattern.compile("r:embed=\"(rId\\d+)\"").matcher(xml);
-        while (nm.find()) ids.add(nm.group(1));
-        while (em.find()) rids.add(em.group(1));
-        Map<String, String> imageIdToRid = new HashMap<>();
-        for (int i = 0; i < Math.min(ids.size(), rids.size()); i++) imageIdToRid.put(ids.get(i), rids.get(i));
-
-        // Cache ảnh
-        Map<String, byte[]> rIdToBytes = new HashMap<>();
-
-        // Duyệt sheet1.xml
-        DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
-        f.setNamespaceAware(false);
-        org.w3c.dom.Document doc = f.newDocumentBuilder().parse(new ByteArrayInputStream(sheetBytes));
-        org.w3c.dom.NodeList cells = doc.getElementsByTagName("c");
-
-        for (int i = 0; i < cells.getLength(); i++) {
-            org.w3c.dom.Element cell = (org.w3c.dom.Element) cells.item(i);
-            String ref = cell.getAttribute("r");
-            org.w3c.dom.NodeList fl = cell.getElementsByTagName("f");
-            if (fl.getLength() == 0) continue;
-            String formula = fl.item(0).getTextContent();
-            if (!formula.contains("DISPIMG")) continue;
-
-            int s = formula.indexOf('"'), e = formula.indexOf('"', s + 1);
-            String imageId = formula.substring(s + 1, e);
-            CellReference cr = new CellReference(ref);
-            int row = cr.getRow(), col = cr.getCol();
-
-            if (col >= IMAGE_COL_START && col <= IMAGE_COL_END) {
-                String rId = imageIdToRid.get(imageId);
-                if (rId != null) {
-                    byte[] img = rIdToBytes.get(rId);
-                    if (img == null) {
-                        String path = rIdToPath.get(rId);
-                        if (path != null) { img = zipEntries.get(path); if (img != null) rIdToBytes.put(rId, img); }
+        if (workbook instanceof XSSFWorkbook) {
+            XSSFWorkbook xssfWorkbook = (XSSFWorkbook) workbook;
+            XSSFSheet sheet = xssfWorkbook.getSheetAt(0);
+            XSSFDrawing drawing = sheet.getDrawingPatriarch();
+            if (drawing == null) {
+                return new HashMap<>();
+            }
+            for (XSSFShape shape : drawing.getShapes()) {
+                if (shape instanceof XSSFPicture) {
+                    XSSFPicture picture = (XSSFPicture) shape;
+                    XSSFClientAnchor anchor = (XSSFClientAnchor) picture.getAnchor();
+                    int row = anchor.getRow1();
+                    int col = anchor.getCol1();
+                    if (col >= IMAGE_COL_START && col <= IMAGE_COL_END) {
+                        byte[] imageData = picture.getPictureData().getData();
+                        rowColImageMap.computeIfAbsent(row, k -> new HashMap<>()).putIfAbsent(col, imageData);
                     }
-                    if (img != null) imageMap.computeIfAbsent(row, k -> new ArrayList<>()).add(img);
                 }
             }
         }
-        return imageMap;
+        Map<Integer, List<byte[]>> result = new HashMap<>();
+        for (Map.Entry<Integer, Map<Integer, byte[]>> rowEntry : rowColImageMap.entrySet()) {
+            int row = rowEntry.getKey();
+            Map<Integer, byte[]> colMap = rowEntry.getValue();
+            List<byte[]> sortedImages = new ArrayList<>();
+            for (int col = IMAGE_COL_START; col <= IMAGE_COL_END; col++) {
+                if (colMap.containsKey(col)) {
+                    sortedImages.add(colMap.get(col));
+                }
+            }
+            if (!sortedImages.isEmpty()) {
+                result.put(row, sortedImages);
+            }
+        }
+        return result;
     }
 
-    // ==================== HELPERS ====================
     private String getCellString(Row row, int index) {
         Cell cell = row.getCell(index);
         if (cell == null) return null;
@@ -282,13 +338,19 @@ public class ProductBatchServiceImpl implements ProductBatchService {
     private BigDecimal getCellBigDecimal(Row row, int index) {
         String value = getCellString(row, index);
         if (value == null) return null;
-        try { return new BigDecimal(value.replace(",", "").replace(" ", "")); } catch (Exception e) { return null; }
+        try {return new BigDecimal(value.replace(",", "").replace(" ", ""));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private Integer getCellInteger(Row row, int index) {
         String value = getCellString(row, index);
         if (value == null) return null;
-        try { return Integer.parseInt(value.replace(",", "").replace(" ", "").split("\\.")[0]); } catch (Exception e) { return null; }
+        try {return Integer.parseInt(value.replace(",", "").replace(" ", "").split("\\.")[0]);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private LocalDate getCellLocalDate(Row row, int index) {
@@ -299,22 +361,29 @@ public class ProductBatchServiceImpl implements ProductBatchService {
         }
         String value = getCellString(row, index);
         if (value == null) return null;
-        for (DateTimeFormatter df : List.of(DateTimeFormatter.ofPattern("dd/MM/yyyy"), DateTimeFormatter.ofPattern("MM/dd/yyyy"), DateTimeFormatter.ofPattern("yyyy-MM-dd"))) {
-            try { return LocalDate.parse(value, df); } catch (Exception ignored) {}
+        for (DateTimeFormatter df : List.of(
+                DateTimeFormatter.ofPattern("dd/MM/yyyy"),
+                DateTimeFormatter.ofPattern("MM/dd/yyyy"),
+                DateTimeFormatter.ofPattern("yyyy-MM-dd"))) {
+            try {
+                return LocalDate.parse(value, df);
+            } catch (Exception ignored) {}
         }
         return null;
     }
 
     private boolean isEmpty(Row row) {
-        for (int i = 0; i <= 8; i++) if (getCellString(row, i) != null) return false;
+        for (int i = 0; i <= 10; i++) {
+            if (getCellString(row, i) != null) return false;
+        }
         return true;
     }
 
     private void validateHeader(Row header) {
         if (header == null) throw new AppException(ErrorCode.INVALID_EXCEL_TEMPLATE);
-        String[] expected = {"Name","Description","Price","BrandName","CategoryName","StockQuantity","ExpiryDate","Ingredients","UsageInstructions","Image1","Image2","Image3","Image4"};
-        for (int i = 0; i < expected.length; i++) {
-            if (!expected[i].equalsIgnoreCase(getCellString(header, i))) throw new AppException(ErrorCode.INVALID_EXCEL_TEMPLATE);
+        String[] expected = {"Name","Description","SalePrice","BrandName","CategoryName","StockQuantity","ExpiryDate","Ingredients","UsageInstructions","BasePrice","Unit","Image1","Image2","Image3","Image4"};
+        for (int i = 0; i < expected.length; i++) {if (!expected[i].equalsIgnoreCase(getCellString(header, i)))
+                throw new AppException(ErrorCode.INVALID_EXCEL_TEMPLATE);
         }
     }
 
@@ -355,57 +424,29 @@ public class ProductBatchServiceImpl implements ProductBatchService {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.equal(root.get("product").get("productId"), productId));
-            if (keyword != null && !keyword.isBlank()) predicates.add(cb.like(cb.lower(root.get("batchCode")), "%" + keyword.trim().toLowerCase() + "%"));
-            if (status != null) predicates.add(cb.equal(root.get("status"), status));
-            else predicates.add(cb.notEqual(root.get("status"), ProductStatus.DELETED));
+            if (keyword != null && !keyword.isBlank()) {
+                predicates.add(cb.like(cb.lower(root.get("batchCode")), "%" + keyword.trim().toLowerCase() + "%"));
+            }
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            } else {
+                predicates.add(cb.notEqual(root.get("status"), ProductStatus.DELETED));
+            }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
     }
 
-    private ProductBatchResponse buildBatchResponse(ProductBatch batch) {
-        ProductBatchResponse response = productBatchMapper.toProductBatchResponse(batch);
-        if (batch.getProduct() != null) {
-            response.setProductId(batch.getProduct().getProductId());
-            response.setProductCode(batch.getProduct().getProductCode());
-            response.setProductName(batch.getProduct().getName());
-        }
-        return response;
-    }
-
-    private boolean hasDifferentInfo(Product product, String description, BigDecimal price, String brandName, Category category, String ingredients, String usageInstructions) {
-        return !Objects.equals(product.getDescription(), description) || product.getPrice().compareTo(price) != 0
-                || !Objects.equals(product.getBrandName(), brandName) || !Objects.equals(product.getCategory().getCategoryId(), category.getCategoryId())
-                || !Objects.equals(product.getIngredients(), ingredients) || !Objects.equals(product.getUsageInstructions(), usageInstructions);
-    }
-
-    private void validateExcelFile(MultipartFile file) {
-        if (file == null || file.isEmpty()) throw new AppException(ErrorCode.FILE_REQUIRED);
-        if (file.getSize() > 10 * 1024 * 1024) throw new AppException(ErrorCode.FILE_TOO_LARGE);
-        String fileName = file.getOriginalFilename();
-        if (fileName == null || !fileName.toLowerCase().endsWith(".xlsx")) throw new AppException(ErrorCode.INVALID_FILE_TYPE);
-    }
-
-    private List<String> uploadImages(List<byte[]> imagesData, String productName) {
+    private List<MediaFile> uploadImages(List<byte[]> imagesData, String productName) {
         if (imagesData == null || imagesData.isEmpty()) return Collections.emptyList();
-        List<String> urls = new ArrayList<>();
+        List<MediaFile> mediaFiles = new ArrayList<>();
         for (byte[] data : imagesData) {
             try {
-                urls.add(fileService.uploadProductImageFromBytes(data, "image/jpeg"));
+                MediaFile mediaFile = fileService.uploadProductImageFromBytes(data);
+                mediaFiles.add(mediaFile);
             } catch (Exception e) {
                 log.warn("Skipped image upload for '{}': {}", productName, e.getMessage());
             }
         }
-        return urls;
-    }
-
-    private Map<String, byte[]> readZipEntries(byte[] excelBytes) throws Exception {
-        Map<String, byte[]> entries = new HashMap<>();
-        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(excelBytes))) {
-            ZipEntry entry;
-            while ((entry = zis.getNextEntry()) != null) {
-                if (!entry.isDirectory()) entries.put(entry.getName(), zis.readAllBytes());
-            }
-        }
-        return entries;
+        return mediaFiles;
     }
 }

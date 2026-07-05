@@ -6,7 +6,10 @@ import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.VoucherRequest;
 import com.petbuddy.petbuddystore.dto.response.VoucherResponse;
 import com.petbuddy.petbuddystore.mapper.VoucherMapper;
+import com.petbuddy.petbuddystore.model.User;
 import com.petbuddy.petbuddystore.model.Voucher;
+import com.petbuddy.petbuddystore.repository.UserRepository;
+import com.petbuddy.petbuddystore.repository.UserVoucherRepository;
 import com.petbuddy.petbuddystore.repository.VoucherRepository;
 import com.petbuddy.petbuddystore.service.VoucherService;
 import jakarta.transaction.Transactional;
@@ -15,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -27,6 +32,8 @@ import java.util.UUID;
 public class VoucherServiceImpl implements VoucherService {
 
     VoucherRepository voucherRepository;
+    UserRepository userRepository;
+    UserVoucherRepository userVoucherRepository;
     VoucherMapper voucherMapper;
 
 
@@ -78,6 +85,22 @@ public class VoucherServiceImpl implements VoucherService {
         return voucherMapper.toVoucherResponse(voucherRepository.save(voucher));
     }
     public Page<VoucherResponse> getActiveVouchers(Pageable pageable) {
-        return voucherRepository.findByStatus(VoucherStatus.ACTIVE, pageable).map(voucherMapper::toVoucherResponse);
+        User currentUser = getCurrentUser();
+        return voucherRepository.findByStatus(VoucherStatus.ACTIVE, pageable)
+                .map(voucher -> {
+                    VoucherResponse response = voucherMapper.toVoucherResponse(voucher);
+                    if (currentUser != null) {
+                        long usedCount = userVoucherRepository.countByUserAndVoucher(currentUser, voucher);
+                        response.setUsedByCurrentUser((int) usedCount);
+                    }
+                    return response;
+                });
+    }
+    private User getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) throw new AppException(ErrorCode.UNAUTHENTICATED);
+        String userId = authentication.getName();
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     }
 }

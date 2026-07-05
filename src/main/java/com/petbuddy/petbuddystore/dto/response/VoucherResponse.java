@@ -25,6 +25,7 @@ public class VoucherResponse {
      Integer usageLimit;
      Integer usedCount;
      Integer perUserLimit;
+     Integer usedByCurrentUser;
      LocalDateTime startAt;
      LocalDateTime expiredAt;
      String status;

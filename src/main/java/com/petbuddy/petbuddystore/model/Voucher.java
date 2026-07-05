@@ -4,6 +4,9 @@ import com.petbuddy.petbuddystore.common.enums.ApplyScope;
 import com.petbuddy.petbuddystore.common.enums.DiscountType;
 import com.petbuddy.petbuddystore.common.enums.VoucherStatus;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -27,9 +30,11 @@ public class Voucher {
      UUID voucherId;
 
     @Column(name = "voucher_code", nullable = false, unique = true)
+    @Size(min = 4, max = 20)
      String voucherCode;
 
     @Column(name = "voucher_name")
+    @Size(max = 100)
      String voucherName;
 
     @Enumerated(EnumType.STRING)
@@ -50,12 +55,15 @@ public class Voucher {
      ApplyScope applyScope;
 
     @Column(name = "usage_limit")
+    @Max(999999)
      Integer usageLimit;
 
     @Column(name = "used_count")
      Integer usedCount;
 
     @Column(name = "per_user_limit")
+    @Min(1)
+    @Max(1000)
      Integer perUserLimit;
 
     @Column(name = "start_at")

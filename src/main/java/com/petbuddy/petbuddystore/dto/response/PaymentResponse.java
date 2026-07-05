@@ -22,6 +22,7 @@ public class PaymentResponse {
     PaymentMethod paymentMethod;
     PaymentStatus status;
     BigDecimal amount;
+    String stripeClientSecret;
     LocalDateTime paidAt;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;

@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.model;
 
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
+import com.petbuddy.petbuddystore.common.enums.ProductUnit;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -51,7 +52,13 @@ public class Product {
     @NotNull(message = "PRODUCT_PRICE_REQUIRED")
     @DecimalMin(value = "0.0", inclusive = false, message = "PRODUCT_PRICE_INVALID")
     @Column(nullable = false)
-    BigDecimal price;
+    BigDecimal salePrice;
+
+    @NotNull(message = "PRODUCT_UNIT_REQUIRED")
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    ProductUnit unit = ProductUnit.PIECE;
 
     @Column(columnDefinition = "NVARCHAR(100)")
     String brandName;
@@ -67,8 +74,9 @@ public class Product {
     @JoinColumn(name = "category_id")
     Category category;
 
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    List<String> imageUrls = new ArrayList<>();
+    List<MediaFile> mediaFiles = new ArrayList<>();
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
@@ -87,4 +95,6 @@ public class Product {
     @OneToMany(mappedBy = "product")
     @Builder.Default
     List<PromotionDetail> promotionDetails = new ArrayList<>();
+
+    Long thumbnailMediaId;
 }
