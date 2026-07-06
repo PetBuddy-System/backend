@@ -12,7 +12,7 @@ public interface PromotionDetailMapper {
     @Mapping(target = "productName", source = "product.name")
     @Mapping(target = "productCode", source = "product.productCode")
     @Mapping(target = "salePrice", source = "product.salePrice")
-    @Mapping(target = "promotion_price", ignore = true)
+    @Mapping(target = "promotionPrice", ignore = true)
     @Mapping(target = "discountAmount", ignore = true)
     PromotionDetailResponse toPromotionDetailResponse(PromotionDetail detail);
 }
