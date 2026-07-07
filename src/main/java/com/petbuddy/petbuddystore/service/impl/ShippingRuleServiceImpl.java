@@ -104,7 +104,6 @@ public class ShippingRuleServiceImpl implements ShippingRuleService {
     }
 
     private void validateLocation(double lat, double lon) {
-        long start = System.nanoTime();
         Point point = GEOMETRY_FACTORY.createPoint(new Coordinate(lon, lat));
 
         if (!geoBoundaries.hcmBoundaryGeometry().covers(point)) {

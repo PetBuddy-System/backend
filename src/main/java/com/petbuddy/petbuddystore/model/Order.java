@@ -75,4 +75,6 @@ public class Order {
 
     @UpdateTimestamp
     LocalDateTime updatedAt;
+
+    LocalDateTime paymentExpiredAt;
 }

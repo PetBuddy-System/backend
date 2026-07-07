@@ -1,12 +1,15 @@
 package com.petbuddy.petbuddystore.service.impl;
 
+import com.petbuddy.petbuddystore.common.enums.DiscountType;
 import com.petbuddy.petbuddystore.common.enums.VoucherStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.VoucherRequest;
 import com.petbuddy.petbuddystore.dto.response.VoucherResponse;
 import com.petbuddy.petbuddystore.mapper.VoucherMapper;
+import com.petbuddy.petbuddystore.model.Order;
 import com.petbuddy.petbuddystore.model.User;
+import com.petbuddy.petbuddystore.model.UserVouchers;
 import com.petbuddy.petbuddystore.model.Voucher;
 import com.petbuddy.petbuddystore.repository.UserRepository;
 import com.petbuddy.petbuddystore.repository.UserVoucherRepository;
@@ -22,6 +25,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -96,6 +100,74 @@ public class VoucherServiceImpl implements VoucherService {
                     return response;
                 });
     }
+    @Override
+    public BigDecimal applyVoucherToOrder(Order order, String voucherCode, User user, BigDecimal totalAmount) {
+        if (voucherCode == null || voucherCode.trim().isEmpty()) {
+            order.setVoucher(null);
+            return BigDecimal.ZERO;
+        }
+
+        Voucher voucher = voucherRepository.findByVoucherCode(voucherCode)
+                .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
+
+        validateVoucher(voucher, user, totalAmount);
+
+        BigDecimal discountAmount = calculateDiscount(voucher, totalAmount);
+
+        voucher.setUsedCount(voucher.getUsedCount() + 1);
+        voucherRepository.save(voucher);
+
+        UserVouchers userVoucher = UserVouchers.builder()
+                .user(user)
+                .voucher(voucher)
+                .usedAt(LocalDateTime.now())
+                .build();
+        userVoucherRepository.save(userVoucher);
+
+        order.setVoucher(voucher);
+        return discountAmount;
+    }
+
+    @Override
+    public void releaseVoucherFromOrder(Order order) {
+        Voucher oldVoucher = order.getVoucher();
+        if (oldVoucher == null) return;
+        oldVoucher.setUsedCount(Math.max(0, oldVoucher.getUsedCount() - 1));
+        voucherRepository.save(oldVoucher);
+        userVoucherRepository.deleteByUserAndVoucher(order.getUser(), oldVoucher);
+        order.setVoucher(null);
+    }
+
+    private BigDecimal calculateDiscount(Voucher voucher, BigDecimal orderAmount) {
+        BigDecimal discount;
+        if (voucher.getDiscountType() == DiscountType.PERCENTAGE) {
+            discount = orderAmount.multiply(voucher.getDiscountValue()).divide(BigDecimal.valueOf(100));
+            if (voucher.getMaxDiscount() != null) {
+                discount = discount.min(voucher.getMaxDiscount());
+            }
+        } else {
+            discount = voucher.getDiscountValue();
+        }
+        return discount.min(orderAmount);
+    }
+
+    private void validateVoucher(Voucher voucher, User user, BigDecimal totalAmount) {
+        LocalDateTime now = LocalDateTime.now();
+        if (voucher.getStatus() != VoucherStatus.ACTIVE)
+            throw new AppException(ErrorCode.VOUCHER_INVALID_STATUS);
+        if (now.isBefore(voucher.getStartAt()))
+            throw new AppException(ErrorCode.VOUCHER_NOT_STARTED);
+        if (now.isAfter(voucher.getExpiredAt()))
+            throw new AppException(ErrorCode.VOUCHER_EXPIRED);
+        if (voucher.getUsageLimit() != null && voucher.getUsedCount() >= voucher.getUsageLimit())
+            throw new AppException(ErrorCode.VOUCHER_OUT_OF_USAGE);
+        if (voucher.getMinOrderValue() != null && totalAmount.compareTo(voucher.getMinOrderValue()) < 0)
+            throw new AppException(ErrorCode.VOUCHER_MIN_ORDER_NOT_MET);
+        long userUsedCount = userVoucherRepository.countByUserAndVoucher(user, voucher);
+        if (voucher.getPerUserLimit() != null && userUsedCount >= voucher.getPerUserLimit())
+            throw new AppException(ErrorCode.VOUCHER_USER_LIMIT_EXCEEDED);
+    }
+
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null) throw new AppException(ErrorCode.UNAUTHENTICATED);

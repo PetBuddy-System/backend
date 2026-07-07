@@ -26,6 +26,7 @@ public class OrderResponse {
     String clientSecret;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
+    LocalDateTime paymentExpiredAt;
     List<OrderDetailResponse> orderDetails;
     PaymentResponse payment;
     VoucherResponse voucher;

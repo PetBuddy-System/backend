@@ -86,6 +86,7 @@ public enum ErrorCode {
     INSUFFICIENT_STOCK(5205, "Insufficient stock",HttpStatus.BAD_REQUEST),
     ORDER_CANCELLED(5206, "Order is cancelled", HttpStatus.CONFLICT),
     ORDER_ALREADY_PAID(5207, "Order is already paid", HttpStatus.CONFLICT),
+    ORDER_CANNOT_BE_UPDATED(5208, "Order cannot be updated", HttpStatus.BAD_REQUEST),
 
     VOUCHER_NOT_FOUND(5301, "Voucher not found", HttpStatus.NOT_FOUND),
     VOUCHER_CODE_EXISTED(5302, "Voucher code already exists", HttpStatus.BAD_REQUEST),
@@ -113,6 +114,7 @@ public enum ErrorCode {
     PAYMENT_INTENT_NOT_FOUND(5506, "PaymentIntent not found", HttpStatus.NOT_FOUND),
     PAYMENT_CANNOT_CANCEL(5507, "Payment can not cancelled", HttpStatus.CONFLICT),
     PAYMENT_NOT_COMPLETED(5508, "Payment is not completed", HttpStatus.BAD_REQUEST),
+    PAYMENT_ALREADY_PAID(5509, "Payment is already paid", HttpStatus.BAD_REQUEST),
 
     FILE_REQUIRED(7001, "File is required", HttpStatus.BAD_REQUEST),
     FILE_TOO_LARGE(7002, "File size is too large", HttpStatus.BAD_REQUEST),
