@@ -39,4 +39,11 @@ public interface ProductMapper {
     ProductPublicResponse toListResponse(Product product);
 
     ProductPublicResponse toDetailPublicResponse(Product product);
+
+    @Mapping(target = "mediaFiles", ignore = true)
+    @Mapping(target = "batches", ignore = true)
+    @Mapping(target = "promotionDetails", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    Product cloneProduct(Product product);
 }

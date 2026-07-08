@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -17,6 +18,8 @@ public interface ProductBatchRepository extends JpaRepository<ProductBatch, UUID
     List<ProductBatch> findByStatusAndDeletedAtBefore(ProductStatus status,LocalDateTime deletedAt);
 
     boolean existsByProduct_ProductIdAndStatusIn(UUID productId,List<ProductStatus> statuses);
+
+    Optional<ProductBatch> findByBatchCode(String batchCode);
 
     @Query("""
         SELECT COALESCE(SUM(b.stockQuantity), 0)
@@ -42,4 +45,6 @@ public interface ProductBatchRepository extends JpaRepository<ProductBatch, UUID
         ORDER BY b.expiryDate ASC, b.createdAt ASC, b.batchCode ASC
         """)
     List<ProductBatch> findActiveBatchesForUpdate(@Param("productId") UUID productId, @Param("status") ProductStatus status);
+
+    List<ProductBatch> findByBatchCodeContaining(String batchCode);
 }

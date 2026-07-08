@@ -11,6 +11,7 @@ import com.petbuddy.petbuddystore.dto.request.PromotionUpdateRequest;
 import com.petbuddy.petbuddystore.dto.response.PromotionListResponse;
 import com.petbuddy.petbuddystore.dto.response.PromotionResponse;
 import com.petbuddy.petbuddystore.dto.response.PromotionDetailResponse;
+import com.petbuddy.petbuddystore.mapper.PromotionDetailMapper;
 import com.petbuddy.petbuddystore.mapper.PromotionMapper;
 import com.petbuddy.petbuddystore.model.Product;
 import com.petbuddy.petbuddystore.model.Promotion;
@@ -52,6 +53,7 @@ public class PromotionServiceImpl implements PromotionService {
     PromotionRepository promotionRepository;
     ProductRepository productRepository;
     PromotionMapper promotionMapper;
+    PromotionDetailMapper promotionDetailMapper;
     PromotionDetailRepository promotionDetailRepository;
     UserRepository userRepository;
     AuditService auditService;
@@ -63,6 +65,7 @@ public class PromotionServiceImpl implements PromotionService {
         }
 
         Promotion promotion = promotionMapper.toPromotion(request);
+        promotion.setPromotionCode(generatePromotionCode());
         if (promotion.getStatus() == null) {
             promotion.setStatus(PromotionStatus.DRAFT);
         }
@@ -93,6 +96,10 @@ public class PromotionServiceImpl implements PromotionService {
         promotion.setUpdatedAt(LocalDateTime.now());
 
         Promotion saved = promotionRepository.save(promotion);
+
+        User currentUser = getCurrentUser();
+        auditService.logPromotionCreate(saved, "CREATE_PROMOTION", null, currentUser);
+
         return convertToPromotionResponseWithCalculations(saved);
     }
 
@@ -123,7 +130,7 @@ public class PromotionServiceImpl implements PromotionService {
         if (promotion.getStatus() == PromotionStatus.DELETED || promotion.getDeletedAt() != null) {
             throw new AppException(ErrorCode.PROMOTION_NOT_FOUND);
         }
-        Promotion oldPromotion = promotionMapper.clonePromotion(promotion);
+        Promotion oldPromotion = promotionMapper.clonePromotion(promotion, promotionDetailMapper);
         LocalDateTime newStart = request.getStartDate() != null ? request.getStartDate() : promotion.getStartDate();
         LocalDateTime newEnd = request.getEndDate() != null ? request.getEndDate() : promotion.getEndDate();
         if (newStart != null && newEnd != null && (newStart.isAfter(newEnd) || newStart.isEqual(newEnd))) {
@@ -168,6 +175,14 @@ public class PromotionServiceImpl implements PromotionService {
         return convertToPromotionResponseWithCalculations(saved);
     }
 
+    private String generatePromotionCode() {
+        String code;
+        do {
+            code = "PRM" + UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase();
+        } while (promotionRepository.existsByPromotionCode(code));
+        return code;
+    }
+
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -181,7 +196,6 @@ public class PromotionServiceImpl implements PromotionService {
             throw new AppException(ErrorCode.USER_NOT_FOUND);
         }
 
-        // ⭐ Tìm user theo userId (vì authentication.getName() trả về userId)
         return userRepository.findById(userId)
                 .orElseThrow(() -> {
                     log.error("User not found with userId: '{}'", userId);
@@ -250,11 +264,15 @@ public class PromotionServiceImpl implements PromotionService {
             List<Predicate> predicates = new ArrayList<>();
 
             if (keyword != null && !keyword.isBlank()) {
-                String searchKeyword = "%" + keyword.trim().toLowerCase() + "%";
-                predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("name")), searchKeyword),
-                        cb.like(cb.lower(root.get("description")), searchKeyword)
-                ));
+                String[] terms = keyword.trim().toLowerCase().split("\\s+");
+                for (String term : terms) {
+                    String searchTerm = "%" + term + "%";
+                    predicates.add(cb.or(
+                            cb.like(cb.lower(root.get("name")), searchTerm),
+                            cb.like(cb.lower(root.get("description")), searchTerm),
+                            cb.like(cb.lower(root.get("promotionCode")), searchTerm)
+                    ));
+                }
             }
 
             if (status != null) {

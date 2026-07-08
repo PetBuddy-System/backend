@@ -3,8 +3,7 @@ package com.petbuddy.petbuddystore.model;
 import com.petbuddy.petbuddystore.common.enums.AuditAction;
 import com.petbuddy.petbuddystore.common.enums.AuditEntityType;
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -14,8 +13,11 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "audit_logs")
-@Data
+@Getter
+@Setter
+@Builder
 @NoArgsConstructor
+@AllArgsConstructor
 public class AuditLog {
 
     @Id
@@ -28,6 +30,9 @@ public class AuditLog {
 
     @Column(name = "entity_id", nullable = false)
     private UUID entityId;
+
+    @Column(name = "entity_code")
+    private String entityCode;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

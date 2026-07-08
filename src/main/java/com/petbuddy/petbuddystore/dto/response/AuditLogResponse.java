@@ -1,4 +1,4 @@
-package com.petbuddy.petbuddystore.dto.request;
+package com.petbuddy.petbuddystore.dto.response;
 
 
 import com.petbuddy.petbuddystore.common.enums.AuditAction;
@@ -17,10 +17,11 @@ public class AuditLogResponse {
     private UUID id;
     private AuditEntityType entityType;
     private UUID entityId;
+    private String entityCode;
     private AuditAction action;
     private List<AuditChange> changes;
     private String reason;
     private String note;
-    private String performedBy;  // Email của người thực hiện
+    private String performedBy;
     private LocalDateTime performedAt;
 }

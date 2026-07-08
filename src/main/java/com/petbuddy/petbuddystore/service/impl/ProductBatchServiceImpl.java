@@ -14,11 +14,10 @@ import com.petbuddy.petbuddystore.model.Category;
 import com.petbuddy.petbuddystore.model.MediaFile;
 import com.petbuddy.petbuddystore.model.Product;
 import com.petbuddy.petbuddystore.model.ProductBatch;
+import com.petbuddy.petbuddystore.model.User;
 import com.petbuddy.petbuddystore.repository.ProductBatchRepository;
-import com.petbuddy.petbuddystore.service.CategoryService;
-import com.petbuddy.petbuddystore.service.FileService;
-import com.petbuddy.petbuddystore.service.ProductBatchService;
-import com.petbuddy.petbuddystore.service.ProductService;
+import com.petbuddy.petbuddystore.repository.UserRepository;
+import com.petbuddy.petbuddystore.service.*;
 import jakarta.persistence.criteria.Predicate;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +27,8 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.*;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -53,6 +54,8 @@ public class ProductBatchServiceImpl implements ProductBatchService {
     ProductBatchMapper productBatchMapper;
     CategoryService categoryService;
     FileService fileService;
+    AuditService auditService;
+    UserRepository userRepository;
 
     @Override
     @Transactional
@@ -69,7 +72,12 @@ public class ProductBatchServiceImpl implements ProductBatchService {
             batches.add(batch);
         }
         product.setLastBatchSequence(sequence);
-        return productBatchRepository.saveAllAndFlush(batches).stream()
+        List<ProductBatch> savedBatches = productBatchRepository.saveAllAndFlush(batches);
+
+        User currentUser = getCurrentUser();
+        for (ProductBatch batch : savedBatches) {auditService.logBatchCreate(batch, "CREATE_BATCH", null, currentUser);
+        }
+        return savedBatches.stream()
                 .map(productBatchMapper::toProductBatchResponse)
                 .toList();
     }
@@ -89,6 +97,8 @@ public class ProductBatchServiceImpl implements ProductBatchService {
     public ProductBatchResponse updateBatch(UUID batchId, ProductBatchUpdateRequest request) {
         ProductBatch batch = getBatchEntityById(batchId);
 
+        ProductBatch oldBatch = productBatchMapper.cloneBatch(batch);
+
         if (request.getStockQuantity() != null) {
             batch.setStockQuantity(request.getStockQuantity());
         }
@@ -105,7 +115,11 @@ public class ProductBatchServiceImpl implements ProductBatchService {
             updateStatus(batch, request.getStatus());
         }
 
-        return productBatchMapper.toProductBatchResponse(productBatchRepository.save(batch));
+        ProductBatch savedBatch = productBatchRepository.save(batch);
+
+        User currentUser = getCurrentUser();
+        auditService.logBatchUpdate(oldBatch, savedBatch, request.getReason(), request. getNote(), currentUser);
+        return productBatchMapper.toProductBatchResponse(savedBatch);
     }
 
     @Override
@@ -242,6 +256,7 @@ public class ProductBatchServiceImpl implements ProductBatchService {
             int createdProducts = 0;
             int createdBatches = 0;
             Map<UUID, Long> batchCounter = new HashMap<>();
+            User currentUser = getCurrentUser();
 
             for (ImportRowRequest rowData : validRows) {
                 Product product = productService.getProductEntityByName(rowData.getName());
@@ -271,6 +286,8 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                 productService.updateLastBatchSequence(product, nextNumber);
                 batchCounter.put(product.getProductId(), nextNumber + 1);
                 createdBatches++;
+
+                auditService.logBatchCreate(batch, "CREATE_BATCH_IMPORT", null, currentUser);
             }
 
             return ProductImportResponse.builder()
@@ -286,6 +303,24 @@ public class ProductBatchServiceImpl implements ProductBatchService {
             log.error("Import products and batches failed", e);
             throw new AppException(ErrorCode.IMPORT_FAILED);
         }
+    }
+
+    private User getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        String userId = authentication.getName();
+        if (userId == null || userId.isEmpty()) {
+            throw new AppException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        return userRepository.findById(userId)
+                .orElseThrow(() -> {
+                    log.error("User not found with userId: '{}'", userId);
+                    return new AppException(ErrorCode.USER_NOT_FOUND);
+                });
     }
 
     private Map<Integer, List<byte[]>> getImagesFromSheet(Workbook workbook) {
@@ -338,7 +373,8 @@ public class ProductBatchServiceImpl implements ProductBatchService {
     private BigDecimal getCellBigDecimal(Row row, int index) {
         String value = getCellString(row, index);
         if (value == null) return null;
-        try {return new BigDecimal(value.replace(",", "").replace(" ", ""));
+        try {
+            return new BigDecimal(value.replace(",", "").replace(" ", ""));
         } catch (Exception e) {
             return null;
         }
@@ -347,7 +383,8 @@ public class ProductBatchServiceImpl implements ProductBatchService {
     private Integer getCellInteger(Row row, int index) {
         String value = getCellString(row, index);
         if (value == null) return null;
-        try {return Integer.parseInt(value.replace(",", "").replace(" ", "").split("\\.")[0]);
+        try {
+            return Integer.parseInt(value.replace(",", "").replace(" ", "").split("\\.")[0]);
         } catch (Exception e) {
             return null;
         }
@@ -382,7 +419,8 @@ public class ProductBatchServiceImpl implements ProductBatchService {
     private void validateHeader(Row header) {
         if (header == null) throw new AppException(ErrorCode.INVALID_EXCEL_TEMPLATE);
         String[] expected = {"Name","Description","SalePrice","BrandName","CategoryName","StockQuantity","ExpiryDate","Ingredients","UsageInstructions","BasePrice","Unit","Image1","Image2","Image3","Image4"};
-        for (int i = 0; i < expected.length; i++) {if (!expected[i].equalsIgnoreCase(getCellString(header, i)))
+        for (int i = 0; i < expected.length; i++) {
+            if (!expected[i].equalsIgnoreCase(getCellString(header, i)))
                 throw new AppException(ErrorCode.INVALID_EXCEL_TEMPLATE);
         }
     }
@@ -404,7 +442,8 @@ public class ProductBatchServiceImpl implements ProductBatchService {
     }
 
     private ProductBatch getBatchEntityById(UUID batchId) {
-        return productBatchRepository.findById(batchId).orElseThrow(() -> new AppException(ErrorCode.BATCH_NOT_FOUND));
+        return productBatchRepository.findById(batchId)
+                .orElseThrow(() -> new AppException(ErrorCode.BATCH_NOT_FOUND));
     }
 
     private Pageable buildPageable(Pageable pageable, String sortBy) {

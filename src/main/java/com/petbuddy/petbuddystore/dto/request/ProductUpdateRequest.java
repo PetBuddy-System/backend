@@ -43,4 +43,11 @@ public class ProductUpdateRequest {
     ProductStatus status;
 
     Long thumbnailMediaId;
+
+    @Size(max = 500, message = "Lý do không được vượt quá 500 ký tự")
+    String reason;
+
+    @Size(max = 1000, message = "Ghi chú không được vượt quá 1000 ký tự")
+    String note;
+
 }

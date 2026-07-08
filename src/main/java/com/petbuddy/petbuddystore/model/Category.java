@@ -3,7 +3,6 @@ package com.petbuddy.petbuddystore.model;
 import com.petbuddy.petbuddystore.common.enums.CategoryStatus;
 import jakarta.persistence.*;
 import lombok.*;
-import lombok.experimental.FieldDefaults;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 

@@ -17,14 +17,19 @@ import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.ProductBatchRepository;
 import com.petbuddy.petbuddystore.repository.ProductRepository;
 import com.petbuddy.petbuddystore.repository.PromotionDetailRepository;
+import com.petbuddy.petbuddystore.repository.UserRepository;
+import com.petbuddy.petbuddystore.service.AuditService;
 import com.petbuddy.petbuddystore.service.CategoryService;
 import com.petbuddy.petbuddystore.service.ProductService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +42,7 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@Slf4j
 public class ProductServiceImpl implements ProductService {
 
     ProductRepository productRepository;
@@ -44,6 +50,8 @@ public class ProductServiceImpl implements ProductService {
     PromotionDetailRepository promotionDetailRepository;
     CategoryService categoryService;
     ProductMapper productMapper;
+    AuditService auditService;
+    UserRepository userRepository;
 
     @Override
     @Transactional
@@ -58,6 +66,8 @@ public class ProductServiceImpl implements ProductService {
         product.setCategory(category);
 
         Product savedProduct = productRepository.save(product);
+        User currentUser = getCurrentUser();
+        auditService.logProductCreate(savedProduct, "CREATE_PRODUCT", null, currentUser);
         return productMapper.toManagementResponse(savedProduct);
     }
 
@@ -65,7 +75,7 @@ public class ProductServiceImpl implements ProductService {
     @Transactional
     public ProductManagementResponse updateProduct(UUID productId, ProductUpdateRequest request) {
         Product product = getProductEntityById(productId);
-
+        Product oldProduct = productMapper.cloneProduct(product);
         if (request.getName() != null && !request.getName().isBlank()) {
             String newName = normalizeName(request.getName());
             productRepository.findByNameIgnoreCaseAndStatusNot(newName, ProductStatus.DELETED)
@@ -84,7 +94,43 @@ public class ProductServiceImpl implements ProductService {
             updateStatus(product, request.getStatus());
         }
         Product updatedProduct = productRepository.save(product);
+        User currentUser = getCurrentUser();
+        auditService.logProductUpdate(oldProduct, updatedProduct, request.getReason(), request.getNote(), currentUser);
         return productMapper.toManagementResponse(updatedProduct);
+    }
+
+    @Override
+    @Transactional
+    public Product createProductFromImport(String name, String description, BigDecimal sale_price, String brandName, Category category, String ingredients, String usageInstructions, ProductUnit unit, List<MediaFile> mediaFiles) {
+        Product product = Product.builder()
+                .name(name.trim())
+                .description(description)
+                .salePrice(sale_price)
+                .brandName(brandName)
+                .category(category)
+                .ingredients(ingredients)
+                .usageInstructions(usageInstructions)
+                .unit(unit)
+                .productCode(generateProductCode())
+                .status(ProductStatus.ACTIVE)
+                .mediaFiles(mediaFiles != null ? mediaFiles : new ArrayList<>())
+                .build();
+
+        if (mediaFiles != null) {
+            mediaFiles.forEach(mf -> mf.setProduct(product));
+        }
+
+        Product savedProduct = productRepository.save(product);
+        User currentUser = getCurrentUser();
+        auditService.logProductCreate(savedProduct, "CREATE_PRODUCT_IMPORT", null, currentUser);
+        return savedProduct;
+    }
+
+    @Override
+    @Transactional
+    public void updateLastBatchSequence(Product product, long lastBatchSequence) {
+        product.setLastBatchSequence(lastBatchSequence);
+        productRepository.save(product);
     }
 
     @Override
@@ -112,41 +158,10 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    @Transactional
-    public Product createProductFromImport(String name, String description, BigDecimal sale_price, String brandName, Category category, String ingredients, String usageInstructions, ProductUnit unit, List<MediaFile> mediaFiles) {
-        Product product = Product.builder()
-                .name(name.trim())
-                .description(description)
-                .salePrice(sale_price)
-                .brandName(brandName)
-                .category(category)
-                .ingredients(ingredients)
-                .usageInstructions(usageInstructions)
-                .unit(unit)
-                .productCode(generateProductCode())
-                .status(ProductStatus.ACTIVE)
-                .mediaFiles(mediaFiles != null ? mediaFiles : new ArrayList<>())
-                .build();
-
-        if (mediaFiles != null) {
-            mediaFiles.forEach(mf -> mf.setProduct(product));
-        }
-
-        return productRepository.save(product);
-    }
-
-    @Override
-    @Transactional
-    public void updateLastBatchSequence(Product product, long lastBatchSequence) {
-        product.setLastBatchSequence(lastBatchSequence);
-        productRepository.save(product);
-    }
-
-    @Override
     @Transactional(readOnly = true)
     public Page<ProductPublicResponse> getProductsForUser(String keyword, Long categoryId, String brandName, String sortBy, Pageable pageable) {
         Pageable sortedPageable = buildPageable(pageable, sortBy);
-        Specification<Product> spec = buildProductSpec(keyword, categoryId, brandName, ProductStatus.ACTIVE);
+        Specification<Product> spec = buildProductSpecForUser(keyword, categoryId, brandName, ProductStatus.ACTIVE);
 
         return productRepository.findAll(spec, sortedPageable)
                 .map(product -> {
@@ -161,7 +176,8 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(readOnly = true)
     public Page<ProductManagementResponse> getProductsForManagement(String keyword, Long categoryId, String brandName, ProductStatus status, String sortBy, Pageable pageable, Integer nearExpiredDays) {
         Pageable sortedPageable = buildPageable(pageable, sortBy);
-        Specification<Product> spec = buildProductSpec(keyword, categoryId, brandName, status, nearExpiredDays);
+        Specification<Product> spec = buildProductSpecForManager(keyword, categoryId, brandName, status, nearExpiredDays);
+
         return productRepository.findAll(spec, sortedPageable)
                 .map(product -> {
                     ProductManagementResponse response = productMapper.toManagementResponse(product);
@@ -201,12 +217,29 @@ public class ProductServiceImpl implements ProductService {
         return setPromotionInfo(response, product);
     }
 
+    private User getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        String userId = authentication.getName();
+        if (userId == null || userId.isEmpty()) {
+            throw new AppException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        return userRepository.findById(userId)
+                .orElseThrow(() -> {
+                    log.error("User not found with userId: '{}'", userId);
+                    return new AppException(ErrorCode.USER_NOT_FOUND);
+                });
+    }
+
     private String getThumbnailUrl(Product product) {
         if (product == null || product.getMediaFiles() == null || product.getMediaFiles().isEmpty()) {
             return null;
         }
 
-        // Ưu tiên lấy theo thumbnailMediaId
         if (product.getThumbnailMediaId() != null) {
             return product.getMediaFiles().stream()
                     .filter(media -> Objects.equals(media.getMediaFileId(), product.getThumbnailMediaId()))
@@ -215,7 +248,6 @@ public class ProductServiceImpl implements ProductService {
                     .orElse(null);
         }
 
-        // Nếu không có thumbnailMediaId, lấy ảnh mới nhất (file có ID lớn nhất)
         return product.getMediaFiles().stream()
                 .filter(media -> media.getFileType() == FileType.IMAGE && media.getMediaFileId() != null)
                 .max(Comparator.comparing(MediaFile::getMediaFileId))
@@ -256,18 +288,46 @@ public class ProductServiceImpl implements ProductService {
         return code;
     }
 
-    private Specification<Product> buildProductSpec(String keyword, Long categoryId, String brandName, ProductStatus status) {
-        return buildProductSpec(keyword, categoryId, brandName, status, null);
-    }
-
-    private Specification<Product> buildProductSpec(String keyword, Long categoryId, String brandName, ProductStatus status, Integer nearExpiredDays) {
+    private Specification<Product> buildProductSpecForUser(String keyword, Long categoryId, String brandName, ProductStatus status) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
             if (keyword != null && !keyword.isBlank()) {
                 String[] terms = keyword.trim().toLowerCase().split("\\s+");
-                for (String term : terms) {predicates.add(cb.like(cb.lower(root.get("name")), "%" + term + "%"));}
+                for (String term : terms) {
+                    predicates.add(cb.like(cb.lower(root.get("name")), "%" + term + "%"));
+                }
             }
+
+            if (categoryId != null) {
+                predicates.add(cb.equal(root.get("category").get("categoryId"), categoryId));
+            }
+
+            if (brandName != null && !brandName.isBlank()) {
+                predicates.add(cb.like(cb.lower(root.get("brandName")), "%" + brandName.trim().toLowerCase() + "%"));
+            }
+
+            predicates.add(status != null ? cb.equal(root.get("status"), status) : cb.notEqual(root.get("status"), ProductStatus.DELETED));
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    private Specification<Product> buildProductSpecForManager(String keyword, Long categoryId, String brandName, ProductStatus status, Integer nearExpiredDays) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (keyword != null && !keyword.isBlank()) {
+                String[] terms = keyword.trim().toLowerCase().split("\\s+");
+                for (String term : terms) {
+                    String searchTerm = "%" + term + "%";
+                    predicates.add(cb.or(
+                            cb.like(cb.lower(root.get("name")), searchTerm),
+                            cb.like(cb.lower(root.get("productCode")), searchTerm)
+                    ));
+                }
+            }
+
             if (categoryId != null) {
                 predicates.add(cb.equal(root.get("category").get("categoryId"), categoryId));
             }

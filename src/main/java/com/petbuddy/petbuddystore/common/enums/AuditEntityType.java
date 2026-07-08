@@ -4,7 +4,4 @@ public enum AuditEntityType {
     PRODUCT,
     PROMOTION,
     BATCH,
-    ORDER,
-    USER,
-    CATEGORY
 }

@@ -20,4 +20,8 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     Optional<Product> findByNameIgnoreCaseAndStatusNot(String name, ProductStatus status);
 
     boolean existsByCategory_CategoryIdAndStatusIn(Long categoryId, List<ProductStatus> statuses);
+
+    Optional<Product> findByProductCode(String productCode);
+
+    List<Product> findByProductCodeContaining(String productCode);
 }

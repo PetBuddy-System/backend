@@ -10,7 +10,7 @@ import java.util.UUID;
 @Data
 public class AuditLogFilterRequest {
     private AuditEntityType entityType;
-    private UUID entityId;
+    private String entityCode;
     private AuditAction action;
     private LocalDateTime fromDate;
     private LocalDateTime toDate;
