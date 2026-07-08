@@ -105,6 +105,7 @@ public enum ErrorCode {
     SHIPPING_RULE_OVERLAP(5405,"Shipping rule overlaps with existing rules",HttpStatus.BAD_REQUEST),
     INVALID_SHIPPING_FEE(5406,"Invalid shipping fee",HttpStatus.BAD_REQUEST),
     LOCATION_ON_WATER(5407,"Location is on water",HttpStatus.BAD_REQUEST),
+    STORE_LOCATION_NOT_FOUND(5408,"Store location not found",HttpStatus.NOT_FOUND),
 
     PAYMENT_NOT_FOUND(5501, "Payment not found", HttpStatus.NOT_FOUND),
     PAYMENT_ALREADY_EXISTS(5502, "Payment already exists", HttpStatus.CONFLICT),

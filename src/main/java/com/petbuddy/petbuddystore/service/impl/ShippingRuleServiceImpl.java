@@ -7,7 +7,9 @@ import com.petbuddy.petbuddystore.dto.response.ShippingFeeResponse;
 import com.petbuddy.petbuddystore.dto.response.ShippingRuleResponse;
 import com.petbuddy.petbuddystore.mapper.ShippingMapper;
 import com.petbuddy.petbuddystore.model.ShippingRule;
+import com.petbuddy.petbuddystore.model.StoreLocation;
 import com.petbuddy.petbuddystore.repository.ShippingRuleRepository;
+import com.petbuddy.petbuddystore.repository.StoreLocationRepository;
 import com.petbuddy.petbuddystore.service.ShippingRuleService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -29,10 +31,9 @@ import java.util.List;
 public class ShippingRuleServiceImpl implements ShippingRuleService {
 
     static double FREE_SHIP_RADIUS = 5.0;
-    static double STORE_LAT = 10.776889;
-    static double STORE_LON = 106.700806;
 
     ShippingRuleRepository shippingRuleRepository;
+    StoreLocationRepository storeLocationRepository;
     ShippingMapper shippingMapper;
 
     GeoBoundaries geoBoundaries;
@@ -48,7 +49,12 @@ public class ShippingRuleServiceImpl implements ShippingRuleService {
 
         validateLocation(latitude, longitude);
 
-        double distance = calculateDistance(STORE_LAT, STORE_LON, latitude, longitude);
+        StoreLocation store = storeLocationRepository.findByActiveTrue()
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_LOCATION_NOT_FOUND));
+
+        double distance = calculateDistance(
+                store.getLatitude(), store.getLongitude(), latitude, longitude);
+
         if (distance <= FREE_SHIP_RADIUS) {
             return shippingMapper.toResponse(distance, BigDecimal.ZERO, true);
         }
@@ -103,7 +109,8 @@ public class ShippingRuleServiceImpl implements ShippingRuleService {
         shippingRuleRepository.delete(rule);
     }
 
-    private void validateLocation(double lat, double lon) {
+    @Override
+    public void validateLocation(double lat, double lon) {
         Point point = GEOMETRY_FACTORY.createPoint(new Coordinate(lon, lat));
 
         if (!geoBoundaries.hcmBoundaryGeometry().covers(point)) {
