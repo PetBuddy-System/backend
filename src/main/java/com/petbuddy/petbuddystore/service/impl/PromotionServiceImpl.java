@@ -11,24 +11,31 @@ import com.petbuddy.petbuddystore.dto.request.PromotionUpdateRequest;
 import com.petbuddy.petbuddystore.dto.response.PromotionListResponse;
 import com.petbuddy.petbuddystore.dto.response.PromotionResponse;
 import com.petbuddy.petbuddystore.dto.response.PromotionDetailResponse;
+import com.petbuddy.petbuddystore.mapper.PromotionDetailMapper;
 import com.petbuddy.petbuddystore.mapper.PromotionMapper;
 import com.petbuddy.petbuddystore.model.Product;
 import com.petbuddy.petbuddystore.model.Promotion;
 import com.petbuddy.petbuddystore.model.PromotionDetail;
+import com.petbuddy.petbuddystore.model.User;
 import com.petbuddy.petbuddystore.repository.ProductRepository;
 import com.petbuddy.petbuddystore.repository.PromotionDetailRepository;
 import com.petbuddy.petbuddystore.repository.PromotionRepository;
+import com.petbuddy.petbuddystore.repository.UserRepository;
+import com.petbuddy.petbuddystore.service.AuditService;
 import com.petbuddy.petbuddystore.service.PromotionService;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -40,12 +47,16 @@ import java.util.*;
 @RequiredArgsConstructor
 @Transactional
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@Slf4j
 public class PromotionServiceImpl implements PromotionService {
 
     PromotionRepository promotionRepository;
     ProductRepository productRepository;
     PromotionMapper promotionMapper;
+    PromotionDetailMapper promotionDetailMapper;
     PromotionDetailRepository promotionDetailRepository;
+    UserRepository userRepository;
+    AuditService auditService;
 
     @Override
     public PromotionResponse createPromotion(PromotionRequest request) {
@@ -54,6 +65,7 @@ public class PromotionServiceImpl implements PromotionService {
         }
 
         Promotion promotion = promotionMapper.toPromotion(request);
+        promotion.setPromotionCode(generatePromotionCode());
         if (promotion.getStatus() == null) {
             promotion.setStatus(PromotionStatus.DRAFT);
         }
@@ -84,6 +96,10 @@ public class PromotionServiceImpl implements PromotionService {
         promotion.setUpdatedAt(LocalDateTime.now());
 
         Promotion saved = promotionRepository.save(promotion);
+
+        User currentUser = getCurrentUser();
+        auditService.logPromotionCreate(saved, "CREATE_PROMOTION", null, currentUser);
+
         return convertToPromotionResponseWithCalculations(saved);
     }
 
@@ -109,21 +125,18 @@ public class PromotionServiceImpl implements PromotionService {
 
     @Override
     public PromotionResponse updatePromotion(UUID id, PromotionUpdateRequest request) {
-        Promotion promotion = promotionRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.PROMOTION_NOT_FOUND));
-
+        User currentUser = getCurrentUser();
+        Promotion promotion = promotionRepository.findByIdWithDetails(id).orElseThrow(() -> new AppException(ErrorCode.PROMOTION_NOT_FOUND));
         if (promotion.getStatus() == PromotionStatus.DELETED || promotion.getDeletedAt() != null) {
             throw new AppException(ErrorCode.PROMOTION_NOT_FOUND);
         }
-
+        Promotion oldPromotion = promotionMapper.clonePromotion(promotion, promotionDetailMapper);
         LocalDateTime newStart = request.getStartDate() != null ? request.getStartDate() : promotion.getStartDate();
         LocalDateTime newEnd = request.getEndDate() != null ? request.getEndDate() : promotion.getEndDate();
         if (newStart != null && newEnd != null && (newStart.isAfter(newEnd) || newStart.isEqual(newEnd))) {
             throw new AppException(ErrorCode.PROMOTION_INVALID_DATE);
         }
-
         promotionMapper.updatePromotionFromRequest(request, promotion);
-
         if (request.getStatus() != null) {
             if (request.getStatus() == PromotionStatus.DELETED) {
                 promotion.setDeletedAt(LocalDateTime.now());
@@ -132,7 +145,6 @@ public class PromotionServiceImpl implements PromotionService {
             }
             promotion.setStatus(request.getStatus());
         }
-
         if (request.getPromotionDetails() != null) {
             promotionDetailRepository.deleteAll(promotion.getPromotionDetails());
             promotion.getPromotionDetails().clear();
@@ -159,10 +171,37 @@ public class PromotionServiceImpl implements PromotionService {
 
         promotion.setUpdatedAt(LocalDateTime.now());
         Promotion saved = promotionRepository.save(promotion);
-
+        auditService.logPromotionUpdate(oldPromotion, saved, request.getReason(), request.getNote(), currentUser);
         return convertToPromotionResponseWithCalculations(saved);
     }
 
+    private String generatePromotionCode() {
+        String code;
+        do {
+            code = "PRM" + UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase();
+        } while (promotionRepository.existsByPromotionCode(code));
+        return code;
+    }
+
+    private User getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        String userId = authentication.getName();
+        log.info("=== DEBUG: UserId from SecurityContext: '{}' ===", userId);
+
+        if (userId == null || userId.isEmpty()) {
+            throw new AppException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        return userRepository.findById(userId)
+                .orElseThrow(() -> {
+                    log.error("User not found with userId: '{}'", userId);
+                    return new AppException(ErrorCode.USER_NOT_FOUND);
+                });
+    }
 
     private BigDecimal calculateDiscountAmount(BigDecimal price, PromotionType type, BigDecimal value) {
         if (price == null || value == null) {
@@ -197,7 +236,7 @@ public class PromotionServiceImpl implements PromotionService {
                         promotionPrice = BigDecimal.ZERO;
                     }
                     detailResponse.setDiscountAmount(discountAmount);
-                    detailResponse.setPromotion_price(promotionPrice);
+                    detailResponse.setPromotionPrice(promotionPrice);
                     detailResponse.setPromotionType(detail.getPromotionType());
                 }
             }
@@ -225,11 +264,15 @@ public class PromotionServiceImpl implements PromotionService {
             List<Predicate> predicates = new ArrayList<>();
 
             if (keyword != null && !keyword.isBlank()) {
-                String searchKeyword = "%" + keyword.trim().toLowerCase() + "%";
-                predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("name")), searchKeyword),
-                        cb.like(cb.lower(root.get("description")), searchKeyword)
-                ));
+                String[] terms = keyword.trim().toLowerCase().split("\\s+");
+                for (String term : terms) {
+                    String searchTerm = "%" + term + "%";
+                    predicates.add(cb.or(
+                            cb.like(cb.lower(root.get("name")), searchTerm),
+                            cb.like(cb.lower(root.get("description")), searchTerm),
+                            cb.like(cb.lower(root.get("promotionCode")), searchTerm)
+                    ));
+                }
             }
 
             if (status != null) {

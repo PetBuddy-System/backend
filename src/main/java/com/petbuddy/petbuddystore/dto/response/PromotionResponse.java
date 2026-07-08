@@ -15,6 +15,7 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class PromotionResponse {
     UUID promotionId;
+    String promotionCode;
     String name;
     String description;
     LocalDateTime startDate;

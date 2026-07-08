@@ -1,6 +1,5 @@
 package com.petbuddy.petbuddystore.dto.response;
 
-import com.petbuddy.petbuddystore.common.enums.DiscountType;
 import com.petbuddy.petbuddystore.common.enums.PromotionType;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -22,6 +21,6 @@ public class PromotionDetailResponse {
     BigDecimal salePrice;
     PromotionType promotionType;
     BigDecimal discountValue;
-    BigDecimal promotion_price;
+    BigDecimal promotionPrice;
     BigDecimal discountAmount;
 }

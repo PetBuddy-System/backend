@@ -27,6 +27,9 @@ public class Promotion {
     @Column(name = "promotion_id")
     UUID promotionId;
 
+    @Column(name = "promotion_code", unique = true, nullable = false, length = 20)
+    String promotionCode;
+
     @Column(nullable = false, columnDefinition = "NVARCHAR(255)")
     String name;
 

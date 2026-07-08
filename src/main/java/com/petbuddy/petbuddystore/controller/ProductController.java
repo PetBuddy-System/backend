@@ -1,6 +1,5 @@
 package com.petbuddy.petbuddystore.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.ProductCreationRequest;
@@ -21,10 +20,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -35,15 +31,12 @@ import java.util.UUID;
 public class ProductController {
 
     ProductService productService;
-    ObjectMapper objectMapper;
-
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ApiResponse<ProductManagementResponse>> createProduct(
             @RequestBody ProductCreationRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Product created successfully", productService.createProduct(request)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Product created successfully", productService.createProduct(request)));
     }
 
 
