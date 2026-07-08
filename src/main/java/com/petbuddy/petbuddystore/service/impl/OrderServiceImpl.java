@@ -23,9 +23,12 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -42,11 +45,13 @@ public class OrderServiceImpl implements OrderService {
     ProductBatchRepository productBatchRepository;
     UserRepository userRepository;
     OrderDetailRepository orderDetailRepository;
+    StaffScheduleRepository staffScheduleRepository;
     ProductService productService;
     CartService cartService;
     PaymentService paymentService;
     VoucherService voucherService;
     ShippingRuleService shippingRuleService;
+    FileService fileService;
     OrderMapper orderMapper;
     PaymentRepository paymentRepository;
 
@@ -166,8 +171,9 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public void updateOrderStatus(Long orderId, OrderStatus newStatus) {
+    public void updateOrderStatus(Long orderId, OrderStatus newStatus, MultipartFile proofImage) {
         checkLogin();
+        User currentUser = getCurrentUser();
         Order order = findOrder(orderId);
         OrderStatus currentStatus = order.getStatus();
 
@@ -191,10 +197,22 @@ public class OrderServiceImpl implements OrderService {
             case PICKING -> {
                 if (newStatus != OrderStatus.SHIPPING && newStatus != OrderStatus.CANCELLED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+                if (newStatus == OrderStatus.SHIPPING) {
+                    validateShipperOnDuty(currentUser);
+                    order.setShippedBy(currentUser);
+                    order.setShippedAt(LocalDateTime.now());
+                }
             }
             case SHIPPING -> {
                 if (newStatus != OrderStatus.DELIVERED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+                if (proofImage == null || proofImage.isEmpty()) {
+                    throw new AppException(ErrorCode.DELIVERY_PROOF_IMAGE_REQUIRED);
+                }
+                validateShipperOnDuty(currentUser);
+                if (!order.getShippedBy().getUserId().equals(currentUser.getUserId())) {
+                    throw new AppException(ErrorCode.NOT_THE_ASSIGNED_SHIPPER);
+                }
             }
             case DELIVERED -> {
                 if (newStatus != OrderStatus.COMPLETED)
@@ -208,6 +226,7 @@ public class OrderServiceImpl implements OrderService {
             }
             case COMPLETED, CANCELLED -> throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
         }
+
         if (newStatus == OrderStatus.CANCELLED) {
             paymentService.releaseOrderStock(order);
             Payment payment = order.getPayment();
@@ -216,6 +235,13 @@ public class OrderServiceImpl implements OrderService {
                 paymentRepository.save(payment);
             }
         }
+
+        if (newStatus == OrderStatus.DELIVERED) {
+            MediaFile proof = fileService.uploadShippingProofImage(proofImage);
+            proof.setOrder(order);
+            order.getMediaFiles().add(proof);
+        }
+
         order.setStatus(newStatus);
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
@@ -349,5 +375,23 @@ public class OrderServiceImpl implements OrderService {
             return null;
         }
         return product.getMediaFiles().getFirst().getFileUrl();
+    }
+    private void validateShipperOnDuty(User user) {
+        if (user.getRole() != Role.STAFF || user.getStaffTask() != StaffTask.SHIPPER) {
+            throw new AppException(ErrorCode.NOT_SHIPPER);
+        }
+
+        boolean onDutyToday = staffScheduleRepository.existsSchedule(
+                user.getUserId(),
+                LocalDate.now(),
+                LocalTime.MIN,
+                LocalTime.MAX,
+                null,
+                List.of(ScheduleStatus.SCHEDULED, ScheduleStatus.WORKING)
+        );
+
+        if (!onDutyToday) {
+            throw new AppException(ErrorCode.SHIPPER_NOT_ON_DUTY);
+        }
     }
 }

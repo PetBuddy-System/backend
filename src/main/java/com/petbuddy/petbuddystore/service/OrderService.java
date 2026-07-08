@@ -9,12 +9,13 @@ import com.petbuddy.petbuddystore.dto.response.PickingItemResponse;
 import com.petbuddy.petbuddystore.model.Order;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
 public interface OrderService {
     OrderResponse createOrder(CreateOrderRequest request);
-    void updateOrderStatus(Long orderId, OrderStatus status);
+    void updateOrderStatus(Long orderId, OrderStatus status, MultipartFile proofImage);
     Page<OrderResponse> getOrder(Pageable pageable);
     Page<OrderResponse> getAllOrder(Pageable pageable);
     OrderResponse getOrder(Long orderId);

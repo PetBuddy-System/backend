@@ -88,6 +88,10 @@ public enum ErrorCode {
     ORDER_CANCELLED(5206, "Order is cancelled", HttpStatus.CONFLICT),
     ORDER_ALREADY_PAID(5207, "Order is already paid", HttpStatus.CONFLICT),
     ORDER_CANNOT_BE_UPDATED(5208, "Order cannot be updated", HttpStatus.BAD_REQUEST),
+    DELIVERY_PROOF_IMAGE_REQUIRED(5209, "Delivery proof image is required", HttpStatus.BAD_REQUEST),
+    NOT_SHIPPER(5210, "You are not the shipper of this order", HttpStatus.FORBIDDEN),
+    SHIPPER_NOT_ON_DUTY(5211, "Shipper is not on duty", HttpStatus.FORBIDDEN),
+    NOT_THE_ASSIGNED_SHIPPER(5212, "You are not the assigned shipper for this order", HttpStatus.FORBIDDEN),
 
     VOUCHER_NOT_FOUND(5301, "Voucher not found", HttpStatus.NOT_FOUND),
     VOUCHER_CODE_EXISTED(5302, "Voucher code already exists", HttpStatus.BAD_REQUEST),

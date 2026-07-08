@@ -28,6 +28,7 @@ public class OrderResponse {
     LocalDateTime updatedAt;
     LocalDateTime paymentExpiredAt;
     List<OrderDetailResponse> orderDetails;
+    List<MediaFileResponse> mediaFiles;
     PaymentResponse payment;
     VoucherResponse voucher;
 }
