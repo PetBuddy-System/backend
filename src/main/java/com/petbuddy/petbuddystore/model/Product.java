@@ -97,4 +97,8 @@ public class Product {
     List<PromotionDetail> promotionDetails = new ArrayList<>();
 
     Long thumbnailMediaId;
+
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    List<ProductReview> reviews = new ArrayList<>();
 }

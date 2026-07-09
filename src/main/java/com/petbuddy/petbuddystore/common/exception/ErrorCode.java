@@ -76,6 +76,15 @@ public enum ErrorCode {
     PRODUCT_PRICE_CHANGE(4216, "Product price has changed", HttpStatus.BAD_REQUEST),
     PRODUCT_HAS_ACTIVE_PROMOTION(4217,"Sản phẩm đang có chương trình khuyến mãi đang hoạt động",HttpStatus.BAD_REQUEST),
 
+    REVIEW_NOT_FOUND(4300, "Review not found", HttpStatus.NOT_FOUND),
+    REVIEW_ALREADY_EXISTS(4301, "You have already reviewed this product", HttpStatus.CONFLICT),
+    REVIEW_DAILY_LIMIT_EXCEEDED(4302, "Daily review limit exceeded (max 10 reviews per day)", HttpStatus.TOO_MANY_REQUESTS),
+    UNAUTHORIZED_REVIEW_ACCESS(4303, "You are not authorized to access this review", HttpStatus.FORBIDDEN),
+    INVALID_RATING(4304, "Rating must be between 1 and 5", HttpStatus.BAD_REQUEST),
+    INVALID_CONTENT(4305, "Content is required", HttpStatus.BAD_REQUEST),
+    CONTENT_TOO_LONG(4306, "Content must not exceed 1000 characters", HttpStatus.BAD_REQUEST),
+    REVIEW_ALREADY_DELETED(4307, "Review has been deleted", HttpStatus.BAD_REQUEST),
+    REVIEW_NOT_ACTIVE(4308, "Review is not active", HttpStatus.BAD_REQUEST),
 
     CART_EMPTY(5101, "Cart is empty", HttpStatus.BAD_REQUEST),
     CART_ITEM_NOT_FOUND(5102, "Cart item not found", HttpStatus.NOT_FOUND),
