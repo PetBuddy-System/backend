@@ -256,13 +256,28 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private Pageable buildPageable(Pageable pageable, String sortBy) {
-        Sort sort = switch (sortBy == null ? "date_desc" : sortBy) {
-            case "price_asc" -> Sort.by(Sort.Direction.ASC, "sale_price");
-            case "price_desc" -> Sort.by(Sort.Direction.DESC, "sale_price");
-            case "date_asc" -> Sort.by(Sort.Direction.ASC, "createdAt");
-            case "date_desc" -> Sort.by(Sort.Direction.DESC, "createdAt");
-            default -> throw new AppException(ErrorCode.INVALID_SORT_OPTION);
-        };
+        if (sortBy == null || sortBy.isBlank()) {
+            sortBy = "date_desc";
+        }
+        Sort sort;
+        switch (sortBy) {
+            case "price_asc":
+                sort = Sort.by(Sort.Direction.ASC, "salePrice");
+                break;
+            case "price_desc":
+                sort = Sort.by(Sort.Direction.DESC, "salePrice");
+                break;
+            case "date_asc":
+                sort = Sort.by(Sort.Direction.ASC, "createdAt");
+                break;
+            case "date_desc":
+                sort = Sort.by(Sort.Direction.DESC, "createdAt");
+                break;
+            default:
+                log.warn("Invalid sortBy value: {}, using default date_desc", sortBy);
+                sort = Sort.by(Sort.Direction.DESC, "createdAt");
+                break;
+        }
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
     }
 
@@ -337,6 +352,7 @@ public class ProductServiceImpl implements ProductService {
 
             predicates.add(status != null ? cb.equal(root.get("status"), status) : cb.notEqual(root.get("status"), ProductStatus.DELETED));
 
+            // ⭐ Filter sản phẩm gần hết hạn
             if (nearExpiredDays != null) {
                 LocalDate threshold = LocalDate.now().plusDays(nearExpiredDays);
                 var subquery = query.subquery(Long.class);
@@ -347,8 +363,11 @@ public class ProductServiceImpl implements ProductService {
                         cb.equal(batchRoot.get("status"), ProductStatus.ACTIVE),
                         cb.isNull(batchRoot.get("deletedAt")),
                         cb.greaterThan(batchRoot.get("stockQuantity"), 0),
-                        cb.isNotNull(batchRoot.get("expiryDate")),
-                        cb.lessThanOrEqualTo(batchRoot.get("expiryDate"), threshold)
+                        // ⭐ SỬA: Nếu expiryDate null thì coi như không bao giờ hết hạn
+                        cb.or(
+                                cb.isNull(batchRoot.get("expiryDate")),
+                                cb.lessThanOrEqualTo(batchRoot.get("expiryDate"), threshold)
+                        )
                 );
                 predicates.add(cb.exists(subquery));
             }

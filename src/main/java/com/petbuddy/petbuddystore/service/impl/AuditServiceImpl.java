@@ -18,6 +18,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -435,6 +436,16 @@ public class AuditServiceImpl implements AuditService {
     // ============================================================
 
     private void addIfChanged(List<AuditChange> changes, String field, String oldValue, String newValue) {
+        if (field.equals("salePrice") || field.equals("basePrice") || field.equals("price")) {
+            try {
+                BigDecimal oldNum = new BigDecimal(oldValue != null ? oldValue.trim() : "0");
+                BigDecimal newNum = new BigDecimal(newValue != null ? newValue.trim() : "0");
+                if (oldNum.compareTo(newNum) == 0) {
+                    return; // Không thay đổi
+                }
+            } catch (NumberFormatException ignored) {}
+        }
+
         if (!Objects.equals(oldValue, newValue)) {
             changes.add(AuditChange.builder()
                     .field(field)

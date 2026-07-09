@@ -16,4 +16,7 @@ public interface PromotionDetailRepository extends JpaRepository<PromotionDetail
 
     @Query("SELECT pd FROM PromotionDetail pd " + "JOIN pd.promotion p " + "WHERE pd.product.productId = :productId " + "AND p.status = :status " + "AND p.deletedAt IS NULL")
     Optional<PromotionDetail> findByProduct_ProductIdAndPromotion_Status(@Param("productId") UUID productId, @Param("status") PromotionStatus status);
+
+    @Query("SELECT COUNT(pd) > 0 FROM PromotionDetail pd " + "JOIN pd.promotion p " + "WHERE pd.product.productId = :productId " + "AND p.status = :status " + "AND p.deletedAt IS NULL " + "AND (:excludedPromotionId IS NULL OR p.promotionId != :excludedPromotionId)")
+    boolean existsActivePromotionForProduct(@Param("productId") UUID productId, @Param("status") PromotionStatus status, @Param("excludedPromotionId") UUID excludedPromotionId);
 }
