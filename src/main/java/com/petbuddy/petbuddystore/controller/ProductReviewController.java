@@ -120,4 +120,14 @@ public class ProductReviewController {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(ApiResponse.success("Review status updated successfully", null));
     }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @GetMapping("/management/reviews/{reviewId}")
+    @Operation(description = "Lấy chi tiết đánh giá (có avatar đầy đủ)")
+    public ResponseEntity<ApiResponse<ProductReviewManagerResponse>> getReviewDetailForManager(
+            @PathVariable String reviewId
+    ) {
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(ApiResponse.success(reviewService.getReviewDetailForManager(reviewId)));
+    }
 }

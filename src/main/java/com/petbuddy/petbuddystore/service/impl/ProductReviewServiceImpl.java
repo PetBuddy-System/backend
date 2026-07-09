@@ -189,6 +189,20 @@ public class ProductReviewServiceImpl implements ProductReviewService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public ProductReviewManagerResponse getReviewDetailForManager(String reviewId) {
+        log.info("Getting review detail for manager: {}", reviewId);
+
+        UUID reviewUUID = UUID.fromString(reviewId);
+
+        ProductReview review = reviewRepository.findByReviewIdAndStatusNot(
+                        reviewUUID, ReviewStatus.DELETED)
+                .orElseThrow(() -> new AppException(ErrorCode.REVIEW_NOT_FOUND));
+
+        return reviewMapper.toManagerDetailResponse(review);
+    }
+
+    @Override
     @Transactional
     public void updateReviewStatus(String reviewId, ReviewStatusUpdateRequest request) {
         log.info("Updating review status: {} to {}", reviewId, request.getStatus());

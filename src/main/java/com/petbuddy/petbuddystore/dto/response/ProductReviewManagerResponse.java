@@ -37,4 +37,5 @@ public class ProductReviewManagerResponse {
     String userId;
     String userEmail;
     String userFullName;
+    String userAvatar;
 }

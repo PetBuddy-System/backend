@@ -20,6 +20,7 @@ public class ProductReviewResponse {
     String productName;
     String userId;
     String fullName;
+    String avatar;
     Integer rating;
     String content;
     Boolean anonymous;
