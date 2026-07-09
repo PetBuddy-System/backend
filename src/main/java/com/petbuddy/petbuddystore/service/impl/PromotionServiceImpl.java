@@ -78,9 +78,8 @@ public class PromotionServiceImpl implements PromotionService {
                 if (product.getStatus() == ProductStatus.DELETED) {
                     throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
                 }
-
+                validateProductHasActivePromotion(detailReq.getProductId());
                 validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getSalePrice());
-
                 PromotionDetail detail = PromotionDetail.builder()
                         .promotion(promotion)
                         .product(product)
@@ -126,17 +125,28 @@ public class PromotionServiceImpl implements PromotionService {
     @Override
     public PromotionResponse updatePromotion(UUID id, PromotionUpdateRequest request) {
         User currentUser = getCurrentUser();
-        Promotion promotion = promotionRepository.findByIdWithDetails(id).orElseThrow(() -> new AppException(ErrorCode.PROMOTION_NOT_FOUND));
+
+        // ⭐ LOG - Bắt đầu update
+        log.info("🔄 Starting updatePromotion for ID: {}", id);
+        log.info("📦 Request payload: {}", request);
+
+        Promotion promotion = promotionRepository.findByIdWithDetails(id)
+                .orElseThrow(() -> new AppException(ErrorCode.PROMOTION_NOT_FOUND));
+
         if (promotion.getStatus() == PromotionStatus.DELETED || promotion.getDeletedAt() != null) {
             throw new AppException(ErrorCode.PROMOTION_NOT_FOUND);
         }
+
         Promotion oldPromotion = promotionMapper.clonePromotion(promotion, promotionDetailMapper);
+
         LocalDateTime newStart = request.getStartDate() != null ? request.getStartDate() : promotion.getStartDate();
         LocalDateTime newEnd = request.getEndDate() != null ? request.getEndDate() : promotion.getEndDate();
         if (newStart != null && newEnd != null && (newStart.isAfter(newEnd) || newStart.isEqual(newEnd))) {
             throw new AppException(ErrorCode.PROMOTION_INVALID_DATE);
         }
+
         promotionMapper.updatePromotionFromRequest(request, promotion);
+
         if (request.getStatus() != null) {
             if (request.getStatus() == PromotionStatus.DELETED) {
                 promotion.setDeletedAt(LocalDateTime.now());
@@ -145,11 +155,54 @@ public class PromotionServiceImpl implements PromotionService {
             }
             promotion.setStatus(request.getStatus());
         }
-        if (request.getPromotionDetails() != null) {
-            promotionDetailRepository.deleteAll(promotion.getPromotionDetails());
-            promotion.getPromotionDetails().clear();
 
+        // ⭐ LOG - Kiểm tra promotionDetails từ request
+        log.info("📦 Promotion details from request: {}", request.getPromotionDetails());
+
+        if (request.getPromotionDetails() != null) {
+            // ⭐ LOG - Số lượng detail
+            log.info("📦 Number of promotion details: {}", request.getPromotionDetails().size());
+
+            // ⭐ LOG chi tiết từng detail
+            for (int i = 0; i < request.getPromotionDetails().size(); i++) {
+                PromotionDetailRequest detailReq = request.getPromotionDetails().get(i);
+                log.info("📦 Detail {} - productId: {}, promotionType: {}, discountValue: {}",
+                        i,
+                        detailReq.getProductId(),
+                        detailReq.getPromotionType(),
+                        detailReq.getDiscountValue()
+                );
+
+                if (detailReq.getProductId() == null) {
+                    log.error("❌ productId is NULL at index {}", i);
+                    throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
+                }
+
+                Product product = productRepository.findById(detailReq.getProductId())
+                        .orElseThrow(() -> {
+                            log.error("❌ Product not found with ID: {}", detailReq.getProductId());
+                            return new AppException(ErrorCode.PRODUCT_NOT_FOUND);
+                        });
+
+                if (product.getStatus() == ProductStatus.DELETED) {
+                    log.error("❌ Product is DELETED with ID: {}", detailReq.getProductId());
+                    throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
+                }
+
+                validateProductHasActivePromotionForUpdate(detailReq.getProductId(), id);
+                validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getSalePrice());
+            }
+
+            // ⭐ LOG - Xóa details cũ
+            log.info("🗑️ Clearing old promotion details, count: {}", promotion.getPromotionDetails().size());
+            promotion.getPromotionDetails().clear();
+            log.info("✅ Old promotion details cleared");
+
+            // ⭐ LOG - Thêm details mới
+            log.info("📦 Adding new promotion details...");
             for (PromotionDetailRequest detailReq : request.getPromotionDetails()) {
+                log.info("📦 Processing detail - productId: {}", detailReq.getProductId());
+
                 Product product = productRepository.findById(detailReq.getProductId())
                         .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
 
@@ -158,21 +211,42 @@ public class PromotionServiceImpl implements PromotionService {
                 }
 
                 validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getSalePrice());
+
                 PromotionDetail detail = PromotionDetail.builder()
                         .promotion(promotion)
-                        .product(product)
+                        .product(product)  // ⭐ Đảm bảo product không null
                         .promotionType(detailReq.getPromotionType())
                         .discountValue(detailReq.getDiscountValue())
                         .build();
 
+                log.info("✅ Created PromotionDetail: {}", detail);
                 promotion.getPromotionDetails().add(detail);
             }
+        } else {
+            log.info("ℹ️ No promotion details in request");
         }
 
+        // ⭐ LOG - Lưu promotion
+        log.info("💾 Saving promotion with {} details", promotion.getPromotionDetails().size());
         promotion.setUpdatedAt(LocalDateTime.now());
         Promotion saved = promotionRepository.save(promotion);
+
+        log.info("✅ Promotion updated successfully: {}", saved.getPromotionId());
         auditService.logPromotionUpdate(oldPromotion, saved, request.getReason(), request.getNote(), currentUser);
+
         return convertToPromotionResponseWithCalculations(saved);
+    }
+
+    private void validateProductHasActivePromotion(UUID productId) {
+        if (promotionDetailRepository.existsActivePromotionForProduct(productId, PromotionStatus.ACTIVE, null)) {
+            throw new AppException(ErrorCode.PRODUCT_HAS_ACTIVE_PROMOTION);
+        }
+    }
+
+    private void validateProductHasActivePromotionForUpdate(UUID productId, UUID currentPromotionId) {
+        if (promotionDetailRepository.existsActivePromotionForProduct(productId, PromotionStatus.ACTIVE, currentPromotionId)) {
+            throw new AppException(ErrorCode.PRODUCT_HAS_ACTIVE_PROMOTION);
+        }
     }
 
     private String generatePromotionCode() {

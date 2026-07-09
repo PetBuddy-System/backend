@@ -29,6 +29,8 @@ public interface PromotionMapper {
     @Mapping(target = "promotionCode", ignore = true)
     Promotion toPromotion(PromotionRequest request);
 
+    @Mapping(target = "promotionDetails", ignore = true)
+    @Mapping(target = "promotionCode", ignore = true)
     void updatePromotionFromRequest(PromotionUpdateRequest request, @MappingTarget Promotion promotion);
 
     @Mapping(target = "promotionDetails", expression = "java(promotionDetailMapper.clonePromotionDetailList(promotion.getPromotionDetails()))")

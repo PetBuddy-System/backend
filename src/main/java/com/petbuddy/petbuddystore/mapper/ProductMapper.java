@@ -23,13 +23,11 @@ public interface ProductMapper {
 
     Product toProduct(ProductCreationRequest request);
 
-    @Mapping(target = "description", ignore = true)
     @Mapping(target = "promotionType", ignore = true)
     @Mapping(target = "discountValue", ignore = true)
     @Mapping(target = "promotionPrice", ignore = true)
     @Mapping(target = "discountAmount", ignore = true)
     @Mapping(target = "promotionEndDate", ignore = true)
-    @Mapping(target = "hasActivePromotion", ignore = true)
     ProductManagementResponse toManagementResponse(Product product);
 
     @Mapping(target = "description", ignore = true)

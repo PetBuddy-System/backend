@@ -74,6 +74,7 @@ public enum ErrorCode {
     PRODUCT_HAS_BATCHES(4221, "Cannot delete product because it has batches", HttpStatus.BAD_REQUEST),
     PRODUCT_INACTIVE(4222, "Product is inactive", HttpStatus.BAD_REQUEST),
     PRODUCT_PRICE_CHANGE(4216, "Product price has changed", HttpStatus.BAD_REQUEST),
+    PRODUCT_HAS_ACTIVE_PROMOTION(4217,"Sản phẩm đang có chương trình khuyến mãi đang hoạt động",HttpStatus.BAD_REQUEST),
 
 
     CART_EMPTY(5101, "Cart is empty", HttpStatus.BAD_REQUEST),
