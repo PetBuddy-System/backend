@@ -39,7 +39,7 @@ public class MediaFile {
     FileType fileType;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "media_purpose", nullable = false)
+    @Column(name = "media_purpose", nullable = false, length = 50)
     MediaPurpose mediaPurpose;
 
     @Enumerated(EnumType.STRING)
@@ -68,4 +68,8 @@ public class MediaFile {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id")
     Order order;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    User user;
 }
