@@ -6,6 +6,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -23,4 +24,5 @@ public class UserResponse {
     UserStatus status;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
+    List<MediaFileResponse> mediaFiles;
 }

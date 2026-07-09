@@ -6,6 +6,7 @@ public enum MediaPurpose {
     CATALOG,
     BOOKING,
     BLOG,
-    SHIPPING
+    SHIPPING,
+    USER_PROFILE
     ;
 }
