@@ -12,4 +12,5 @@ public interface FileService {
     MediaFile uploadBlogImage(MultipartFile file);
     MediaFile uploadProductImageFromBytes(byte[] bytes);
     void validateExcelFile(MultipartFile file);
+    MediaFile uploadShippingProofImage(MultipartFile file);
 }

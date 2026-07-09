@@ -38,6 +38,8 @@ public class OrderDetail {
 
     BigDecimal unitPrice;
 
+    BigDecimal salePrice;
+
     Integer quantity;
 
     BigDecimal totalPrice;

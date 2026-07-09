@@ -48,4 +48,10 @@ public class PaymentController {
     public ResponseEntity<ApiResponse<Page<PaymentResponse>>> getAllPayments(Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(paymentService.getAllPayments(pageable)));
     }
+
+    @PutMapping("/method/{orderId}")
+    public ResponseEntity<ApiResponse<PaymentResponse>> updatePaymentMethod(@PathVariable Long orderId, @RequestParam String paymentMethod) {
+        return ResponseEntity.ok(ApiResponse.success("Payment method updated successfully",
+                paymentService.changePaymentMethod(orderId,paymentMethod)));
+    }
 }

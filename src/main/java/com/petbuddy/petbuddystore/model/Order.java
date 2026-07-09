@@ -75,4 +75,16 @@ public class Order {
 
     @UpdateTimestamp
     LocalDateTime updatedAt;
+
+    LocalDateTime paymentExpiredAt;
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    List<MediaFile> mediaFiles = new ArrayList<>();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "shipped_by")
+    User shippedBy;
+
+    @Column(name = "shipped_at")
+    LocalDateTime shippedAt;
 }

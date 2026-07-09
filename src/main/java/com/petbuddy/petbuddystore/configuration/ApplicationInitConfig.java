@@ -51,7 +51,7 @@ public class ApplicationInitConfig {
             if (userRepository.findByEmail("staff1@gmail.com").isEmpty()) {
                 User user = User.builder()
                         .email("staff1@gmail.com")
-                        .password(passwordEncoder.encode("groomer"))
+                        .password(passwordEncoder.encode("Groomer@1234"))
                         .fullName("Groomer Staff")
                         .role(Role.STAFF)
                         .staffTask(StaffTask.GROOMER)
@@ -64,7 +64,7 @@ public class ApplicationInitConfig {
             if (userRepository.findByEmail("staff2@gmail.com").isEmpty()) {
                 User user = User.builder()
                         .email("staff2@gmail.com")
-                        .password(passwordEncoder.encode("cashier"))
+                        .password(passwordEncoder.encode("Cashier@1234"))
                         .fullName("Cashier Staff")
                         .role(Role.STAFF)
                         .staffTask(StaffTask.CASHIER)
@@ -77,7 +77,7 @@ public class ApplicationInitConfig {
             if (userRepository.findByEmail("staff3@gmail.com").isEmpty()) {
                 User user = User.builder()
                         .email("staff3@gmail.com")
-                        .password(passwordEncoder.encode("shipper"))
+                        .password(passwordEncoder.encode("Shipper@1234"))
                         .fullName("Shipper Staff")
                         .role(Role.STAFF)
                         .staffTask(StaffTask.SHIPPER)

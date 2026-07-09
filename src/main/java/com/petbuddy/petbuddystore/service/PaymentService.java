@@ -12,4 +12,6 @@ public interface PaymentService {
     PaymentResponse getPaymentByOrderId(Long orderId);
     void markPaymentSucceeded(Order order);
     Page<PaymentResponse> getAllPayments(Pageable pageable);
+    PaymentResponse changePaymentMethod(Long orderId, String rawMethod);
+    void releaseOrderStock(Order order);
 }

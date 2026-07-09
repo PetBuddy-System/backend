@@ -3,10 +3,12 @@ package com.petbuddy.petbuddystore.controller;
 import com.petbuddy.petbuddystore.common.enums.OrderStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.CreateOrderRequest;
+import com.petbuddy.petbuddystore.dto.request.UpdateOrderRequest;
 import com.petbuddy.petbuddystore.dto.response.OrderResponse;
 import com.petbuddy.petbuddystore.dto.response.PickingItemResponse;
 import com.petbuddy.petbuddystore.service.OrderService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -15,9 +17,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -52,12 +56,12 @@ public class OrderController {
     }
 
     @PreAuthorize("hasRole('STAFF') or hasRole('CUSTOMER')")
-    @PatchMapping("/{orderId}/status")
-    public ResponseEntity<ApiResponse<Void>> updateStatus(
-            @PathVariable Long orderId,
-            @RequestParam OrderStatus status) {
+    @PatchMapping(value = "/{orderId}/status", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<Void>> updateStatus(@PathVariable Long orderId,
+            @RequestParam OrderStatus status,
+            @RequestParam(required = false) MultipartFile proofImage) {
 
-        orderService.updateOrderStatus(orderId, status);
+        orderService.updateOrderStatus(orderId, status, proofImage);
 
         return ResponseEntity.ok(ApiResponse.success("Order status updated successfully", null));
     }
@@ -72,5 +76,12 @@ public class OrderController {
     @GetMapping("/all")
     public ResponseEntity<ApiResponse<Page<OrderResponse>>> getAllOrders(Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success("Orders retrieved successfully", orderService.getAllOrder(pageable)));
+    }
+
+    @PutMapping("/{orderId}")
+    public ResponseEntity<ApiResponse<OrderResponse>> updateOrderStatus(@PathVariable Long orderId,
+                                                                        @RequestBody @Valid UpdateOrderRequest request){
+        return ResponseEntity.ok(ApiResponse.success("Order updated successfully",
+                orderService.updateOrder(orderId, request)));
     }
 }

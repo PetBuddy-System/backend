@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.service.impl;
 
+import com.petbuddy.petbuddystore.common.enums.OrderStatus;
 import com.petbuddy.petbuddystore.common.enums.PaymentMethod;
 import com.petbuddy.petbuddystore.common.enums.PaymentStatus;
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
@@ -7,10 +8,8 @@ import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
 import com.petbuddy.petbuddystore.mapper.PaymentMapper;
-import com.petbuddy.petbuddystore.model.Order;
-import com.petbuddy.petbuddystore.model.OrderDetail;
-import com.petbuddy.petbuddystore.model.Payment;
-import com.petbuddy.petbuddystore.model.ProductBatch;
+import com.petbuddy.petbuddystore.model.*;
+import com.petbuddy.petbuddystore.repository.OrderBatchLocationRepository;
 import com.petbuddy.petbuddystore.repository.OrderRepository;
 import com.petbuddy.petbuddystore.repository.PaymentRepository;
 import com.petbuddy.petbuddystore.repository.ProductBatchRepository;
@@ -46,6 +45,7 @@ public class PaymentServiceImpl implements PaymentService {
     final PaymentRepository paymentRepository;
     final OrderRepository orderRepository;
     final ProductBatchRepository productBatchRepository;
+    final OrderBatchLocationRepository orderBatchLocationRepository;
     final CartService cartService;
     final PaymentMapper paymentMapper;
 
@@ -69,6 +69,7 @@ public class PaymentServiceImpl implements PaymentService {
         paymentRepository.save(payment);
 
         if (method == PaymentMethod.CARD) {
+            holdOrderStock(order);
             createStripePayment(payment);
         }
         paymentRepository.save(payment);
@@ -109,10 +110,21 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     public void markPaymentSucceeded(Order order) {
         Payment payment = order.getPayment();
-        for (OrderDetail detail : order.getOrderDetails()) {
-            deductStockByFefo(detail.getProduct().getProductId(), detail.getQuantity());
+        if (payment.getPaymentMethod() == PaymentMethod.CASH) {
+            List<OrderBatchLocation> locations = new ArrayList<>();
+            for (OrderDetail detail : order.getOrderDetails()) {
+                List<AllocatedBatch> allocations =
+                        deductStockByFefo(detail.getProduct().getProductId(), detail.getQuantity());
+                for (AllocatedBatch alloc : allocations) {
+                    locations.add(OrderBatchLocation.builder()
+                            .orderDetail(detail)
+                            .batch(alloc.batch())
+                            .quantity(alloc.quantity())
+                            .build());
+                }
+            }
+            orderBatchLocationRepository.saveAll(locations);
         }
-        log.info("Trừ kho xong cho order {}", order.getOrderCode());
         paymentRepository.save(payment);
     }
 
@@ -122,21 +134,105 @@ public class PaymentServiceImpl implements PaymentService {
         return payments.map(paymentMapper::toPaymentResponse);
     }
 
-    private void deductStockByFefo(UUID productId, int quantity) {
+    @Override
+    @Transactional
+    public PaymentResponse changePaymentMethod(Long orderId, String rawMethod) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        Payment payment = order.getPayment();
+        if (payment.getStatus() == PaymentStatus.PAID) {
+            throw new AppException(ErrorCode.PAYMENT_ALREADY_PAID);
+        }
+
+        PaymentMethod newMethod = resolvePaymentMethod(rawMethod);
+        if (newMethod == payment.getPaymentMethod()) {
+            return paymentMapper.toPaymentResponse(payment);
+        }
+
+        if (payment.getPaymentMethod() == PaymentMethod.CARD) {
+            if (payment.getStripePaymentIntentId() != null) {
+                cancelStripeIntent(payment.getStripePaymentIntentId());
+                payment.setStripePaymentIntentId(null);
+                payment.setStripeClientSecret(null);
+            }
+            releaseOrderStock(order);
+        }
+
+        payment.setPaymentMethod(newMethod);
+        payment.setStatus(PaymentStatus.PENDING);
+
+        if (newMethod == PaymentMethod.CARD) {
+            holdOrderStock(order);
+            createStripePayment(payment);
+        }
+        paymentRepository.save(payment);
+        return paymentMapper.toPaymentResponse(payment);
+    }
+
+    @Override
+    public void releaseOrderStock(Order order) {
+        List<OrderBatchLocation> locations =
+                orderBatchLocationRepository.findByOrderDetail_Order_OrderId(order.getOrderId());
+
+        if (locations.isEmpty()) {
+            return;
+        }
+
+        List<ProductBatch> updatedBatches = new ArrayList<>();
+        for (OrderBatchLocation loc : locations) {
+            ProductBatch batch = loc.getBatch();
+            batch.setStockQuantity(batch.getStockQuantity() + loc.getQuantity());
+            updatedBatches.add(batch);
+        }
+
+        productBatchRepository.saveAll(updatedBatches);
+        orderBatchLocationRepository.deleteAll(locations);
+        log.info("Đã trả hàng đã giữ cho order {}", order.getOrderCode());
+    }
+
+    private record AllocatedBatch(ProductBatch batch, int quantity) {}
+
+    private List<AllocatedBatch> deductStockByFefo(UUID productId, int quantity) {
         List<ProductBatch> batches = productBatchRepository.findActiveBatchesForUpdate(productId, ProductStatus.ACTIVE);
         List<ProductBatch> updatedBatches = new ArrayList<>();
+        List<AllocatedBatch> allocations = new ArrayList<>();
         int remaining = quantity;
 
         for (ProductBatch batch : batches) {
             if (remaining <= 0) break;
             int picked = Math.min(batch.getStockQuantity(), remaining);
+            if (picked <= 0) continue;
             batch.setStockQuantity(batch.getStockQuantity() - picked);
             updatedBatches.add(batch);
+            allocations.add(new AllocatedBatch(batch, picked));
             remaining -= picked;
         }
 
         if (remaining > 0) throw new AppException(ErrorCode.PRODUCT_OUT_OF_STOCK);
         productBatchRepository.saveAll(updatedBatches);
+        return allocations;
+    }
+
+    private void holdOrderStock(Order order) {
+        List<OrderBatchLocation> locations = new ArrayList<>();
+        for (OrderDetail detail : order.getOrderDetails()) {
+            List<AllocatedBatch> allocations = deductStockByFefo(detail.getProduct().getProductId(), detail.getQuantity());
+            for (AllocatedBatch alloc : allocations) {
+                locations.add(OrderBatchLocation.builder()
+                        .orderDetail(detail)
+                        .batch(alloc.batch())
+                        .quantity(alloc.quantity())
+                        .build());
+            }
+        }
+
+        orderBatchLocationRepository.saveAll(locations);
+        log.info("Đã giữ hàng tạm thời cho order {}", order.getOrderCode());
     }
 
     private String extractPaymentIntentId(Event event) {
@@ -224,6 +320,7 @@ public class PaymentServiceImpl implements PaymentService {
 
         payment.setStatus(PaymentStatus.CANCELLED);
         paymentRepository.save(payment);
+        releaseOrderStock(payment.getOrder());
 
         log.info("PaymentIntent bị huỷ: {}", intentId);
     }
@@ -231,5 +328,34 @@ public class PaymentServiceImpl implements PaymentService {
     private Payment findByStripeIntentId(String intentId) {
         return paymentRepository.findByStripePaymentIntentId(intentId)
                 .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_INTENT_NOT_FOUND));
+    }
+
+    private PaymentMethod resolvePaymentMethod(String raw) {
+        try {
+            return PaymentMethod.valueOf(raw.toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new AppException(ErrorCode.PAYMENT_INVALID_METHOD);
+        }
+    }
+
+    private void cancelStripeIntent(String paymentIntentId) {
+        try {
+            PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);
+
+            if ("succeeded".equals(intent.getStatus())) {
+                log.warn("Không thể huỷ PaymentIntent {} vì đã succeeded, có thể user đã thanh toán trước đó", paymentIntentId);
+                throw new AppException(ErrorCode.PAYMENT_ALREADY_PAID);
+            }
+
+            if ("canceled".equals(intent.getStatus())) {
+                log.info("PaymentIntent {} đã ở trạng thái canceled từ trước, bỏ qua", paymentIntentId);
+                return;
+            }
+            intent.cancel();
+            log.info("Đã huỷ PaymentIntent {} thành công", paymentIntentId);
+        } catch (StripeException ex) {
+            log.error("Lỗi khi huỷ PaymentIntent {}: {}", paymentIntentId, ex.getMessage());
+            throw new AppException(ErrorCode.PAYMENT_STRIPE_ERROR);
+        }
     }
 }

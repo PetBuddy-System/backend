@@ -88,6 +88,11 @@ public enum ErrorCode {
     INSUFFICIENT_STOCK(5205, "Insufficient stock",HttpStatus.BAD_REQUEST),
     ORDER_CANCELLED(5206, "Order is cancelled", HttpStatus.CONFLICT),
     ORDER_ALREADY_PAID(5207, "Order is already paid", HttpStatus.CONFLICT),
+    ORDER_CANNOT_BE_UPDATED(5208, "Order cannot be updated", HttpStatus.BAD_REQUEST),
+    DELIVERY_PROOF_IMAGE_REQUIRED(5209, "Delivery proof image is required", HttpStatus.BAD_REQUEST),
+    NOT_SHIPPER(5210, "You are not the shipper of this order", HttpStatus.FORBIDDEN),
+    SHIPPER_NOT_ON_DUTY(5211, "Shipper is not on duty", HttpStatus.FORBIDDEN),
+    NOT_THE_ASSIGNED_SHIPPER(5212, "You are not the assigned shipper for this order", HttpStatus.FORBIDDEN),
 
     VOUCHER_NOT_FOUND(5301, "Voucher not found", HttpStatus.NOT_FOUND),
     VOUCHER_CODE_EXISTED(5302, "Voucher code already exists", HttpStatus.BAD_REQUEST),
@@ -106,6 +111,7 @@ public enum ErrorCode {
     SHIPPING_RULE_OVERLAP(5405,"Shipping rule overlaps with existing rules",HttpStatus.BAD_REQUEST),
     INVALID_SHIPPING_FEE(5406,"Invalid shipping fee",HttpStatus.BAD_REQUEST),
     LOCATION_ON_WATER(5407,"Location is on water",HttpStatus.BAD_REQUEST),
+    STORE_LOCATION_NOT_FOUND(5408,"Store location not found",HttpStatus.NOT_FOUND),
 
     PAYMENT_NOT_FOUND(5501, "Payment not found", HttpStatus.NOT_FOUND),
     PAYMENT_ALREADY_EXISTS(5502, "Payment already exists", HttpStatus.CONFLICT),
@@ -115,6 +121,7 @@ public enum ErrorCode {
     PAYMENT_INTENT_NOT_FOUND(5506, "PaymentIntent not found", HttpStatus.NOT_FOUND),
     PAYMENT_CANNOT_CANCEL(5507, "Payment can not cancelled", HttpStatus.CONFLICT),
     PAYMENT_NOT_COMPLETED(5508, "Payment is not completed", HttpStatus.BAD_REQUEST),
+    PAYMENT_ALREADY_PAID(5509, "Payment is already paid", HttpStatus.BAD_REQUEST),
 
     PROMOTION_NOT_FOUND(5601, "Promotion not found", HttpStatus.NOT_FOUND),
     PROMOTION_INVALID_DATE(5602, "Promotion date is invalid", HttpStatus.BAD_REQUEST),

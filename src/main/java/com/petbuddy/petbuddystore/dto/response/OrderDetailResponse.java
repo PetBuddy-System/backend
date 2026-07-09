@@ -22,6 +22,7 @@ public class OrderDetailResponse {
     String productName;
     String productImage;
     BigDecimal unitPrice;
+    BigDecimal salePrice;
     Integer quantity;
     BigDecimal totalPrice;
     LocalDateTime createdAt;
