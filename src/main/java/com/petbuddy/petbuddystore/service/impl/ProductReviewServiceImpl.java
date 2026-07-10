@@ -57,9 +57,6 @@ public class ProductReviewServiceImpl implements ProductReviewService {
         String userId = getCurrentUserId();
         log.info("Creating review for user {} and product {}", userId, productId);
 
-        validateRating(request.getRating());
-        validateContent(request.getContent());
-
         UUID productUUID = UUID.fromString(productId);
         Product product = productService.getProductEntityById(productUUID);
         User user = userService.getUserEntityById(userId);
@@ -91,10 +88,6 @@ public class ProductReviewServiceImpl implements ProductReviewService {
     ) {
         String userId = getCurrentUserId();
         log.info("Updating review {} by user {}", reviewId, userId);
-
-        validateRating(request.getRating());
-        validateContent(request.getContent());
-
         UUID reviewUUID = UUID.fromString(reviewId);
 
         ProductReview review = reviewRepository.findByReviewIdAndStatusNot(
@@ -277,21 +270,6 @@ public class ProductReviewServiceImpl implements ProductReviewService {
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
         return authentication.getName();
-    }
-
-    private void validateRating(Integer rating) {
-        if (rating == null || rating < 1 || rating > 5) {
-            throw new AppException(ErrorCode.INVALID_RATING);
-        }
-    }
-
-    private void validateContent(String content) {
-        if (content == null || content.trim().isEmpty()) {
-            throw new AppException(ErrorCode.INVALID_CONTENT);
-        }
-        if (content.length() > 1000) {
-            throw new AppException(ErrorCode.CONTENT_TOO_LONG);
-        }
     }
 
     private void validateDailyLimit(String userId) {
