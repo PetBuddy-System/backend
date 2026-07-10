@@ -2,6 +2,7 @@ package com.petbuddy.petbuddystore.controller;
 
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
+import com.petbuddy.petbuddystore.dto.request.ProductBatchCreationListRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductBatchCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductBatchUpdateRequest;
 import com.petbuddy.petbuddystore.dto.response.ProductBatchResponse;
@@ -42,9 +43,9 @@ public class ProductBatchController {
     )
     public ResponseEntity<ApiResponse<List<ProductBatchResponse>>> createBatches(
             @PathVariable UUID productId,
-            @Valid @RequestBody List<ProductBatchCreationRequest> requests
+            @Valid @RequestBody ProductBatchCreationListRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Product batches created successfully", productBatchService.createBatches(productId, requests)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Product batches created successfully", productBatchService.createBatches(productId, request.getBatches())));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")

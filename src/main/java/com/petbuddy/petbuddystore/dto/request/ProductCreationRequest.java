@@ -20,14 +20,16 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ProductCreationRequest {
     @NotBlank(message = "PRODUCT_NAME_REQUIRED")
+    @Size(max = 255, message = "PRODUCT_NAME_INVALID")
     String name;
 
+    @Size(max = 2000, message = "PRODUCT_DESCRIPTION_INVALID")
     String description;
 
-    @Size(max = 1000)
+    @Size(max = 1000, message = "PRODUCT_INGREDIENTS_INVALID")
     String ingredients;
 
-    @Size(max = 1000)
+    @Size(max = 1000, message = "PRODUCT_USAGE_INSTRUCTIONS_INVALID")
     String usageInstructions;
 
     @NotNull(message = "PRODUCT_PRICE_REQUIRED")
@@ -37,8 +39,10 @@ public class ProductCreationRequest {
     @NotNull(message = "PRODUCT_UNIT_REQUIRED")
     private ProductUnit unit;
 
+    @NotBlank(message = "PRODUCT_BRAND_REQUIRED")
+    @Size(max = 255, message = "PRODUCT_BRAND_INVALID")
     String brandName;
 
-    @NotNull(message = "CATEGORY_REQUIRED")
+    @NotNull(message = "CATEGORY_ID_REQUIRED")
     Long categoryId;
 }

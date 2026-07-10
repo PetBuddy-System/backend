@@ -32,8 +32,6 @@ public class ProductBatch {
     @Column(name = "batch_code", nullable = false, unique = true, length = 30)
     String batchCode;
 
-    @NotNull(message = "PRODUCT_STOCK_REQUIRED")
-    @Min(value = 0, message = "PRODUCT_STOCK_INVALID")
     @Column(nullable = false)
     Integer stockQuantity;
 

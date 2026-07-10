@@ -19,23 +19,24 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProductUpdateRequest {
-    @Size(max = 255)
+    @Size(max = 255, message = "PRODUCT_NAME_INVALID")
     String name;
 
-    @Size(max = 2000)
+    @Size(max = 2000, message = "PRODUCT_DESCRIPTION_INVALID")
     String description;
 
-    @Size(max = 1000)
+    @Size(max = 1000, message = "PRODUCT_INGREDIENTS_INVALID")
     String ingredients;
 
-    @Size(max = 1000)
+    @Size(max = 1000, message = "PRODUCT_USAGE_INSTRUCTIONS_INVALID")
     String usageInstructions;
 
-    @DecimalMin(value = "0.01")
+    @DecimalMin(value = "0.01", message = "PRODUCT_PRICE_INVALID")
     BigDecimal salePrice;
 
     ProductUnit unit;
 
+    @Size(max = 255, message = "PRODUCT_BRAND_INVALID")
     String brandName;
 
     Long categoryId;
@@ -44,10 +45,10 @@ public class ProductUpdateRequest {
 
     Long thumbnailMediaId;
 
-    @Size(max = 500, message = "Lý do không được vượt quá 500 ký tự")
+    @Size(max = 500, message = "PRODUCT_REASON_INVALID")
     String reason;
 
-    @Size(max = 1000, message = "Ghi chú không được vượt quá 1000 ký tự")
+    @Size(max = 1000, message = "PRODUCT_NOTE_INVALID")
     String note;
 
 }

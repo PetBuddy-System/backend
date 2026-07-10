@@ -83,22 +83,28 @@ public class ProductServiceImpl implements ProductService {
                     .ifPresent(existed -> { throw new AppException(ErrorCode.PRODUCT_EXISTED); });
             request.setName(newName);
         }
-
-        productMapper.updateProduct(product, request);
-
-        if (request.getCategoryId() != null) {
-            product.setCategory(categoryService.getActiveCategoryEntityById(request.getCategoryId()));
+        if (request.getSalePrice() != null) {
+            BigDecimal maxBasePrice = productBatchRepository.findMaxBasePriceByProductId(productId, List.of(ProductStatus.ACTIVE, ProductStatus.INACTIVE));
+            if (maxBasePrice != null && request.getSalePrice().compareTo(maxBasePrice) < 0) {
+                throw new AppException(ErrorCode.SALE_PRICE_LESS_THAN_BASE_PRICE);
+            }
         }
-
+        if (ProductStatus.DELETED.equals(request.getStatus())) {
+            boolean hasBatch = productBatchRepository.existsByProduct_ProductIdAndStatusIn(productId, List.of(ProductStatus.ACTIVE, ProductStatus.INACTIVE));
+            if (hasBatch) {throw new AppException(ErrorCode.PRODUCT_HAS_BATCHES);}
+        }
+        productMapper.updateProduct(product, request);
+        if (request.getCategoryId() != null) {product.setCategory(categoryService.getActiveCategoryEntityById(request.getCategoryId()));}
         if (request.getStatus() != null) {
-            updateStatus(product, request.getStatus());
+            if (ProductStatus.DELETED.equals(request.getStatus())) {
+                product.setDeletedAt(LocalDateTime.now());
+            }
+            product.setStatus(request.getStatus());
         }
         Product updatedProduct = productRepository.save(product);
-        User currentUser = getCurrentUser();
-        auditService.logProductUpdate(oldProduct, updatedProduct, request.getReason(), request.getNote(), currentUser);
+        auditService.logProductUpdate(oldProduct, updatedProduct, request.getReason(), request.getNote(), getCurrentUser());
         return productMapper.toManagementResponse(updatedProduct);
     }
-
     @Override
     @Transactional
     public Product createProductFromImport(String name, String description, BigDecimal sale_price, String brandName, Category category, String ingredients, String usageInstructions, ProductUnit unit, List<MediaFile> mediaFiles) {
@@ -279,20 +285,6 @@ public class ProductServiceImpl implements ProductService {
                 break;
         }
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
-    }
-
-    private void updateStatus(Product product, ProductStatus status) {
-        if (status == ProductStatus.DELETED) {
-            boolean hasActiveBatches = productBatchRepository.existsByProduct_ProductIdAndStatusIn(
-                    product.getProductId(), List.of(ProductStatus.ACTIVE, ProductStatus.INACTIVE));
-            if (hasActiveBatches) {
-                throw new AppException(ErrorCode.PRODUCT_HAS_BATCHES);
-            }
-            product.setDeletedAt(LocalDateTime.now());
-        } else {
-            product.setDeletedAt(null);
-        }
-        product.setStatus(status);
     }
 
     private String generateProductCode() {
