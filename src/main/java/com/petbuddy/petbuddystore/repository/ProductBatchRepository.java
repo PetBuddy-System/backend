@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -45,6 +46,14 @@ public interface ProductBatchRepository extends JpaRepository<ProductBatch, UUID
         ORDER BY b.expiryDate ASC, b.createdAt ASC, b.batchCode ASC
         """)
     List<ProductBatch> findActiveBatchesForUpdate(@Param("productId") UUID productId, @Param("status") ProductStatus status);
+
+    @Query("""
+    SELECT MAX(pb.basePrice)
+    FROM ProductBatch pb
+    WHERE pb.product.productId = :productId
+      AND pb.status IN :statuses
+""")
+    BigDecimal findMaxBasePriceByProductId(@Param("productId") UUID productId, @Param("statuses") List<ProductStatus> statuses);
 
     List<ProductBatch> findByBatchCodeContaining(String batchCode);
 }

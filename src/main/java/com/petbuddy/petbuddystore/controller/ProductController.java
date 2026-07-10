@@ -9,6 +9,7 @@ import com.petbuddy.petbuddystore.dto.response.ProductPublicResponse;
 import com.petbuddy.petbuddystore.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -34,7 +35,7 @@ public class ProductController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ApiResponse<ProductManagementResponse>> createProduct(
-            @RequestBody ProductCreationRequest request
+            @Valid @RequestBody ProductCreationRequest request
     ) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Product created successfully", productService.createProduct(request)));
     }
@@ -96,8 +97,13 @@ public class ProductController {
     @PatchMapping(value = "/{productId}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ApiResponse<ProductManagementResponse>> updateProduct(
             @PathVariable UUID productId,
-            @RequestBody ProductUpdateRequest request
+            @Valid @RequestBody ProductUpdateRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success("Product updated successfully", productService.updateProduct(productId, request)));
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Product updated successfully",
+                        productService.updateProduct(productId, request)
+                )
+        );
     }
 }

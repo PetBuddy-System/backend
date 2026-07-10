@@ -32,11 +32,9 @@ public class Product {
     @Column(name = "product_id")
     UUID productId;
 
-
     @Column(name = "product_code", nullable = false, unique = true, length = 12)
     String productCode;
 
-    @NotBlank(message = "PRODUCT_NAME_REQUIRED")
     @Column(nullable = false, columnDefinition = "NVARCHAR(255)")
     String name;
 
@@ -49,12 +47,9 @@ public class Product {
     @Column(columnDefinition = "NVARCHAR(1000)")
     private String usageInstructions;
 
-    @NotNull(message = "PRODUCT_PRICE_REQUIRED")
-    @DecimalMin(value = "0.0", inclusive = false, message = "PRODUCT_PRICE_INVALID")
     @Column(nullable = false)
     BigDecimal salePrice;
 
-    @NotNull(message = "PRODUCT_UNIT_REQUIRED")
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default

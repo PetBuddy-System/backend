@@ -60,8 +60,14 @@ public class ProductBatchServiceImpl implements ProductBatchService {
     @Override
     @Transactional
     public List<ProductBatchResponse> createBatches(UUID productId, List<ProductBatchCreationRequest> requests) {
-        validateBatchCreateRequests(requests);
         Product product = productService.getActiveProductEntityById(productId);
+        for (ProductBatchCreationRequest request : requests) {
+            if (request.getBasePrice() != null && product.getSalePrice() != null) {
+                if (request.getBasePrice().compareTo(product.getSalePrice()) > 0) {
+                    throw new AppException(ErrorCode.BASE_PRICE_GREATER_THAN_SALE_PRICE);
+                }
+            }
+        }
         long sequence = product.getLastBatchSequence();
         List<ProductBatch> batches = new ArrayList<>();
         for (ProductBatchCreationRequest request : requests) {
@@ -96,29 +102,20 @@ public class ProductBatchServiceImpl implements ProductBatchService {
     @Transactional
     public ProductBatchResponse updateBatch(UUID batchId, ProductBatchUpdateRequest request) {
         ProductBatch batch = getBatchEntityById(batchId);
-
+        Product product = batch.getProduct();
+        if (request.getBasePrice() != null && product.getSalePrice() != null) {
+            if (request.getBasePrice().compareTo(product.getSalePrice()) > 0) {
+                throw new AppException(ErrorCode.BASE_PRICE_GREATER_THAN_SALE_PRICE);
+            }
+        }
         ProductBatch oldBatch = productBatchMapper.cloneBatch(batch);
-
-        if (request.getStockQuantity() != null) {
-            batch.setStockQuantity(request.getStockQuantity());
+        productBatchMapper.updateBatch(batch, request);
+        if (request.getStatus() == ProductStatus.DELETED) {
+            batch.setDeletedAt(LocalDateTime.now());
         }
-
-        if (request.getBasePrice() != null) {
-            batch.setBasePrice(request.getBasePrice());
-        }
-
-        if (request.getExpiryDate() != null) {
-            batch.setExpiryDate(request.getExpiryDate());
-        }
-
-        if (request.getStatus() != null) {
-            updateStatus(batch, request.getStatus());
-        }
-
         ProductBatch savedBatch = productBatchRepository.save(batch);
-
         User currentUser = getCurrentUser();
-        auditService.logBatchUpdate(oldBatch, savedBatch, request.getReason(), request. getNote(), currentUser);
+        auditService.logBatchUpdate(oldBatch, savedBatch, request.getReason(), request.getNote(), currentUser);
         return productBatchMapper.toProductBatchResponse(savedBatch);
     }
 
@@ -423,16 +420,6 @@ public class ProductBatchServiceImpl implements ProductBatchService {
             if (!expected[i].equalsIgnoreCase(getCellString(header, i)))
                 throw new AppException(ErrorCode.INVALID_EXCEL_TEMPLATE);
         }
-    }
-
-    private void validateBatchCreateRequests(List<ProductBatchCreationRequest> requests) {
-        if (requests == null || requests.isEmpty()) throw new AppException(ErrorCode.BATCH_REQUIRED);
-        if (requests.size() > MAX_BATCH_CREATE_LIMIT) throw new AppException(ErrorCode.BATCH_LIMIT_EXCEEDED);
-    }
-
-    private void updateStatus(ProductBatch batch, ProductStatus status) {
-        batch.setStatus(status);
-        batch.setDeletedAt(status == ProductStatus.DELETED ? LocalDateTime.now() : null);
     }
 
     private String generateBatchCode(Product product, long sequence) {
