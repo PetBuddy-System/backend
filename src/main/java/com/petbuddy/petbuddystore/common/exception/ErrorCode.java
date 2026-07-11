@@ -209,6 +209,9 @@ public enum ErrorCode {
     CATALOG_TIME_SLOT_NOT_FOUND(9015, "Catalog time slot not found", HttpStatus.NOT_FOUND),
     CATALOG_TIME_SLOT_EXISTED(9016, "Catalog time slot already exists", HttpStatus.BAD_REQUEST),
     WORK_SCHEDULE_IN_THE_PAST(9017, "Cannot create a work schedule in the past", HttpStatus.BAD_REQUEST),
+    TOO_EARLY_TO_CHECKIN(9018, "It's not time to check in yet", HttpStatus.BAD_REQUEST),
+    MISSED_CHECKIN(9019, "Check-in time has closed", HttpStatus.BAD_REQUEST),
+    TOO_EARLY_TO_CHECKOUT(9020, "It's not time to check out yet", HttpStatus.BAD_REQUEST),
     ;
 
     int code;

@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.service.impl;
 
+import com.petbuddy.petbuddystore.common.enums.AttendanceStatus;
 import com.petbuddy.petbuddystore.common.enums.Role;
 import com.petbuddy.petbuddystore.common.enums.ScheduleStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
@@ -8,6 +9,7 @@ import com.petbuddy.petbuddystore.dto.response.StaffScheduleResponse;
 import com.petbuddy.petbuddystore.mapper.StaffScheduleMapper;
 import com.petbuddy.petbuddystore.model.StaffSchedule;
 import com.petbuddy.petbuddystore.model.User;
+import com.petbuddy.petbuddystore.model.WorkSchedule;
 import com.petbuddy.petbuddystore.repository.StaffScheduleRepository;
 import com.petbuddy.petbuddystore.repository.UserRepository;
 import com.petbuddy.petbuddystore.service.StaffScheduleService;
@@ -61,10 +63,33 @@ public class StaffScheduleServiceImpl implements StaffScheduleService {
             throw new AppException(ErrorCode.CANNOT_CHECKIN);
         }
 
-        staffSchedule.setScheduleStatus(ScheduleStatus.WORKING);
-        staffSchedule.setCheckInAt(LocalDateTime.now());
-        return staffScheduleMapper.toStaffScheduleResponse(staffScheduleRepository.save(staffSchedule));
+        LocalDateTime now = LocalDateTime.now();
+        WorkSchedule workSchedule = staffSchedule.getWorkSchedule();
+        LocalDateTime startTime = LocalDateTime.of(workSchedule.getWorkDate(), workSchedule.getStartTime());
 
+        LocalDateTime earlyCheckIn = startTime.minusMinutes(15);
+        LocalDateTime onTimeCheckIn = startTime.plusMinutes(5);
+        LocalDateTime absentCheckIn = startTime.plusMinutes(30);
+
+        if (now.isBefore(earlyCheckIn)){
+            throw new AppException(ErrorCode.TOO_EARLY_TO_CHECKIN);
+        }
+
+        if (now.isAfter(absentCheckIn)){
+            staffSchedule.setAttendanceStatus(AttendanceStatus.ABSENT);
+            staffScheduleRepository.save(staffSchedule);
+            throw new AppException(ErrorCode.MISSED_CHECKIN);
+        }
+
+        if (!now.isAfter(onTimeCheckIn)) {
+            staffSchedule.setAttendanceStatus(AttendanceStatus.ON_TIME);
+        } else {
+            staffSchedule.setAttendanceStatus(AttendanceStatus.LATE);
+        }
+
+        staffSchedule.setScheduleStatus(ScheduleStatus.WORKING);
+        staffSchedule.setCheckInAt(now);
+        return staffScheduleMapper.toStaffScheduleResponse(staffScheduleRepository.save(staffSchedule));
     }
 
     @Override
@@ -78,8 +103,16 @@ public class StaffScheduleServiceImpl implements StaffScheduleService {
             throw new AppException(ErrorCode.CANNOT_CHECKOUT);
         }
 
+        LocalDateTime now = LocalDateTime.now();
+        WorkSchedule workSchedule = staffSchedule.getWorkSchedule();
+        LocalDateTime endTime = LocalDateTime.of(workSchedule.getWorkDate(), workSchedule.getEndTime());
+
+        if (now.isBefore(endTime)) {
+            throw new AppException(ErrorCode.TOO_EARLY_TO_CHECKOUT);
+        }
+
         staffSchedule.setScheduleStatus(ScheduleStatus.COMPLETED);
-        staffSchedule.setCheckOutAt(LocalDateTime.now());
+        staffSchedule.setCheckOutAt(now);
         return staffScheduleMapper.toStaffScheduleResponse(staffScheduleRepository.save(staffSchedule));
     }
 

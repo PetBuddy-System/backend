@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.model;
 
+import com.petbuddy.petbuddystore.common.enums.AttendanceStatus;
 import com.petbuddy.petbuddystore.common.enums.ScheduleStatus;
 import com.petbuddy.petbuddystore.common.enums.ShiftType;
 import jakarta.persistence.*;
@@ -34,6 +35,9 @@ public class StaffSchedule {
 
     @Enumerated(EnumType.STRING)
     ScheduleStatus scheduleStatus;
+
+    @Enumerated(EnumType.STRING)
+    AttendanceStatus attendanceStatus;
 
     @CreationTimestamp
     @Column(updatable = false)
