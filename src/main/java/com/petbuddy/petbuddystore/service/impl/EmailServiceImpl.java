@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
+import java.util.Map;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -51,5 +53,43 @@ public class EmailServiceImpl implements EmailService {
     @Override
     public void sendForgotPasswordOtp(String toEmail, String otp) {
         sendEmail(toEmail, otp, "forgot-password", "Reset your password - PetBuddy");
+    }
+
+    private void sendHtmlEmail(String toEmail, String subject, String template, Map<String, Object> variables) {
+        try {
+            Context context = new Context();
+            variables.forEach(context::setVariable);
+
+            String html = templateEngine.process(template, context);
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail);
+            helper.setTo(toEmail);
+            helper.setSubject(subject);
+            helper.setText(html, true);
+            mailSender.send(message);
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            throw new AppException(ErrorCode.EMAIL_SEND_FAILED);
+        }
+    }
+
+    @Override
+    public void sendPaymentFailWarningEmail(String toEmail, String orderCode, int failCount, int maxFails) {
+        String subject = "Cảnh báo: Đơn hàng " + orderCode + " chưa được thanh toán";
+        sendHtmlEmail(toEmail, subject, "payment-fail-warning", Map.of(
+                "orderCode", orderCode,
+                "failCount", failCount,
+                "maxFails", maxFails
+        ));
+    }
+
+    @Override
+    public void sendAccountSuspendedEmail(String toEmail, int failCount) {
+        String subject = "Tài khoản của bạn đã bị tạm khóa";
+        sendHtmlEmail(toEmail, subject, "account-suspended", Map.of(
+                "failCount", failCount
+        ));
     }
 }

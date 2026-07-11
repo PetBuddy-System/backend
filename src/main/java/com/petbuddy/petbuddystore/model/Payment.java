@@ -46,9 +46,6 @@ public class Payment {
     @Column(name = "stripe_client_secret")
     String stripeClientSecret;
 
-    @Column(name = "stripe_session_id", unique = true)
-    String stripeSessionId;
-
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     LocalDateTime createdAt;
@@ -56,4 +53,13 @@ public class Payment {
     @UpdateTimestamp
     @Column(name = "updated_at")
     LocalDateTime updatedAt;
+
+    @Column(name = "stripe_refund_id", unique = true)
+    String stripeRefundId;
+
+    @Column(name = "refunded_at")
+    LocalDateTime refundedAt;
+
+    @Column(name = "cancel_reason")
+    String cancelReason;
 }

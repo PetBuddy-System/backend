@@ -4,6 +4,7 @@ import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.StoreLocationRequest;
 import com.petbuddy.petbuddystore.dto.response.StoreLocationResponse;
 import com.petbuddy.petbuddystore.service.StoreLocationService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import java.util.List;
 @RequestMapping("/api/store-locations")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@Tag(name = "Store Location API", description = "Quản lý vị trí cửa hàng")
 public class StoreLocationController {
     StoreLocationService storeLocationService;
 

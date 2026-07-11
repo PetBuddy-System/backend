@@ -26,6 +26,7 @@ public class OrderResponse {
     String clientSecret;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
+    LocalDateTime shippedAt;
     LocalDateTime paymentExpiredAt;
     List<OrderDetailResponse> orderDetails;
     List<MediaFileResponse> mediaFiles;
