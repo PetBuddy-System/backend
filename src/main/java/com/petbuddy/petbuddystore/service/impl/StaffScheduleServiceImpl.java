@@ -44,6 +44,13 @@ public class StaffScheduleServiceImpl implements StaffScheduleService {
     }
 
     @Override
+    public StaffScheduleResponse getStaffSchedule(String staffScheduleId) {
+        StaffSchedule staffSchedule = staffScheduleRepository.findByIdWithWorkScheduleAndStaff(staffScheduleId)
+                .orElseThrow(() -> new AppException(ErrorCode.STAFF_SCHEDULE_NOT_EXISTED));
+        return staffScheduleMapper.toStaffScheduleResponse(staffSchedule);
+    }
+
+    @Override
     public StaffScheduleResponse checkIn(String staffScheduleId) {
         User staff = getCurrentStaff();
         StaffSchedule staffSchedule = staffScheduleRepository.findByIdWithWorkScheduleAndStaff(staffScheduleId)
