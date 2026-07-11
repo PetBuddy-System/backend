@@ -2,6 +2,7 @@ package com.petbuddy.petbuddystore.service;
 
 import com.petbuddy.petbuddystore.dto.request.CalculateRefundRequest;
 import com.petbuddy.petbuddystore.dto.request.CreateReturnRequest;
+import com.petbuddy.petbuddystore.dto.request.ReturnFilterRequest;
 import com.petbuddy.petbuddystore.dto.request.UpdateReturnStatusRequest;
 import com.petbuddy.petbuddystore.dto.response.CalculateRefundResponse;
 import com.petbuddy.petbuddystore.dto.response.ReturnRequestResponse;
@@ -13,11 +14,18 @@ import java.util.List;
 
 public interface ReturnRequestService {
     CalculateRefundResponse calculateRefund(CalculateRefundRequest request);
+
     ReturnRequestResponse createReturnRequest(CreateReturnRequest request);
+
     ReturnRequestResponse uploadMedia(Long id, List<MultipartFile> files);
+
     Page<ReturnRequestResponse> getMyReturnRequests(Pageable pageable);
+
     ReturnRequestResponse getReturnRequestById(Long id);
+
     ReturnRequestResponse cancelReturnRequest(Long id);
-    Page<ReturnRequestResponse> getAllReturnRequests(Pageable pageable);
+
+    Page<ReturnRequestResponse> getAllReturnRequests(ReturnFilterRequest filter, String sortBy, Pageable pageable);
+
     ReturnRequestResponse updateReturnStatus(Long id, UpdateReturnStatusRequest request);
 }

@@ -5,6 +5,7 @@ import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.CalculateRefundRequest;
 import com.petbuddy.petbuddystore.dto.request.CreateReturnRequest;
+import com.petbuddy.petbuddystore.dto.request.ReturnFilterRequest;
 import com.petbuddy.petbuddystore.dto.request.ReturnItemRequest;
 import com.petbuddy.petbuddystore.dto.request.UpdateReturnStatusRequest;
 import com.petbuddy.petbuddystore.dto.response.CalculateRefundResponse;
@@ -15,11 +16,16 @@ import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.*;
 import com.petbuddy.petbuddystore.service.FileService;
 import com.petbuddy.petbuddystore.service.ReturnRequestService;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.Predicate;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -31,9 +37,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @Transactional
@@ -102,14 +106,14 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
 
             int alreadyReturned = returnItemRepository.sumQuantityByOrderDetailIdAndStatusIn(
                     orderDetail.getOrderDetailId(),
-                    List.of(ReturnStatus.PENDING, ReturnStatus.APPROVED, ReturnStatus.COMPLETED)
-            );
+                    List.of(ReturnStatus.PENDING, ReturnStatus.APPROVED, ReturnStatus.COMPLETED));
 
             if (itemReq.getQuantity() > orderDetail.getQuantity() - alreadyReturned) {
                 throw new AppException(ErrorCode.RETURN_QUANTITY_EXCEEDED);
             }
 
-            BigDecimal effectivePrice = orderDetail.getSalePrice() != null ? orderDetail.getSalePrice() : orderDetail.getUnitPrice();
+            BigDecimal effectivePrice = orderDetail.getSalePrice() != null ? orderDetail.getSalePrice()
+                    : orderDetail.getUnitPrice();
             BigDecimal orderTotal = order.getTotalAmount();
             BigDecimal discount = order.getDiscountAmount();
 
@@ -118,7 +122,8 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                     : BigDecimal.ZERO;
 
             BigDecimal detailValueAfterVoucher = orderDetail.getTotalPrice().subtract(allocatedDetailDiscount);
-            BigDecimal unitValueAfterVoucher = detailValueAfterVoucher.divide(BigDecimal.valueOf(orderDetail.getQuantity()), 4, RoundingMode.HALF_UP);
+            BigDecimal unitValueAfterVoucher = detailValueAfterVoucher
+                    .divide(BigDecimal.valueOf(orderDetail.getQuantity()), 4, RoundingMode.HALF_UP);
             BigDecimal requestedValue = unitValueAfterVoucher.multiply(BigDecimal.valueOf(itemReq.getQuantity()));
 
             BigDecimal itemRefund = requestedValue.multiply(policyFactor).setScale(2, RoundingMode.HALF_UP);
@@ -189,8 +194,7 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
 
         boolean activeExists = returnRequestRepository.existsByOrder_OrderIdAndStatusIn(
                 order.getOrderId(),
-                List.of(ReturnStatus.PENDING, ReturnStatus.APPROVED)
-        );
+                List.of(ReturnStatus.PENDING, ReturnStatus.APPROVED));
         if (activeExists) {
             throw new AppException(ErrorCode.DUPLICATE_RETURN_REQUEST);
         }
@@ -210,8 +214,10 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                 .refundStatus(typeEnum == ReturnType.RETURN ? RefundStatus.PENDING : RefundStatus.NOT_REQUIRED)
                 .staffNote(null)
                 .bankName(refundMethodEnum == RefundMethod.BANK_TRANSFER ? request.getBankName() : null)
-                .bankAccountNumber(refundMethodEnum == RefundMethod.BANK_TRANSFER ? request.getBankAccountNumber() : null)
-                .bankAccountHolder(refundMethodEnum == RefundMethod.BANK_TRANSFER ? request.getBankAccountHolder() : null)
+                .bankAccountNumber(
+                        refundMethodEnum == RefundMethod.BANK_TRANSFER ? request.getBankAccountNumber() : null)
+                .bankAccountHolder(
+                        refundMethodEnum == RefundMethod.BANK_TRANSFER ? request.getBankAccountHolder() : null)
                 .build();
 
         BigDecimal policyFactor = getRefundPolicyFactor(reasonEnum, days);
@@ -234,8 +240,7 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
 
             int alreadyReturned = returnItemRepository.sumQuantityByOrderDetailIdAndStatusIn(
                     orderDetail.getOrderDetailId(),
-                    List.of(ReturnStatus.PENDING, ReturnStatus.APPROVED, ReturnStatus.COMPLETED)
-            );
+                    List.of(ReturnStatus.PENDING, ReturnStatus.APPROVED, ReturnStatus.COMPLETED));
 
             if (itemReq.getQuantity() > orderDetail.getQuantity() - alreadyReturned) {
                 throw new AppException(ErrorCode.RETURN_QUANTITY_EXCEEDED);
@@ -244,7 +249,8 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
             BigDecimal itemRefund = BigDecimal.ZERO;
 
             if (typeEnum == ReturnType.RETURN) {
-                BigDecimal effectivePrice = orderDetail.getSalePrice() != null ? orderDetail.getSalePrice() : orderDetail.getUnitPrice();
+                BigDecimal effectivePrice = orderDetail.getSalePrice() != null ? orderDetail.getSalePrice()
+                        : orderDetail.getUnitPrice();
                 BigDecimal orderTotal = order.getTotalAmount();
                 BigDecimal discount = order.getDiscountAmount();
 
@@ -253,7 +259,8 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                         : BigDecimal.ZERO;
 
                 BigDecimal detailValueAfterVoucher = orderDetail.getTotalPrice().subtract(allocatedDetailDiscount);
-                BigDecimal unitValueAfterVoucher = detailValueAfterVoucher.divide(BigDecimal.valueOf(orderDetail.getQuantity()), 4, RoundingMode.HALF_UP);
+                BigDecimal unitValueAfterVoucher = detailValueAfterVoucher
+                        .divide(BigDecimal.valueOf(orderDetail.getQuantity()), 4, RoundingMode.HALF_UP);
                 BigDecimal requestedValue = unitValueAfterVoucher.multiply(BigDecimal.valueOf(itemReq.getQuantity()));
 
                 itemRefund = requestedValue.multiply(policyFactor).setScale(2, RoundingMode.HALF_UP);
@@ -295,7 +302,8 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
 
         fileService.validateReturnImages(files);
 
-        // Clear existing media files since orphanRemoval is true, they'll be deleted in DB
+        // Clear existing media files since orphanRemoval is true, they'll be deleted in
+        // DB
         returnRequest.getMediaFiles().clear();
 
         for (MultipartFile file : files) {
@@ -359,10 +367,87 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
     }
 
     @Override
-    public Page<ReturnRequestResponse> getAllReturnRequests(Pageable pageable) {
+    public Page<ReturnRequestResponse> getAllReturnRequests(ReturnFilterRequest filter, String sortBy, Pageable pageable) {
         checkLogin();
-        return returnRequestRepository.findAll(pageable)
+        Pageable resolvedPageable = buildPageable(pageable, sortBy);
+        Specification<ReturnRequest> spec = buildReturnSpec(filter);
+        return returnRequestRepository.findAll(spec, resolvedPageable)
                 .map(returnRequestMapper::toReturnRequestResponse);
+    }
+
+    // ── Private helpers ────────────────────────────────────────────────────────
+
+    private Specification<ReturnRequest> buildReturnSpec(ReturnFilterRequest filter) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            // keyword: split by whitespace, OR across orderCode / returnCode / fullName / email
+            String keyword = filter.getKeyword();
+            if (keyword != null && !keyword.isBlank()) {
+                String[] terms = keyword.trim().toLowerCase().split("\\s+");
+                Join<Object, Object> orderJoin = root.join("order");
+                Join<Object, Object> userJoin  = root.join("requestedBy");
+                for (String term : terms) {
+                    String pattern = "%" + term + "%";
+                    predicates.add(cb.or(
+                            cb.like(cb.lower(orderJoin.get("orderCode")),  pattern),
+                            cb.like(cb.lower(root.get("returnCode")),      pattern),
+                            cb.like(cb.lower(userJoin.get("fullName")),    pattern),
+                            cb.like(cb.lower(userJoin.get("email")),       pattern)
+                    ));
+                }
+            }
+
+            // exact-match enum filters
+            if (filter.getStatus() != null) {
+                predicates.add(cb.equal(root.get("status"), filter.getStatus()));
+            }
+            if (filter.getRefundMethod() != null) {
+                predicates.add(cb.equal(root.get("refundMethod"), filter.getRefundMethod()));
+            }
+            if (filter.getType() != null) {
+                predicates.add(cb.equal(root.get("type"), filter.getType()));
+            }
+
+            // exact-match code filters (only when keyword is absent to avoid duplicate joins)
+            if ((keyword == null || keyword.isBlank()) && filter.getOrderCode() != null && !filter.getOrderCode().isBlank()) {
+                Join<Object, Object> orderJoin = root.join("order");
+                predicates.add(cb.equal(orderJoin.get("orderCode"), filter.getOrderCode().trim()));
+            }
+            if (filter.getReturnCode() != null && !filter.getReturnCode().isBlank()) {
+                predicates.add(cb.equal(root.get("returnCode"), filter.getReturnCode().trim()));
+            }
+
+            // date range on createdAt (LocalDateTime) — no DB CAST needed
+            if (filter.getFromDate() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(
+                        root.get("createdAt"), filter.getFromDate().atStartOfDay()));
+            }
+            if (filter.getToDate() != null) {
+                predicates.add(cb.lessThan(
+                        root.get("createdAt"), filter.getToDate().plusDays(1).atStartOfDay()));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    private Pageable buildPageable(Pageable pageable, String sortBy) {
+        if (sortBy == null || sortBy.isBlank()) {
+            sortBy = "createdAt_desc";
+        }
+        String[] parts = sortBy.split("_");
+        String field = parts[0];
+        Sort.Direction direction = (parts.length > 1 && parts[1].equalsIgnoreCase("asc"))
+                ? Sort.Direction.ASC
+                : Sort.Direction.DESC;
+
+        Set<String> allowedFields = Set.of("createdAt", "status", "refundMethod", "type", "refundAmount");
+        if (!allowedFields.contains(field)) {
+            throw new AppException(ErrorCode.INVALID_SORT_OPTION);
+        }
+
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by(direction, field));
     }
 
     @Override
@@ -382,7 +467,8 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
 
         ReturnStatus currentStatus = returnRequest.getStatus();
 
-        if (currentStatus == ReturnStatus.REJECTED || currentStatus == ReturnStatus.COMPLETED || currentStatus == ReturnStatus.CANCELLED) {
+        if (currentStatus == ReturnStatus.REJECTED || currentStatus == ReturnStatus.COMPLETED
+                || currentStatus == ReturnStatus.CANCELLED) {
             throw new AppException(ErrorCode.RETURN_REQUEST_ALREADY_PROCESSED);
         }
 
@@ -449,7 +535,8 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
 
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null) throw new AppException(ErrorCode.UNAUTHENTICATED);
+        if (authentication == null)
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
         String userId = authentication.getName();
         return userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
