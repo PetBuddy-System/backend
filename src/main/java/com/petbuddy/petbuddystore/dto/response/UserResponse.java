@@ -22,6 +22,7 @@ public class UserResponse {
     String role;
     StaffTask staffTask;
     UserStatus status;
+    int paymentFailStreak;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
     List<MediaFileResponse> mediaFiles;

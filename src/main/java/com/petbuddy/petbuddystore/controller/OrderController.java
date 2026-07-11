@@ -2,11 +2,14 @@ package com.petbuddy.petbuddystore.controller;
 
 import com.petbuddy.petbuddystore.common.enums.OrderStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
+import com.petbuddy.petbuddystore.dto.request.CancelOrderRequest;
 import com.petbuddy.petbuddystore.dto.request.CreateOrderRequest;
 import com.petbuddy.petbuddystore.dto.request.UpdateOrderRequest;
 import com.petbuddy.petbuddystore.dto.response.OrderResponse;
+import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
 import com.petbuddy.petbuddystore.dto.response.PickingItemResponse;
 import com.petbuddy.petbuddystore.service.OrderService;
+import com.petbuddy.petbuddystore.service.PaymentService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -33,6 +36,7 @@ import java.util.List;
 public class OrderController {
 
     OrderService orderService;
+    PaymentService paymentService;
 
     @PreAuthorize("hasRole('CUSTOMER')")
     @PostMapping
@@ -79,9 +83,21 @@ public class OrderController {
     }
 
     @PutMapping("/{orderId}")
-    public ResponseEntity<ApiResponse<OrderResponse>> updateOrderStatus(@PathVariable Long orderId,
-                                                                        @RequestBody @Valid UpdateOrderRequest request){
+    public ResponseEntity<ApiResponse<OrderResponse>> updateOrder(@PathVariable Long orderId,
+                                                                  @RequestBody @Valid UpdateOrderRequest request){
         return ResponseEntity.ok(ApiResponse.success("Order updated successfully",
                 orderService.updateOrder(orderId, request)));
+    }
+    @PostMapping("/{orderId}/cancel-request")
+    public ApiResponse<PaymentResponse> requestCancel(
+            @PathVariable Long orderId,
+            @RequestBody @Valid CancelOrderRequest request) {
+        return ApiResponse.success(paymentService.requestCancelOrder(orderId, request.getCancelReason()));
+    }
+
+    @PreAuthorize("hasRole('STAFF')")
+    @PostMapping("/{orderId}/cancel-confirm")
+    public ApiResponse<PaymentResponse> confirmCancel(@PathVariable Long orderId) {
+        return ApiResponse.success(paymentService.confirmCancelOrder(orderId));
     }
 }

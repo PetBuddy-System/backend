@@ -44,6 +44,9 @@ public class User {
     @Column(name = "date_of_birth")
     LocalDate dateOfBirth;
 
+    @Column(name = "payment_fail_streak", nullable = false)
+    int paymentFailStreak = 0;
+
     @Column(columnDefinition = "VARCHAR(50)")
     @Enumerated(EnumType.STRING)
     Role role;

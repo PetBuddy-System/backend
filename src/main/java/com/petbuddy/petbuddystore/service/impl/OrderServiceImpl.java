@@ -50,10 +50,14 @@ public class OrderServiceImpl implements OrderService {
     CartService cartService;
     PaymentService paymentService;
     VoucherService voucherService;
+    EmailService emailService;
+    PaymentServiceImpl paymentServiceImpl;
     ShippingRuleService shippingRuleService;
     FileService fileService;
     OrderMapper orderMapper;
     PaymentRepository paymentRepository;
+
+    static int MAX_CONSECUTIVE_FAILS = 4;
 
     @Override
     public OrderResponse createOrder(CreateOrderRequest request) {
@@ -83,7 +87,7 @@ public class OrderServiceImpl implements OrderService {
                 .note(request.getNote())
                 .shippingFee(shippingFee)
                 .status(OrderStatus.PENDING)
-                .paymentExpiredAt(LocalDateTime.now().plusHours(24))
+                .paymentExpiredAt(LocalDateTime.now().plusMinutes(1))
                 .createdAt(LocalDateTime.now())
                 .build();
 
@@ -228,12 +232,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         if (newStatus == OrderStatus.CANCELLED) {
-            paymentService.releaseOrderStock(order);
-            Payment payment = order.getPayment();
-            if (payment.getStatus() != PaymentStatus.PAID) {
-                payment.setStatus(PaymentStatus.CANCELLED);
-                paymentRepository.save(payment);
-            }
+            paymentService.cancelPaymentForOrder(order);
         }
 
         if (newStatus == OrderStatus.DELIVERED) {
@@ -280,26 +279,70 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    @Scheduled(fixedRate = 5 * 60 * 1000)
+    @Scheduled(fixedRate = 60 * 1000)
     public void expirePendingOrders() {
         List<Order> expired = orderRepository
-                .findByStatusAndPaymentExpiredAtBefore(OrderStatus.PENDING, LocalDateTime.now());
+                .findByStatusAndPaymentExpiredAtBeforeAndPayment_PaymentMethod(OrderStatus.PENDING, LocalDateTime.now(), PaymentMethod.CARD);
 
         for (Order order : expired) {
-            order.setStatus(OrderStatus.EXPIRED);
-            order.setUpdatedAt(LocalDateTime.now());
-
-            if (order.getPayment() != null) {
-                order.getPayment().setStatus(PaymentStatus.FAILED);
-                paymentRepository.save(order.getPayment());
-
-                if (order.getPayment().getPaymentMethod() == PaymentMethod.CARD) {
-                    paymentService.releaseOrderStock(order);
-                }
+            try {
+                expireSingleOrder(order);
+            } catch (Exception ex) {
+                log.error("Lỗi khi expire order {}: {}", order.getOrderCode(), ex.getMessage());
             }
-            log.info("Order {} expired do qua hạn thanh toán", order.getOrderCode());
         }
-        orderRepository.saveAll(expired);
+    }
+
+    private void expireSingleOrder(Order order) {
+        Payment payment = order.getPayment();
+
+        if (payment == null || payment.getPaymentMethod() != PaymentMethod.CARD) {
+            return;
+        }
+        if (payment.getStatus() == PaymentStatus.PAID) {
+            log.info("Order {} đã PAID trước khi job expire chạy tới, bỏ qua", order.getOrderCode());
+            return;
+        }
+
+        if (payment.getStripePaymentIntentId() != null) {
+            try {
+                paymentServiceImpl.cancelStripeIntent(payment.getStripePaymentIntentId());
+            } catch (AppException ex) {
+                if (ex.getErrorCode() == ErrorCode.PAYMENT_ALREADY_PAID) {
+                    log.warn("Order {} đã thanh toán trước khi expire, bỏ qua", order.getOrderCode());
+                    return;
+                }
+                log.error("Cancel Stripe intent thất bại cho order {}, vẫn expire local, cần đối soát: {}",
+                        order.getOrderCode(), ex.getMessage());
+            }
+        }
+
+        payment.setStatus(PaymentStatus.FAILED);
+        paymentRepository.save(payment);
+        paymentService.releaseOrderStock(order);
+        handlePaymentFailStreak(order.getUser(), order.getOrderCode());
+
+        order.setStatus(OrderStatus.EXPIRED);
+        order.setUpdatedAt(LocalDateTime.now());
+        orderRepository.save(order);
+    }
+
+    @Transactional
+    public void handlePaymentFailStreak(User user, String orderCode) {
+        int streak = user.getPaymentFailStreak() + 1;
+        user.setPaymentFailStreak(streak);
+
+        if (streak >= MAX_CONSECUTIVE_FAILS) {
+            if (user.getStatus() != UserStatus.SUSPENDED) {
+                user.setStatus(UserStatus.SUSPENDED);
+                log.warn("User {} bị SUSPENDED do {} lần liên tiếp không thanh toán", user.getUserId(), streak);
+                emailService.sendAccountSuspendedEmail(user.getEmail(), streak);
+            }
+        } else {
+            emailService.sendPaymentFailWarningEmail(user.getEmail(), orderCode, streak, MAX_CONSECUTIVE_FAILS);
+        }
+
+        userRepository.save(user);
     }
 
     private List<PickingItemResponse> buildPickingList(Order order) {
@@ -380,16 +423,14 @@ public class OrderServiceImpl implements OrderService {
         if (user.getRole() != Role.STAFF || user.getStaffTask() != StaffTask.SHIPPER) {
             throw new AppException(ErrorCode.NOT_SHIPPER);
         }
-
         boolean onDutyToday = staffScheduleRepository.existsSchedule(
                 user.getUserId(),
                 LocalDate.now(),
                 LocalTime.MIN,
-                LocalTime.MAX,
+                LocalTime.of(23, 59, 59),
                 null,
                 List.of(ScheduleStatus.SCHEDULED, ScheduleStatus.WORKING)
         );
-
         if (!onDutyToday) {
             throw new AppException(ErrorCode.SHIPPER_NOT_ON_DUTY);
         }

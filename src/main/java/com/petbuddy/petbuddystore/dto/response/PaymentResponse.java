@@ -2,6 +2,7 @@ package com.petbuddy.petbuddystore.dto.response;
 
 import com.petbuddy.petbuddystore.common.enums.PaymentMethod;
 import com.petbuddy.petbuddystore.common.enums.PaymentStatus;
+import jakarta.persistence.Column;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -26,4 +27,5 @@ public class PaymentResponse {
     LocalDateTime paidAt;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
+    String cancelReason;
 }

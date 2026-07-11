@@ -154,6 +154,8 @@ public enum ErrorCode {
     PAYMENT_CANNOT_CANCEL(5507, "Payment can not cancelled", HttpStatus.CONFLICT),
     PAYMENT_NOT_COMPLETED(5508, "Payment is not completed", HttpStatus.BAD_REQUEST),
     PAYMENT_ALREADY_PAID(5509, "Payment is already paid", HttpStatus.BAD_REQUEST),
+    PAYMENT_REFUND_NOT_ALLOWED(5510,"Payment refund is not allowed",HttpStatus.BAD_REQUEST),
+    PAYMENT_REFUND_FAILED(5511,"Payment refund failed",HttpStatus.INTERNAL_SERVER_ERROR),
 
     PROMOTION_NOT_FOUND(5601, "Promotion not found", HttpStatus.NOT_FOUND),
     PROMOTION_INVALID_DATE(5602, "Promotion date is invalid", HttpStatus.BAD_REQUEST),

@@ -9,18 +9,17 @@ import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
 import com.petbuddy.petbuddystore.mapper.PaymentMapper;
 import com.petbuddy.petbuddystore.model.*;
-import com.petbuddy.petbuddystore.repository.OrderBatchLocationRepository;
-import com.petbuddy.petbuddystore.repository.OrderRepository;
-import com.petbuddy.petbuddystore.repository.PaymentRepository;
-import com.petbuddy.petbuddystore.repository.ProductBatchRepository;
+import com.petbuddy.petbuddystore.repository.*;
 import com.petbuddy.petbuddystore.service.CartService;
 import com.petbuddy.petbuddystore.service.PaymentService;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
 import com.stripe.model.PaymentIntent;
+import com.stripe.model.Refund;
 import com.stripe.net.Webhook;
 import com.stripe.param.PaymentIntentCreateParams;
+import com.stripe.param.RefundCreateParams;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +43,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     final PaymentRepository paymentRepository;
     final OrderRepository orderRepository;
+    final UserRepository userRepository;
     final ProductBatchRepository productBatchRepository;
     final OrderBatchLocationRepository orderBatchLocationRepository;
     final CartService cartService;
@@ -82,16 +82,14 @@ public class PaymentServiceImpl implements PaymentService {
         try {
             event = Webhook.constructEvent(payload, sigHeader, webhookSecret);
         } catch (SignatureVerificationException ex) {
-            log.warn("Webhook signature không hợp lệ: {}", ex.getMessage());
             throw new AppException(ErrorCode.PAYMENT_WEBHOOK_INVALID);
         }
-
-        log.info("Nhận Stripe webhook event: {}", event.getType());
 
         switch (event.getType()) {
             case "payment_intent.succeeded"       -> handlePaymentSucceeded(event);
             case "payment_intent.payment_failed"  -> handlePaymentFailed(event);
             case "payment_intent.canceled"        -> handlePaymentCanceled(event);
+            case "charge.refunded", "refund.updated" -> handleRefundUpdated(event);
             default -> log.debug("Bỏ qua event không xử lý: {}", event.getType());
         }
     }
@@ -189,10 +187,87 @@ public class PaymentServiceImpl implements PaymentService {
             batch.setStockQuantity(batch.getStockQuantity() + loc.getQuantity());
             updatedBatches.add(batch);
         }
-
         productBatchRepository.saveAll(updatedBatches);
         orderBatchLocationRepository.deleteAll(locations);
-        log.info("Đã trả hàng đã giữ cho order {}", order.getOrderCode());
+    }
+
+    @Override
+    @Transactional
+    public PaymentResponse requestCancelOrder(Long orderId, String cancelReason) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+
+        if (order.getStatus() != OrderStatus.CONFIRMED && order.getStatus() != OrderStatus.PENDING) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        Payment payment = order.getPayment();
+        payment.setCancelReason(cancelReason);
+        order.setStatus(OrderStatus.CANCEL_REQUESTED);
+        order.setUpdatedAt(LocalDateTime.now());
+
+        orderRepository.save(order);
+        paymentRepository.save(payment);
+        return paymentMapper.toPaymentResponse(payment);
+    }
+
+    @Override
+    @Transactional
+    public PaymentResponse confirmCancelOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+
+        if (order.getStatus() != OrderStatus.CANCEL_REQUESTED) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        cancelPaymentForOrder(order);
+
+        order.setStatus(OrderStatus.CANCELLED);
+        order.setUpdatedAt(LocalDateTime.now());
+        orderRepository.save(order);
+
+        return paymentMapper.toPaymentResponse(order.getPayment());
+    }
+
+    @Override
+    @Transactional
+    public void cancelPaymentForOrder(Order order) {
+        Payment payment = order.getPayment();
+
+        if (payment.getPaymentMethod() == PaymentMethod.CARD && payment.getStatus() == PaymentStatus.PAID) {
+            createStripeRefund(payment);
+            payment.setStatus(PaymentStatus.REFUNDED);
+            payment.setRefundedAt(LocalDateTime.now());
+        } else {
+            if (payment.getPaymentMethod() == PaymentMethod.CARD
+                    && payment.getStripePaymentIntentId() != null
+                    && payment.getStatus() != PaymentStatus.CANCELLED) {
+                cancelStripeIntent(payment.getStripePaymentIntentId());
+            }
+            releaseOrderStock(order);
+            payment.setStatus(PaymentStatus.CANCELLED);
+        }
+
+        paymentRepository.save(payment);
+    }
+
+    private void createStripeRefund(Payment payment) {
+        try {
+            RefundCreateParams params = RefundCreateParams.builder()
+                    .setPaymentIntent(payment.getStripePaymentIntentId())
+                    .putMetadata("order_id", String.valueOf(payment.getOrder().getOrderId()))
+                    .putMetadata("order_code", payment.getOrder().getOrderCode())
+                    .build();
+
+            Refund refund = Refund.create(params);
+            payment.setStripeRefundId(refund.getId());
+
+        } catch (StripeException ex) {
+            log.error("Lỗi khi tạo refund Stripe cho order {}: {}",
+                    payment.getOrder().getOrderId(), ex.getMessage());
+            throw new AppException(ErrorCode.PAYMENT_STRIPE_ERROR);
+        }
     }
 
     private record AllocatedBatch(ProductBatch batch, int quantity) {}
@@ -287,20 +362,20 @@ public class PaymentServiceImpl implements PaymentService {
     private void handlePaymentSucceeded(Event event) {
         String intentId = extractPaymentIntentId(event);
         Payment payment = findByStripeIntentId(intentId);
-
-        if (payment.getStatus() == PaymentStatus.PAID) {
-            log.info("Webhook trùng lặp, bỏ qua: PaymentIntent={}", intentId);
+        User user = payment.getOrder().getUser();
+        Order order = payment.getOrder();
+        if (payment.getStatus() == PaymentStatus.PAID
+                || order.getStatus() == OrderStatus.EXPIRED
+                || order.getStatus() == OrderStatus.CANCELLED) {
             return;
         }
-
-        Order order = payment.getOrder();
         markPaymentSucceeded(order);
 
         payment.setStatus(PaymentStatus.PAID);
         payment.setPaidAt(LocalDateTime.now());
         cartService.clearCart(order.getUser());
         paymentRepository.save(payment);
-        log.info("Thanh toán thành công: PaymentIntent={}, Order={}", intentId, order.getOrderCode());
+        user.setPaymentFailStreak(0);
     }
 
     private void handlePaymentFailed(Event event) {
@@ -309,9 +384,7 @@ public class PaymentServiceImpl implements PaymentService {
 
         payment.setStatus(PaymentStatus.FAILED);
         paymentRepository.save(payment);
-
-        log.warn("Thanh toán thất bại: PaymentIntent={}, Order={}",
-                intentId, payment.getOrder().getOrderCode());
+        releaseOrderStock(payment.getOrder());
     }
 
     private void handlePaymentCanceled(Event event) {
@@ -321,8 +394,42 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setStatus(PaymentStatus.CANCELLED);
         paymentRepository.save(payment);
         releaseOrderStock(payment.getOrder());
+    }
 
-        log.info("PaymentIntent bị huỷ: {}", intentId);
+    private void handleRefundUpdated(Event event) {
+        var deserializer = event.getDataObjectDeserializer();
+        Refund refund;
+
+        if (deserializer.getObject().isPresent()) {
+            refund = (Refund) deserializer.getObject().get();
+        } else {
+            try {
+                com.google.gson.JsonObject json = com.google.gson.JsonParser
+                        .parseString(deserializer.getRawJson())
+                        .getAsJsonObject();
+                refund = Refund.retrieve(json.get("id").getAsString());
+            } catch (Exception e) {
+                return;
+            }
+        }
+
+        Payment payment = paymentRepository.findByStripeRefundId(refund.getId()).orElse(null);
+        if (payment == null) {
+            return;
+        }
+
+        switch (refund.getStatus()) {
+            case "succeeded" -> {
+                payment.setStatus(PaymentStatus.REFUNDED);
+                payment.setRefundedAt(LocalDateTime.now());
+            }
+            case "failed" -> {
+                payment.setStatus(PaymentStatus.PAID);
+            }
+            default -> log.info("Refund {} đang ở trạng thái {}", refund.getId(), refund.getStatus());
+        }
+
+        paymentRepository.save(payment);
     }
 
     private Payment findByStripeIntentId(String intentId) {
@@ -338,23 +445,19 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
-    private void cancelStripeIntent(String paymentIntentId) {
+    public void cancelStripeIntent(String paymentIntentId) {
         try {
             PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);
 
             if ("succeeded".equals(intent.getStatus())) {
-                log.warn("Không thể huỷ PaymentIntent {} vì đã succeeded, có thể user đã thanh toán trước đó", paymentIntentId);
                 throw new AppException(ErrorCode.PAYMENT_ALREADY_PAID);
             }
 
             if ("canceled".equals(intent.getStatus())) {
-                log.info("PaymentIntent {} đã ở trạng thái canceled từ trước, bỏ qua", paymentIntentId);
                 return;
             }
             intent.cancel();
-            log.info("Đã huỷ PaymentIntent {} thành công", paymentIntentId);
         } catch (StripeException ex) {
-            log.error("Lỗi khi huỷ PaymentIntent {}: {}", paymentIntentId, ex.getMessage());
             throw new AppException(ErrorCode.PAYMENT_STRIPE_ERROR);
         }
     }

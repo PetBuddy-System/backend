@@ -19,34 +19,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     boolean existsByOrder_OrderId(Long orderId);
 
-    @Query("""
-        select coalesce(sum(p.amount), 0)
-        from Payment p
-        where p.status = 'PAID' and p.paidAt between :start and :end
-    """)
-    BigDecimal sumRevenue(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    Optional<Payment> findByStripeRefundId(String stripeRefundId);
 
-    @Query("""
-        select count(p)
-        from Payment p
-        where p.status = 'PAID' and p.paidAt between :start and :end
-    """)
-    Long countSuccessfulPayments(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
-
-    @Query("""
-        select count(p)
-        from Payment p
-        where p.createdAt between :start and :end
-    """)
-    Long countTotalPayments(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
-
-    // Trend theo ngày (DB-agnostic bằng function('date', ...) nếu dùng Postgres/MySQL)
-    @Query("""
-        select function('date', p.paidAt) as day, coalesce(sum(p.amount), 0) as revenue
-        from Payment p
-        where p.status = 'PAID' and p.paidAt between :start and :end
-        group by function('date', p.paidAt)
-        order by day
-    """)
-    List<Object[]> sumRevenueGroupedByDay(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }

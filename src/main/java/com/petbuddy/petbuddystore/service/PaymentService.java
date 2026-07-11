@@ -14,4 +14,7 @@ public interface PaymentService {
     Page<PaymentResponse> getAllPayments(Pageable pageable);
     PaymentResponse changePaymentMethod(Long orderId, String rawMethod);
     void releaseOrderStock(Order order);
+    PaymentResponse confirmCancelOrder(Long orderId);
+    PaymentResponse requestCancelOrder(Long orderId, String cancelReason);
+    void cancelPaymentForOrder(Order order);
 }
