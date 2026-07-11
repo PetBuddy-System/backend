@@ -46,6 +46,13 @@ public class PetController {
                 .body(ApiResponse.success(petService.getPetById(petId)));
     }
 
+    @GetMapping()
+    @Operation(description = "Tìm danh sách hồ sơ thú cưng")
+    public ResponseEntity<ApiResponse<List<PetProfileResponse>>> getAllPetProfiles(){
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(ApiResponse.success(petService.getAllPetProfiles()));
+    }
+
     @PutMapping(value = "/{petId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<PetProfileResponse>> updatePet(
             @PathVariable String petId,

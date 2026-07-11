@@ -10,5 +10,6 @@ import java.util.List;
 public interface PetService {
     PetProfileResponse createPet(PetProfileCreationRequest request, List<MultipartFile> images);
     PetProfileResponse getPetById(String petId);
+    List<PetProfileResponse> getAllPetProfiles();
     PetProfileResponse updatePet(String petId, PetProfileUpdateRequest request, List<MultipartFile> images);
 }

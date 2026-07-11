@@ -63,6 +63,13 @@ public class PetServiceImpl implements PetService {
     }
 
     @Override
+    public List<PetProfileResponse> getAllPetProfiles() {
+        return petRepository.findAll().stream()
+                .map(petMapper::toPetProfileResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public PetProfileResponse updatePet(String petId, PetProfileUpdateRequest request, List<MultipartFile> images) {
         PetProfile petProfile = petRepository.findById(petId)
                 .orElseThrow(() -> new AppException(ErrorCode.PET_NOT_EXISTED));
