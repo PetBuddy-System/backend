@@ -57,7 +57,7 @@ public class OrderServiceImpl implements OrderService {
     OrderMapper orderMapper;
     PaymentRepository paymentRepository;
 
-    static int MAX_CONSECUTIVE_FAILS = 3;
+    static int MAX_CONSECUTIVE_FAILS = 4;
 
     @Override
     public OrderResponse createOrder(CreateOrderRequest request) {
@@ -232,12 +232,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         if (newStatus == OrderStatus.CANCELLED) {
-            paymentService.releaseOrderStock(order);
-            Payment payment = order.getPayment();
-            if (payment.getStatus() != PaymentStatus.PAID) {
-                payment.setStatus(PaymentStatus.CANCELLED);
-                paymentRepository.save(payment);
-            }
+            paymentService.cancelPaymentForOrder(order);
         }
 
         if (newStatus == OrderStatus.DELIVERED) {
@@ -304,27 +299,28 @@ public class OrderServiceImpl implements OrderService {
         if (payment == null || payment.getPaymentMethod() != PaymentMethod.CARD) {
             return;
         }
-
-        if (payment.getStatus() != PaymentStatus.PAID) {
-            if (payment.getStripePaymentIntentId() != null) {
-                try {
-                    paymentServiceImpl.cancelStripeIntent(payment.getStripePaymentIntentId());
-                } catch (AppException ex) {
-                    if (ex.getErrorCode() == ErrorCode.PAYMENT_ALREADY_PAID) {
-                        log.warn("Order {} đã thanh toán trước khi expire, bỏ qua", order.getOrderCode());
-                        return;
-                    }
-                    log.error("Cancel Stripe intent thất bại cho order {}, vẫn expire local, cần đối soát: {}",
-                            order.getOrderCode(), ex.getMessage());
-                }
-            }
-
-            payment.setStatus(PaymentStatus.FAILED);
-            paymentRepository.save(payment);
-            paymentService.releaseOrderStock(order);
-
-            handlePaymentFailStreak(order.getUser(), order.getOrderCode());
+        if (payment.getStatus() == PaymentStatus.PAID) {
+            log.info("Order {} đã PAID trước khi job expire chạy tới, bỏ qua", order.getOrderCode());
+            return;
         }
+
+        if (payment.getStripePaymentIntentId() != null) {
+            try {
+                paymentServiceImpl.cancelStripeIntent(payment.getStripePaymentIntentId());
+            } catch (AppException ex) {
+                if (ex.getErrorCode() == ErrorCode.PAYMENT_ALREADY_PAID) {
+                    log.warn("Order {} đã thanh toán trước khi expire, bỏ qua", order.getOrderCode());
+                    return;
+                }
+                log.error("Cancel Stripe intent thất bại cho order {}, vẫn expire local, cần đối soát: {}",
+                        order.getOrderCode(), ex.getMessage());
+            }
+        }
+
+        payment.setStatus(PaymentStatus.FAILED);
+        paymentRepository.save(payment);
+        paymentService.releaseOrderStock(order);
+        handlePaymentFailStreak(order.getUser(), order.getOrderCode());
 
         order.setStatus(OrderStatus.EXPIRED);
         order.setUpdatedAt(LocalDateTime.now());

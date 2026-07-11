@@ -88,12 +88,16 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Order updated successfully",
                 orderService.updateOrder(orderId, request)));
     }
-
-    @PostMapping("/{orderId}/cancel")
-    public ResponseEntity<ApiResponse<PaymentResponse>> cancelOrderWithRefund(
+    @PostMapping("/{orderId}/cancel-request")
+    public ApiResponse<PaymentResponse> requestCancel(
             @PathVariable Long orderId,
-            @Valid @RequestBody CancelOrderRequest request) {
-        return ResponseEntity.ok(ApiResponse.success("Refund successfully",
-                paymentService.cancelOrderWithRefund(orderId, request.getCancelReason())));
+            @RequestBody @Valid CancelOrderRequest request) {
+        return ApiResponse.success(paymentService.requestCancelOrder(orderId, request.getCancelReason()));
+    }
+
+    @PreAuthorize("hasRole('STAFF')")
+    @PostMapping("/{orderId}/cancel-confirm")
+    public ApiResponse<PaymentResponse> confirmCancel(@PathVariable Long orderId) {
+        return ApiResponse.success(paymentService.confirmCancelOrder(orderId));
     }
 }

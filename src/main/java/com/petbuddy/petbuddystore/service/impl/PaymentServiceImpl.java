@@ -193,25 +193,52 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional
-    public PaymentResponse cancelOrderWithRefund(Long orderId, String cancelReason) {
+    public PaymentResponse requestCancelOrder(Long orderId, String cancelReason) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
-        Payment payment = order.getPayment();
-
-        if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.EXPIRED) {
+        if (order.getStatus() != OrderStatus.CONFIRMED && order.getStatus() != OrderStatus.PENDING) {
             throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
         }
-        if (payment.getStatus() == PaymentStatus.REFUND_PENDING) {
-            throw new AppException(ErrorCode.PAYMENT_REFUND_NOT_ALLOWED);
+
+        Payment payment = order.getPayment();
+        payment.setCancelReason(cancelReason);
+        order.setStatus(OrderStatus.CANCEL_REQUESTED);
+        order.setUpdatedAt(LocalDateTime.now());
+
+        orderRepository.save(order);
+        paymentRepository.save(payment);
+        return paymentMapper.toPaymentResponse(payment);
+    }
+
+    @Override
+    @Transactional
+    public PaymentResponse confirmCancelOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+
+        if (order.getStatus() != OrderStatus.CANCEL_REQUESTED) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
         }
 
-        payment.setCancelReason(cancelReason);
+        cancelPaymentForOrder(order);
+
+        order.setStatus(OrderStatus.CANCELLED);
+        order.setUpdatedAt(LocalDateTime.now());
+        orderRepository.save(order);
+
+        return paymentMapper.toPaymentResponse(order.getPayment());
+    }
+
+    @Override
+    @Transactional
+    public void cancelPaymentForOrder(Order order) {
+        Payment payment = order.getPayment();
 
         if (payment.getPaymentMethod() == PaymentMethod.CARD && payment.getStatus() == PaymentStatus.PAID) {
             createStripeRefund(payment);
-            payment.setStatus(PaymentStatus.REFUND_PENDING);
-            order.setStatus(OrderStatus.CANCELLED);
+            payment.setStatus(PaymentStatus.REFUNDED);
+            payment.setRefundedAt(LocalDateTime.now());
         } else {
             if (payment.getPaymentMethod() == PaymentMethod.CARD
                     && payment.getStripePaymentIntentId() != null
@@ -220,12 +247,9 @@ public class PaymentServiceImpl implements PaymentService {
             }
             releaseOrderStock(order);
             payment.setStatus(PaymentStatus.CANCELLED);
-            order.setStatus(OrderStatus.CANCELLED);
         }
 
-        orderRepository.save(order);
         paymentRepository.save(payment);
-        return paymentMapper.toPaymentResponse(payment);
     }
 
     private void createStripeRefund(Payment payment) {
@@ -398,9 +422,6 @@ public class PaymentServiceImpl implements PaymentService {
             case "succeeded" -> {
                 payment.setStatus(PaymentStatus.REFUNDED);
                 payment.setRefundedAt(LocalDateTime.now());
-                Order order = payment.getOrder();
-                order.setStatus(OrderStatus.CANCELLED);
-                orderRepository.save(order);
             }
             case "failed" -> {
                 payment.setStatus(PaymentStatus.PAID);
