@@ -14,4 +14,6 @@ public interface FileService {
     void validateExcelFile(MultipartFile file);
     MediaFile uploadShippingProofImage(MultipartFile file);
     MediaFile uploadUserProfileImage(MultipartFile file);
+    MediaFile uploadReturnImage(MultipartFile file);
+    void validateReturnImages(List<MultipartFile> files);
 }
