@@ -20,6 +20,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -54,6 +55,29 @@ public class FileServiceImpl implements FileService {
     @Override
     public MediaFile uploadUserProfileImage(MultipartFile file) {
         return uploadImage(file, MediaPurpose.USER_PROFILE, "users");
+    }
+
+    @Override
+    public MediaFile uploadReturnImage(MultipartFile file) {return uploadImage(file, MediaPurpose.RETURN_REQUEST, "returns");
+    }
+
+    @Override
+    public void validateReturnImages(List<MultipartFile> files) {
+        if (files == null || files.isEmpty()) {
+            throw new AppException(ErrorCode.FILE_REQUIRED);
+        }
+
+        if (files.size() < 1) {
+            throw new AppException(ErrorCode.MINIMUM_1_IMAGE_REQUIRED);
+        }
+
+        if (files.size() > 5) {
+            throw new AppException(ErrorCode.MAXIMUM_5_IMAGES_ALLOWED);
+        }
+
+        for (MultipartFile file : files) {
+            validateFile(file);
+        }
     }
 
     @Override
