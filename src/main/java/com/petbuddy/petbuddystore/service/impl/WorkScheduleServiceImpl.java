@@ -53,6 +53,12 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
             throw new AppException(ErrorCode.INVALID_WORKING_TIME);
         }
 
+        LocalDateTime startScheduleTime = LocalDateTime.of(request.getWorkDate(), request.getStartTime());
+
+        if (startScheduleTime.isBefore(LocalDateTime.now())) {
+            throw new AppException(ErrorCode.WORK_SCHEDULE_IN_THE_PAST);
+        }
+
         if (workScheduleRepository.existsByWorkDateAndStartTimeAndEndTime(request.getWorkDate(),
                 request.getStartTime(), request.getEndTime())) {
             throw new AppException(ErrorCode.WORK_SCHEDULE_EXISTED);

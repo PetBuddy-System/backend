@@ -3,8 +3,10 @@ package com.petbuddy.petbuddystore.controller;
 import com.petbuddy.petbuddystore.common.enums.ScheduleStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.response.StaffScheduleResponse;
+import com.petbuddy.petbuddystore.dto.response.UserResponse;
 import com.petbuddy.petbuddystore.dto.response.WorkScheduleResponse;
 import com.petbuddy.petbuddystore.service.StaffScheduleService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,13 @@ public class StaffScheduleController {
                                                                                    @RequestParam(required = false) ScheduleStatus scheduleStatus) {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(ApiResponse.success(staffScheduleService.getMySchedules(fromDate, toDate, scheduleStatus)));
+    }
+
+    @GetMapping("/{staffScheduleId}")
+    @Operation(description = "Lấy thông tin chi tiết lịch làm việc staff theo id")
+    public ResponseEntity<ApiResponse<StaffScheduleResponse>> getStaffSchedule(@PathVariable String staffScheduleId){
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(ApiResponse.success(staffScheduleService.getStaffSchedule(staffScheduleId)));
     }
 
     @PatchMapping("/{staffScheduleId}/check-in")
