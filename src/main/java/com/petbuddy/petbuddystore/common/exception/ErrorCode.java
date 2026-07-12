@@ -167,6 +167,11 @@ public enum ErrorCode {
     PAYMENT_ALREADY_PAID(5509, "Payment is already paid", HttpStatus.BAD_REQUEST),
     PAYMENT_REFUND_NOT_ALLOWED(5510,"Payment refund is not allowed",HttpStatus.BAD_REQUEST),
     PAYMENT_REFUND_FAILED(5511,"Payment refund failed",HttpStatus.INTERNAL_SERVER_ERROR),
+    REFUND_NOT_SUPPORTED(5512,"Phương thức thanh toán không hỗ trợ hoàn tiền", HttpStatus.BAD_REQUEST),
+    PAYMENT_NOT_PAID(5513,"Đơn hàng chưa được thanh toán", HttpStatus.BAD_REQUEST),
+    STRIPE_REFUND_FAILED(5514,"Hoàn tiền qua Stripe thất bại, vui lòng thử lại", HttpStatus.BAD_REQUEST),
+    REFUND_METHOD_NOT_SUPPORTED(5515,"Phương thức hoàn tiền không được hỗ trợ", HttpStatus.BAD_REQUEST),
+
 
     PROMOTION_NOT_FOUND(5601, "Promotion not found", HttpStatus.NOT_FOUND),
     PROMOTION_INVALID_DATE(5602, "Promotion date is invalid", HttpStatus.BAD_REQUEST),

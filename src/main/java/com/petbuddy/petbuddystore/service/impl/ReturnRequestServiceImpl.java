@@ -15,6 +15,7 @@ import com.petbuddy.petbuddystore.mapper.ReturnRequestMapper;
 import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.*;
 import com.petbuddy.petbuddystore.service.FileService;
+import com.petbuddy.petbuddystore.service.PaymentService;
 import com.petbuddy.petbuddystore.service.ReturnRequestService;
 import com.petbuddy.petbuddystore.service.ReturnStockService;
 import jakarta.persistence.criteria.Join;
@@ -52,9 +53,9 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
     ReturnItemRepository returnItemRepository;
     OrderRepository orderRepository;
     OrderDetailRepository orderDetailRepository;
-    ProductBatchRepository productBatchRepository;
     UserRepository userRepository;
     FileService fileService;
+    PaymentService paymentService;
     ReturnRequestMapper returnRequestMapper;
     ReturnStockService returnStockService;
 
@@ -484,21 +485,15 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
         if (returnRequest.getType() == ReturnType.EXCHANGE) {
             switch (newStatus) {
                 case APPROVED:
-                    // PENDING → APPROVED: Xác nhận stock (xóa reserve)
                     returnStockService.confirmStockForExchange(returnRequest);
                     break;
-
                 case EXCHANGE_FAILED:
-                    // APPROVED → EXCHANGE_FAILED: Trả lại stock
                     returnStockService.returnStockForExchange(returnRequest);
                     break;
-
                 case REJECTED:
                 case CANCELLED:
-                    // PENDING → REJECTED/CANCELLED: Giải phóng reserve
                     returnStockService.releaseReservedStock(returnRequest);
                     break;
-
                 case COMPLETED:
                     break;
             }
@@ -507,6 +502,7 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
         if (returnRequest.getType() == ReturnType.RETURN) {
             switch (newStatus) {
                 case COMPLETED:
+                    paymentService.refundForReturn(returnRequest);
                     returnRequest.setRefundStatus(RefundStatus.SUCCESS);
                     break;
                 case REJECTED:

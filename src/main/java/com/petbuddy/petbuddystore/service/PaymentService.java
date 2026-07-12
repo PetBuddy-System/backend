@@ -3,6 +3,7 @@ package com.petbuddy.petbuddystore.service;
 import com.petbuddy.petbuddystore.common.enums.PaymentMethod;
 import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
 import com.petbuddy.petbuddystore.model.Order;
+import com.petbuddy.petbuddystore.model.ReturnRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -17,4 +18,6 @@ public interface PaymentService {
     PaymentResponse confirmCancelOrder(Long orderId);
     PaymentResponse requestCancelOrder(Long orderId, String cancelReason);
     void cancelPaymentForOrder(Order order);
+    void refundForReturn(ReturnRequest returnRequest);
+
 }
