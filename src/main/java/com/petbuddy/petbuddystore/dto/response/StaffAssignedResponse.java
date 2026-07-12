@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.dto.response;
 
+import com.petbuddy.petbuddystore.common.enums.AttendanceStatus;
 import com.petbuddy.petbuddystore.common.enums.ScheduleStatus;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -17,6 +18,7 @@ public class StaffAssignedResponse {
     String staffEmail;
     String staffName;
     ScheduleStatus scheduleStatus;
+    AttendanceStatus attendanceStatus;
     LocalDateTime checkInAt;
     LocalDateTime checkOutAt;
     LocalDateTime assignedAt;

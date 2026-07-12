@@ -23,6 +23,7 @@ public interface WorkScheduleMapper {
     @Mapping(source = "staff.fullName", target = "staffName")
     @Mapping(source = "staff.email", target = "staffEmail")
     @Mapping(source = "scheduleStatus", target = "scheduleStatus")
+    @Mapping(source = "attendanceStatus", target = "attendanceStatus")
     StaffAssignedResponse toStaffAssignedResponse(StaffSchedule staffSchedule);
 
     void updateWorkSchedule(@MappingTarget WorkSchedule workSchedule, WorkScheduleUpdateRequest request);
