@@ -9,5 +9,7 @@ public enum ReturnStatus {
 
     COMPLETED,
 
-    CANCELLED
+    CANCELLED,
+
+    EXCHANGE_FAILED
 }

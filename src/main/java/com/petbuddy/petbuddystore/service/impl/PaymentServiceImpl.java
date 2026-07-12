@@ -1,9 +1,6 @@
 package com.petbuddy.petbuddystore.service.impl;
 
-import com.petbuddy.petbuddystore.common.enums.OrderStatus;
-import com.petbuddy.petbuddystore.common.enums.PaymentMethod;
-import com.petbuddy.petbuddystore.common.enums.PaymentStatus;
-import com.petbuddy.petbuddystore.common.enums.ProductStatus;
+import com.petbuddy.petbuddystore.common.enums.*;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
@@ -12,6 +9,7 @@ import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.*;
 import com.petbuddy.petbuddystore.service.CartService;
 import com.petbuddy.petbuddystore.service.PaymentService;
+import com.stripe.Stripe;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
@@ -30,6 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -250,6 +249,70 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         paymentRepository.save(payment);
+    }
+
+    @Override
+    @Transactional
+    public void refundForReturn(ReturnRequest returnRequest) {
+        Payment payment = returnRequest.getOrder().getPayment();
+
+        // ✅ LẤY REFUND METHOD TỪ RETURN REQUEST
+        RefundMethod refundMethod = returnRequest.getRefundMethod();
+
+        // ✅ KIỂM TRA PHƯƠNG THỨC HOÀN TIỀN
+        if (refundMethod == RefundMethod.STRIPE_PAYMENT) {
+            // Hoàn qua Stripe (thẻ)
+            if (payment.getPaymentMethod() != PaymentMethod.CARD) {
+                throw new AppException(ErrorCode.REFUND_NOT_SUPPORTED);
+            }
+
+            if (payment.getStatus() != PaymentStatus.PAID) {
+                throw new AppException(ErrorCode.PAYMENT_NOT_PAID);
+            }
+
+            BigDecimal refundAmount = returnRequest.getRefundAmount();
+            createStripeRefundForReturn(payment, refundAmount, returnRequest);
+
+            payment.setStatus(PaymentStatus.REFUNDED);
+            payment.setRefundedAt(LocalDateTime.now());
+            paymentRepository.save(payment);
+
+        } else if (refundMethod == RefundMethod.BANK_TRANSFER) {
+            // Hoàn qua chuyển khoản ngân hàng
+            // Staff sẽ xử lý thủ công bên ngoài hệ thống
+            // Chỉ cần set status là REFUNDED
+            payment.setStatus(PaymentStatus.REFUNDED);
+            payment.setRefundedAt(LocalDateTime.now());
+            paymentRepository.save(payment);
+
+            log.info("Yêu cầu hoàn tiền qua chuyển khoản cho return request {}",
+                    returnRequest.getReturnCode());
+        } else {
+            throw new AppException(ErrorCode.REFUND_METHOD_NOT_SUPPORTED);
+        }
+    }
+
+    private void createStripeRefundForReturn(Payment payment, BigDecimal amount, ReturnRequest returnRequest) {
+        try {
+            long amountInVnd = amount.longValue();
+
+            RefundCreateParams params = RefundCreateParams.builder()
+                    .setPaymentIntent(payment.getStripePaymentIntentId())
+                    .setAmount(amountInVnd)  // ← 394.000 (không nhân 100)
+                    .putMetadata("order_id", String.valueOf(payment.getOrder().getOrderId()))
+                    .putMetadata("order_code", payment.getOrder().getOrderCode())
+                    .putMetadata("return_code", returnRequest.getReturnCode())
+                    .putMetadata("refund_amount", amount.toString())
+                    .build();
+
+            Refund refund = Refund.create(params);
+            payment.setStripeRefundId(refund.getId());
+
+        } catch (StripeException ex) {
+            log.error("Lỗi khi tạo refund Stripe cho return request {}: {}",
+                    returnRequest.getReturnCode(), ex.getMessage());
+            throw new AppException(ErrorCode.STRIPE_REFUND_FAILED);
+        }
     }
 
     private void createStripeRefund(Payment payment) {

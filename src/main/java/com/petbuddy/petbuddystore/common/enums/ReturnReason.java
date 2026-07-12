@@ -12,5 +12,7 @@ public enum ReturnReason {
 
     CUSTOMER_CHANGED_MIND,
 
-    OTHER
+    OTHER,
+
+    OUT_OF_STOCK   //sản phẩm heets hàng nếu user chọn đổi hàng kh có nữa thì qua báo lỗi kêu user chọn cái này sẽ đc hoàng tiền 100%
 }
