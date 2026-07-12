@@ -7,6 +7,8 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "bookings_detail")
@@ -27,7 +29,7 @@ public class BookingDetail {
     String catalogName;
 
     @Column(name = "catalog_type_snapshot")
-    String catalogType;
+    String catalogType; //DOG,CAT
 
     @Column(name = "pet_name_snapshot")
     String petName;
@@ -60,20 +62,26 @@ public class BookingDetail {
     @CreationTimestamp
     LocalDateTime createAt;
 
+    @OneToMany(mappedBy = "bookingDetail", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    List<MediaFile> mediaFiles = new ArrayList<>();
+
     @ManyToOne
     @JoinColumn(name = "booking_id")
     Booking booking;
 
     @ManyToOne
-    @JoinColumn(name = "cage_id")
-    Cage cage;
-
-    @ManyToOne
     @JoinColumn(name = "pet_id")
     PetProfile pet;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "catalog_id")
     Catalog catalog;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "time_slot_id")
+    CatalogTimeSlot timeSlot;
+
+
 
 }

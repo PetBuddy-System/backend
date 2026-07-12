@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.controller;
 
+import com.petbuddy.petbuddystore.common.enums.CatalogStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.CatalogCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.CatalogUpdateRequest;
@@ -13,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -75,6 +77,20 @@ public class CatalogController {
                 ApiResponse.success(
                         "Catalog updated successfully",
                         catalogService.updateCatalog(catalogId, updateRequest)
+                )
+        );
+    }
+
+    @PutMapping("/{catalogId}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Update catalog status")
+    public ResponseEntity<ApiResponse<CatalogResponse>> updateCatalogStatus(
+            @PathVariable Integer catalogId,
+            @RequestParam CatalogStatus status) {
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Catalog status updated successfully",
+                        catalogService.updateCatalogStatus(catalogId, status)
                 )
         );
     }

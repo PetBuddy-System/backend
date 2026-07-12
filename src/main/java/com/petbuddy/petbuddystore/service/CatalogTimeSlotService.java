@@ -22,4 +22,6 @@ public interface CatalogTimeSlotService {
     TimeSlotResponse updateTimeSlot(Integer timeSlotId, TimeSlotUpdateRequest request);
 
     TimeSlotResponse updateActiveStatus(Integer timeSlotId, Boolean isActive);
+
+    TimeSlotResponse toggleTimeSlotActive(Integer timeSlotId);
 }

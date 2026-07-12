@@ -10,6 +10,7 @@ public interface FileService {
     MediaFile uploadProductVideo(MultipartFile file);
     MediaFile uploadPetImage(MultipartFile file);
     MediaFile uploadBlogImage(MultipartFile file);
+    MediaFile uploadBookingImage(MultipartFile file);
     MediaFile uploadProductImageFromBytes(byte[] bytes);
     void validateExcelFile(MultipartFile file);
     MediaFile uploadShippingProofImage(MultipartFile file);

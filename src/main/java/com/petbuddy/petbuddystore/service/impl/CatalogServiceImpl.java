@@ -59,4 +59,13 @@ public class CatalogServiceImpl implements CatalogService {
         catalogMapper.updateCatalog(updateRequest, catalog);
         return catalogMapper.toCatalogResponse(catalogRepository.save(catalog));
     }
+
+    @Override
+    public CatalogResponse updateCatalogStatus(Integer catalogId, CatalogStatus status) {
+        Catalog catalog = catalogRepository.findById(catalogId)
+                .orElseThrow(() -> new AppException(ErrorCode.CATALOG_NOT_FOUND));
+
+        catalog.setStatus(status);
+        return catalogMapper.toCatalogResponse(catalogRepository.save(catalog));
+    }
 }
