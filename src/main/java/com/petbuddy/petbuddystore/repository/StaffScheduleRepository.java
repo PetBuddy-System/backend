@@ -15,6 +15,7 @@ import java.util.Optional;
 @Repository
 public interface StaffScheduleRepository extends JpaRepository<StaffSchedule, String> {
     boolean existsByStaff_UserIdAndWorkSchedule_WorkScheduleId(String staffId, String workScheduleId);
+    List<StaffSchedule> findByScheduleStatus(ScheduleStatus scheduleStatus);
 
     @Query("""
         SELECT COUNT(ss) > 0

@@ -21,6 +21,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -42,14 +43,18 @@ public class PetServiceImpl implements PetService {
         petProfile.setUser(user);
         petProfile.setPetStatus(PetStatus.ACTIVE);
 
-        List<MediaFile> mediaFiles = images.stream()
-                .filter(image -> image != null && !image.isEmpty())
-                .map(file -> {
-                    MediaFile mediaFile = fileService.uploadPetImage(file);
-                    mediaFile.setPetProfile(petProfile);
-                    return mediaFile;
-                })
-                .collect(Collectors.toList());
+        List<MediaFile> mediaFiles = new ArrayList<>();
+
+        if (images != null && !images.isEmpty()){
+            mediaFiles = images.stream()
+                    .filter(image -> image != null && !image.isEmpty())
+                    .map(file -> {
+                        MediaFile mediaFile = fileService.uploadPetImage(file);
+                        mediaFile.setPetProfile(petProfile);
+                        return mediaFile;
+                    })
+                    .toList();
+        }
 
         petProfile.setMediaFiles(mediaFiles);
         return petMapper.toPetProfileResponse(petRepository.save(petProfile));
@@ -63,23 +68,32 @@ public class PetServiceImpl implements PetService {
     }
 
     @Override
+    public List<PetProfileResponse> getAllPetProfiles() {
+        return petRepository.findAll().stream()
+                .map(petMapper::toPetProfileResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public PetProfileResponse updatePet(String petId, PetProfileUpdateRequest request, List<MultipartFile> images) {
         PetProfile petProfile = petRepository.findById(petId)
                 .orElseThrow(() -> new AppException(ErrorCode.PET_NOT_EXISTED));
         petMapper.updatePet(request, petProfile);
 
-        petProfile.getMediaFiles().clear();
-        List<MediaFile> mediaFiles = images.stream()
-                .filter(image -> image != null && !image.isEmpty())
-                .map(file -> {
-                    MediaFile mediaFile = fileService.uploadPetImage(file);
-                    mediaFile.setPetProfile(petProfile);
-                    return mediaFile;
-                })
-                .toList();
+        if (images != null && !images.isEmpty()){
+            List<MediaFile> mediaFiles = images.stream()
+                    .filter(image -> image != null && !image.isEmpty())
+                    .map(file -> {
+                        MediaFile mediaFile = fileService.uploadPetImage(file);
+                        mediaFile.setPetProfile(petProfile);
+                        return mediaFile;
+                    })
+                    .toList();
 
-        if (!mediaFiles.isEmpty()) {
-            petProfile.getMediaFiles().addAll(mediaFiles);
+            if (!mediaFiles.isEmpty()) {
+                petProfile.getMediaFiles().clear();
+                petProfile.getMediaFiles().addAll(mediaFiles);
+            }
         }
         return petMapper.toPetProfileResponse(petRepository.save(petProfile));
     }
