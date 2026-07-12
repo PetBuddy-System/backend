@@ -28,7 +28,7 @@ public class ReturnRequest {
         private Long returnRequestId;
 
         @Column(unique = true, nullable = false)
-        private String returnCode; // tự gen trong BE như product_code hay promotion_code)
+        private String returnCode;
 
         // Đơn hàng cần hoàn/đổi
         @ManyToOne(fetch = FetchType.LAZY)
@@ -91,4 +91,7 @@ public class ReturnRequest {
 
         @OneToMany(mappedBy = "returnRequest", cascade = CascadeType.ALL, orphanRemoval = true)
         private List<MediaFile> mediaFiles = new ArrayList<>();
+
+        @Column(name = "restocked_at")
+        private LocalDateTime restockedAt;
 }

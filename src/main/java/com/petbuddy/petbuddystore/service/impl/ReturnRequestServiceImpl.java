@@ -16,11 +16,13 @@ import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.*;
 import com.petbuddy.petbuddystore.service.FileService;
 import com.petbuddy.petbuddystore.service.ReturnRequestService;
+import com.petbuddy.petbuddystore.service.ReturnStockService;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -43,15 +45,18 @@ import java.util.*;
 @Transactional
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@Slf4j
 public class ReturnRequestServiceImpl implements ReturnRequestService {
 
     ReturnRequestRepository returnRequestRepository;
     ReturnItemRepository returnItemRepository;
     OrderRepository orderRepository;
     OrderDetailRepository orderDetailRepository;
+    ProductBatchRepository productBatchRepository;
     UserRepository userRepository;
     FileService fileService;
     ReturnRequestMapper returnRequestMapper;
+    ReturnStockService returnStockService;
 
     @Override
     public CalculateRefundResponse calculateRefund(CalculateRefundRequest request) {
@@ -112,8 +117,6 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                 throw new AppException(ErrorCode.RETURN_QUANTITY_EXCEEDED);
             }
 
-            BigDecimal effectivePrice = orderDetail.getSalePrice() != null ? orderDetail.getSalePrice()
-                    : orderDetail.getUnitPrice();
             BigDecimal orderTotal = order.getTotalAmount();
             BigDecimal discount = order.getDiscountAmount();
 
@@ -192,11 +195,18 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
             }
         }
 
-        boolean activeExists = returnRequestRepository.existsByOrder_OrderIdAndStatusIn(
-                order.getOrderId(),
-                List.of(ReturnStatus.PENDING, ReturnStatus.APPROVED));
-        if (activeExists) {
-            throw new AppException(ErrorCode.DUPLICATE_RETURN_REQUEST);
+        if (typeEnum == ReturnType.EXCHANGE) {
+            for (ReturnItemRequest itemReq : request.getItems()) {
+                OrderDetail orderDetail = orderDetailRepository.findById(itemReq.getOrderDetailId())
+                        .orElseThrow(() -> new AppException(ErrorCode.ORDER_DETAIL_NOT_FOUND));
+
+                ReturnItem tempItem = ReturnItem.builder()
+                        .orderDetail(orderDetail)
+                        .quantity(itemReq.getQuantity())
+                        .build();
+
+                returnStockService.validateStockForExchange(tempItem);
+            }
         }
 
         BigDecimal totalRefundAmount = BigDecimal.ZERO;
@@ -249,8 +259,6 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
             BigDecimal itemRefund = BigDecimal.ZERO;
 
             if (typeEnum == ReturnType.RETURN) {
-                BigDecimal effectivePrice = orderDetail.getSalePrice() != null ? orderDetail.getSalePrice()
-                        : orderDetail.getUnitPrice();
                 BigDecimal orderTotal = order.getTotalAmount();
                 BigDecimal discount = order.getDiscountAmount();
 
@@ -281,6 +289,11 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
         returnRequest.setReturnItems(returnItems);
 
         ReturnRequest saved = returnRequestRepository.save(returnRequest);
+
+        if (typeEnum == ReturnType.EXCHANGE) {
+            returnStockService.reserveStockForExchange(saved);
+        }
+
         return returnRequestMapper.toReturnRequestResponse(saved);
     }
 
@@ -302,8 +315,6 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
 
         fileService.validateReturnImages(files);
 
-        // Clear existing media files since orphanRemoval is true, they'll be deleted in
-        // DB
         returnRequest.getMediaFiles().clear();
 
         for (MultipartFile file : files) {
@@ -357,6 +368,10 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
             throw new AppException(ErrorCode.RETURN_REQUEST_NOT_PENDING);
         }
 
+        if (returnRequest.getType() == ReturnType.EXCHANGE) {
+            returnStockService.releaseReservedStock(returnRequest);
+        }
+
         returnRequest.setStatus(ReturnStatus.CANCELLED);
         if (returnRequest.getType() == ReturnType.RETURN) {
             returnRequest.setRefundStatus(RefundStatus.FAILED);
@@ -381,7 +396,6 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // keyword: split by whitespace, OR across orderCode / returnCode / fullName / email
             String keyword = filter.getKeyword();
             if (keyword != null && !keyword.isBlank()) {
                 String[] terms = keyword.trim().toLowerCase().split("\\s+");
@@ -398,7 +412,6 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                 }
             }
 
-            // exact-match enum filters
             if (filter.getStatus() != null) {
                 predicates.add(cb.equal(root.get("status"), filter.getStatus()));
             }
@@ -409,7 +422,6 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                 predicates.add(cb.equal(root.get("type"), filter.getType()));
             }
 
-            // exact-match code filters (only when keyword is absent to avoid duplicate joins)
             if ((keyword == null || keyword.isBlank()) && filter.getOrderCode() != null && !filter.getOrderCode().isBlank()) {
                 Join<Object, Object> orderJoin = root.join("order");
                 predicates.add(cb.equal(orderJoin.get("orderCode"), filter.getOrderCode().trim()));
@@ -418,7 +430,6 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                 predicates.add(cb.equal(root.get("returnCode"), filter.getReturnCode().trim()));
             }
 
-            // date range on createdAt (LocalDateTime) — no DB CAST needed
             if (filter.getFromDate() != null) {
                 predicates.add(cb.greaterThanOrEqualTo(
                         root.get("createdAt"), filter.getFromDate().atStartOfDay()));
@@ -451,6 +462,7 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
     }
 
     @Override
+    @Transactional
     public ReturnRequestResponse updateReturnStatus(Long id, UpdateReturnStatusRequest request) {
         checkLogin();
         User currentUser = getCurrentUser();
@@ -467,18 +479,40 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
 
         ReturnStatus currentStatus = returnRequest.getStatus();
 
-        if (currentStatus == ReturnStatus.REJECTED || currentStatus == ReturnStatus.COMPLETED
-                || currentStatus == ReturnStatus.CANCELLED) {
-            throw new AppException(ErrorCode.RETURN_REQUEST_ALREADY_PROCESSED);
+        validateStatusTransition(currentStatus, newStatus);
+
+        if (returnRequest.getType() == ReturnType.EXCHANGE) {
+            switch (newStatus) {
+                case APPROVED:
+                    // PENDING → APPROVED: Xác nhận stock (xóa reserve)
+                    returnStockService.confirmStockForExchange(returnRequest);
+                    break;
+
+                case EXCHANGE_FAILED:
+                    // APPROVED → EXCHANGE_FAILED: Trả lại stock
+                    returnStockService.returnStockForExchange(returnRequest);
+                    break;
+
+                case REJECTED:
+                case CANCELLED:
+                    // PENDING → REJECTED/CANCELLED: Giải phóng reserve
+                    returnStockService.releaseReservedStock(returnRequest);
+                    break;
+
+                case COMPLETED:
+                    break;
+            }
         }
 
-        if (currentStatus == ReturnStatus.PENDING) {
-            if (newStatus != ReturnStatus.APPROVED && newStatus != ReturnStatus.REJECTED) {
-                throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
-            }
-        } else if (currentStatus == ReturnStatus.APPROVED) {
-            if (newStatus != ReturnStatus.COMPLETED) {
-                throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+        if (returnRequest.getType() == ReturnType.RETURN) {
+            switch (newStatus) {
+                case COMPLETED:
+                    returnRequest.setRefundStatus(RefundStatus.SUCCESS);
+                    break;
+                case REJECTED:
+                case CANCELLED:
+                    returnRequest.setRefundStatus(RefundStatus.FAILED);
+                    break;
             }
         }
 
@@ -491,17 +525,29 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
 
         if (newStatus == ReturnStatus.COMPLETED) {
             returnRequest.setCompletedAt(LocalDateTime.now());
-            if (returnRequest.getType() == ReturnType.RETURN) {
-                returnRequest.setRefundStatus(RefundStatus.SUCCESS);
-            }
-        } else if (newStatus == ReturnStatus.REJECTED) {
-            if (returnRequest.getType() == ReturnType.RETURN) {
-                returnRequest.setRefundStatus(RefundStatus.FAILED);
-            }
         }
 
         ReturnRequest saved = returnRequestRepository.save(returnRequest);
         return returnRequestMapper.toReturnRequestResponse(saved);
+    }
+
+
+    private void validateStatusTransition(ReturnStatus current, ReturnStatus next) {
+        if (current == ReturnStatus.REJECTED || current == ReturnStatus.COMPLETED
+                || current == ReturnStatus.CANCELLED || current == ReturnStatus.EXCHANGE_FAILED) {
+            throw new AppException(ErrorCode.RETURN_REQUEST_ALREADY_PROCESSED);
+        }
+
+        if (current == ReturnStatus.PENDING) {
+            if (next != ReturnStatus.APPROVED && next != ReturnStatus.REJECTED
+                    && next != ReturnStatus.CANCELLED) {
+                throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+            }
+        } else if (current == ReturnStatus.APPROVED) {
+            if (next != ReturnStatus.COMPLETED && next != ReturnStatus.EXCHANGE_FAILED) {
+                throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+            }
+        }
     }
 
     private BigDecimal getRefundPolicyFactor(ReturnReason reason, long days) {
@@ -522,7 +568,8 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
         return reason == ReturnReason.DAMAGED
                 || reason == ReturnReason.WRONG_PRODUCT
                 || reason == ReturnReason.MISSING_ITEM
-                || reason == ReturnReason.EXPIRED;
+                || reason == ReturnReason.EXPIRED
+                || reason == ReturnReason.OUT_OF_STOCK;
     }
 
     private String generateReturnCode() {
