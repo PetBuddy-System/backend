@@ -27,5 +27,4 @@ public class PaymentResponse {
     LocalDateTime paidAt;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
-    String cancelReason;
 }

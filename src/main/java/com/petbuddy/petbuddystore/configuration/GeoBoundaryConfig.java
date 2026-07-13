@@ -74,8 +74,6 @@ public class GeoBoundaryConfig {
             throw new IllegalStateException("Không tìm thấy geometry hợp lệ trong file GeoJSON");
         }
 
-        // FIX: fix từng geometry (self-intersection, ring lỗi...) trước khi union
-        // tránh TopologyException: side location conflict
         List<Geometry> fixedGeometries = new ArrayList<>();
         for (Geometry g : geometries) {
             fixedGeometries.add(g.isValid() ? g : GeometryFixer.fix(g));

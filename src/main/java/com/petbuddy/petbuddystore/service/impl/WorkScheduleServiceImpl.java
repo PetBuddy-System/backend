@@ -47,6 +47,7 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
     StaffScheduleRepository staffScheduleRepository;
     StaffScheduleMapper staffScheduleMapper;
 
+    static int MAX_ORDER_CAPACITY = 30;
     @Override
     public WorkScheduleResponse createWorkSchedule(WorkScheduleCreationRequest request) {
         if (!request.getStartTime().isBefore(request.getEndTime())) {
@@ -193,6 +194,7 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
                     .workSchedule(workSchedule)
                     .assignedAt(LocalDateTime.now())
                     .scheduleStatus(ScheduleStatus.SCHEDULED)
+                    .maxOrderCapacity(MAX_ORDER_CAPACITY)
                     .build();
             StaffSchedule savedStaffSchedule = staffScheduleRepository.save(staffSchedule);
             workSchedule.getStaffSchedules().add(savedStaffSchedule);

@@ -125,6 +125,8 @@ public enum ErrorCode {
     NOT_SHIPPER(5210, "You are not the shipper of this order", HttpStatus.FORBIDDEN),
     SHIPPER_NOT_ON_DUTY(5211, "Shipper is not on duty", HttpStatus.FORBIDDEN),
     NOT_THE_ASSIGNED_SHIPPER(5212, "You are not the assigned shipper for this order", HttpStatus.FORBIDDEN),
+    SHIPPER_TOO_FAR_FROM_CLUSTER(5213,"The distance between orders are too far",HttpStatus.FORBIDDEN),
+    ROUTE_CALCULATION_FAILED(5214,"Failed to calculate route",HttpStatus.INTERNAL_SERVER_ERROR),
 
     VOUCHER_NOT_FOUND(5301, "Voucher not found", HttpStatus.NOT_FOUND),
     VOUCHER_CODE_EXISTED(5302, "Voucher code already exists", HttpStatus.BAD_REQUEST),
@@ -214,6 +216,7 @@ public enum ErrorCode {
     TOO_EARLY_TO_CHECKIN(9018, "It's not time to check in yet", HttpStatus.BAD_REQUEST),
     MISSED_CHECKIN(9019, "Check-in time has closed", HttpStatus.BAD_REQUEST),
     TOO_EARLY_TO_CHECKOUT(9020, "It's not time to check out yet", HttpStatus.BAD_REQUEST),
+    SHIPPER_CAPACITY_FULL(9021, "Shipper capacity is full", HttpStatus.BAD_REQUEST)
     ;
 
     int code;

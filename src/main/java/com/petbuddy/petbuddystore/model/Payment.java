@@ -59,7 +59,4 @@ public class Payment {
 
     @Column(name = "refunded_at")
     LocalDateTime refundedAt;
-
-    @Column(name = "cancel_reason")
-    String cancelReason;
 }

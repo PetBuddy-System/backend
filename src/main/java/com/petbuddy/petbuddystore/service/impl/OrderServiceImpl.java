@@ -84,6 +84,8 @@ public class OrderServiceImpl implements OrderService {
                 .recipientName(request.getRecipientName())
                 .phoneNumber(request.getPhoneNumber())
                 .address(request.getAddress())
+                .longitude(request.getLongitude())
+                .latitude(request.getLatitude())
                 .note(request.getNote())
                 .shippingFee(shippingFee)
                 .status(OrderStatus.PENDING)
@@ -199,13 +201,13 @@ public class OrderServiceImpl implements OrderService {
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
             }
             case PICKING -> {
-                if (newStatus != OrderStatus.SHIPPING && newStatus != OrderStatus.CANCELLED)
+                if (newStatus != OrderStatus.PICKED && newStatus != OrderStatus.CANCELLED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
-                if (newStatus == OrderStatus.SHIPPING) {
-                    validateShipperOnDuty(currentUser);
-                    order.setShippedBy(currentUser);
-                    order.setShippedAt(LocalDateTime.now());
-                }
+            }
+
+            case PICKED -> {
+                if (newStatus != OrderStatus.CANCELLED)
+                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
             }
             case SHIPPING -> {
                 if (newStatus != OrderStatus.DELIVERED)
@@ -214,7 +216,7 @@ public class OrderServiceImpl implements OrderService {
                     throw new AppException(ErrorCode.DELIVERY_PROOF_IMAGE_REQUIRED);
                 }
                 validateShipperOnDuty(currentUser);
-                if (!order.getShippedBy().getUserId().equals(currentUser.getUserId())) {
+                if (!order.getStaffSchedule().getStaff().getUserId().equals(currentUser.getUserId())){
                     throw new AppException(ErrorCode.NOT_THE_ASSIGNED_SHIPPER);
                 }
             }
@@ -244,6 +246,48 @@ public class OrderServiceImpl implements OrderService {
         order.setStatus(newStatus);
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
+    }
+
+    @Override
+    public OrderResponse requestCancelOrder(Long orderId, String cancelReason) {
+        Order order = getOrderOrThrow(orderId);
+
+        if (order.getStatus() != OrderStatus.CONFIRMED && order.getStatus() != OrderStatus.PENDING) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        Payment payment = order.getPayment();
+        order.setCancelReason(cancelReason);
+
+        if (payment.getPaymentMethod() == PaymentMethod.CASH) {
+            paymentService.cancelPaymentForOrder(order);
+            order.setStatus(OrderStatus.CANCELLED);
+        } else {
+            paymentRepository.save(payment);
+            order.setStatus(OrderStatus.CANCEL_REQUESTED);
+        }
+
+        order.setUpdatedAt(LocalDateTime.now());
+        Order saved = orderRepository.save(order);
+
+        return orderMapper.toOrderResponse(saved);
+    }
+
+    @Override
+    public OrderResponse confirmCancelOrder(Long orderId) {
+        Order order = getOrderOrThrow(orderId);
+
+        if (order.getStatus() != OrderStatus.CANCEL_REQUESTED) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        paymentService.cancelPaymentForOrder(order);
+
+        order.setStatus(OrderStatus.CANCELLED);
+        order.setUpdatedAt(LocalDateTime.now());
+        Order saved = orderRepository.save(order);
+
+        return orderMapper.toOrderResponse(saved);
     }
 
     @Override
@@ -327,7 +371,6 @@ public class OrderServiceImpl implements OrderService {
         orderRepository.save(order);
     }
 
-    @Transactional
     public void handlePaymentFailStreak(User user, String orderCode) {
         int streak = user.getPaymentFailStreak() + 1;
         user.setPaymentFailStreak(streak);

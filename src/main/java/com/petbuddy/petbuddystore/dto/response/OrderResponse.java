@@ -27,9 +27,13 @@ public class OrderResponse {
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
     LocalDateTime shippedAt;
+    LocalDateTime cancelledAt;
+    String cancelReason;
     LocalDateTime paymentExpiredAt;
     List<OrderDetailResponse> orderDetails;
     List<MediaFileResponse> mediaFiles;
     PaymentResponse payment;
     VoucherResponse voucher;
+    Double latitude;
+    Double longitude;
 }

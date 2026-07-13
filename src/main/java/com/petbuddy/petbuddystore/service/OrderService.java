@@ -21,5 +21,7 @@ public interface OrderService {
     OrderResponse getOrder(Long orderId);
     List<PickingItemResponse> getPickingList(Long orderId);
     OrderResponse updateOrder(Long orderId, UpdateOrderRequest request);
+    OrderResponse requestCancelOrder(Long orderId, String cancelReason);
+    OrderResponse confirmCancelOrder(Long orderId);
     void expirePendingOrders();
 }

@@ -191,44 +191,6 @@ public class PaymentServiceImpl implements PaymentService {
         orderBatchLocationRepository.deleteAll(locations);
     }
 
-    @Override
-    @Transactional
-    public PaymentResponse requestCancelOrder(Long orderId, String cancelReason) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
-
-        if (order.getStatus() != OrderStatus.CONFIRMED && order.getStatus() != OrderStatus.PENDING) {
-            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
-        }
-
-        Payment payment = order.getPayment();
-        payment.setCancelReason(cancelReason);
-        order.setStatus(OrderStatus.CANCEL_REQUESTED);
-        order.setUpdatedAt(LocalDateTime.now());
-
-        orderRepository.save(order);
-        paymentRepository.save(payment);
-        return paymentMapper.toPaymentResponse(payment);
-    }
-
-    @Override
-    @Transactional
-    public PaymentResponse confirmCancelOrder(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
-
-        if (order.getStatus() != OrderStatus.CANCEL_REQUESTED) {
-            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
-        }
-
-        cancelPaymentForOrder(order);
-
-        order.setStatus(OrderStatus.CANCELLED);
-        order.setUpdatedAt(LocalDateTime.now());
-        orderRepository.save(order);
-
-        return paymentMapper.toPaymentResponse(order.getPayment());
-    }
 
     @Override
     @Transactional
@@ -239,10 +201,15 @@ public class PaymentServiceImpl implements PaymentService {
             createStripeRefund(payment);
             payment.setStatus(PaymentStatus.REFUNDED);
             payment.setRefundedAt(LocalDateTime.now());
+
+        } else if (payment.getPaymentMethod() == PaymentMethod.CASH) {
+            if (order.getStatus() == OrderStatus.CONFIRMED || order.getStatus() == OrderStatus.PICKING) {
+                releaseOrderStock(order);
+            }
+            payment.setStatus(PaymentStatus.CANCELLED);
+
         } else {
-            if (payment.getPaymentMethod() == PaymentMethod.CARD
-                    && payment.getStripePaymentIntentId() != null
-                    && payment.getStatus() != PaymentStatus.CANCELLED) {
+            if (payment.getStripePaymentIntentId() != null && payment.getStatus() != PaymentStatus.CANCELLED) {
                 cancelStripeIntent(payment.getStripePaymentIntentId());
             }
             releaseOrderStock(order);

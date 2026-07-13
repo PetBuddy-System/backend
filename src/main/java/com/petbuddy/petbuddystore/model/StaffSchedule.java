@@ -12,6 +12,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "staff_schedules")
@@ -28,6 +30,8 @@ public class StaffSchedule {
 
     @Column(columnDefinition = "TEXT")
     String note;
+
+    Integer maxOrderCapacity;
 
     LocalDateTime checkInAt;
     LocalDateTime checkOutAt;
@@ -53,4 +57,7 @@ public class StaffSchedule {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "work_schedule_id", nullable = false)
     WorkSchedule workSchedule;
+
+    @OneToMany(mappedBy = "staffSchedule")
+    List<Order> orders = new ArrayList<>();
 }

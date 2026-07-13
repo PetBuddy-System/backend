@@ -2,6 +2,7 @@ package com.petbuddy.petbuddystore.service.impl;
 
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
+import com.petbuddy.petbuddystore.common.util.GeoUtils;
 import com.petbuddy.petbuddystore.dto.request.ShippingRuleRequest;
 import com.petbuddy.petbuddystore.dto.response.ShippingFeeResponse;
 import com.petbuddy.petbuddystore.dto.response.ShippingRuleResponse;
@@ -10,6 +11,7 @@ import com.petbuddy.petbuddystore.model.ShippingRule;
 import com.petbuddy.petbuddystore.model.StoreLocation;
 import com.petbuddy.petbuddystore.repository.ShippingRuleRepository;
 import com.petbuddy.petbuddystore.repository.StoreLocationRepository;
+import com.petbuddy.petbuddystore.service.OrsRoutingService;
 import com.petbuddy.petbuddystore.service.ShippingRuleService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -31,11 +33,12 @@ import java.util.List;
 public class ShippingRuleServiceImpl implements ShippingRuleService {
 
     static double FREE_SHIP_RADIUS = 5.0;
+    static double MAX_DISTANCE_FOR_ORS_CALL_KM = 15.0;
 
     ShippingRuleRepository shippingRuleRepository;
     StoreLocationRepository storeLocationRepository;
     ShippingMapper shippingMapper;
-
+    OrsRoutingService orsRoutingService;
     GeoBoundaries geoBoundaries;
 
     static GeometryFactory GEOMETRY_FACTORY = new GeometryFactory();
@@ -52,7 +55,7 @@ public class ShippingRuleServiceImpl implements ShippingRuleService {
         StoreLocation store = storeLocationRepository.findByActiveTrue()
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_LOCATION_NOT_FOUND));
 
-        double distance = calculateDistance(
+        double distance = resolveDistanceKm(
                 store.getLatitude(), store.getLongitude(), latitude, longitude);
 
         if (distance <= FREE_SHIP_RADIUS) {
@@ -63,6 +66,7 @@ public class ShippingRuleServiceImpl implements ShippingRuleService {
                 .orElseThrow(() -> new AppException(ErrorCode.SHIPPING_CONFIG_NOT_FOUND));
         return shippingMapper.toResponse(distance, config.getFee(), false);
     }
+
 
     @Override
     public ShippingRuleResponse createRule(ShippingRuleRequest request) {
@@ -121,20 +125,18 @@ public class ShippingRuleServiceImpl implements ShippingRuleService {
             throw new AppException(ErrorCode.LOCATION_ON_WATER);
         }
     }
+    private double resolveDistanceKm(double storeLat, double storeLon, double destLat, double destLon) {
+        double haversine = GeoUtils.distanceKm(storeLat, storeLon, destLat, destLon);
 
-    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-        double dLat = Math.toRadians(lat2 - lat1);
-        double dLon = Math.toRadians(lon2 - lon1);
+        if (haversine > MAX_DISTANCE_FOR_ORS_CALL_KM) {
+            return GeoUtils.estimateRoadDistanceKm(haversine);
+        }
 
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-                + Math.cos(Math.toRadians(lat1))
-                * Math.cos(Math.toRadians(lat2))
-                * Math.sin(dLon / 2)
-                * Math.sin(dLon / 2);
-
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-        double EARTH_RADIUS = 6371;
-        return EARTH_RADIUS * c;
+        try {
+            return orsRoutingService.getRoadDistanceKm(storeLat, storeLon, destLat, destLon);
+        } catch (Exception e) {
+            log.warn("ORS routing thất bại khi tính phí ship, fallback sang ước tính. Haversine={}km", haversine, e);
+            return GeoUtils.estimateRoadDistanceKm(haversine);
+        }
     }
 }

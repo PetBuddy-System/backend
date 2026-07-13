@@ -15,4 +15,7 @@ import java.util.List;
 public interface OrderRepository extends JpaRepository<Order, Long> {
     Page<Order> findByUser_UserIdOrderByCreatedAtDesc(String userId, Pageable pageable);
     List<Order> findByStatusAndPaymentExpiredAtBeforeAndPayment_PaymentMethod(
-            OrderStatus status, LocalDateTime now, PaymentMethod paymentMethod);}
+            OrderStatus status, LocalDateTime now, PaymentMethod paymentMethod);
+    long countByStaffSchedule_StaffScheduleId(String staffScheduleId);
+}
+

@@ -65,4 +65,10 @@ public interface StaffScheduleRepository extends JpaRepository<StaffSchedule, St
         WHERE ss.staffScheduleId = :staffScheduleId
     """)
     Optional<StaffSchedule> findByIdWithWorkScheduleAndStaff(@Param("staffScheduleId") String staffScheduleId);
+
+    @Query("SELECT s FROM StaffSchedule s WHERE s.workSchedule.workDate = :date AND s.scheduleStatus IN :statuses")
+    List<StaffSchedule> findOnDutySchedules(LocalDate date, List<ScheduleStatus> statuses);
+
+    @Query("SELECT s FROM StaffSchedule s WHERE s.staff.userId = :staffId AND s.workSchedule.workDate = :date AND s.scheduleStatus IN :statuses")
+    Optional<StaffSchedule> findTodayScheduleByStaffId(String staffId, LocalDate date, List<ScheduleStatus> statuses);
 }

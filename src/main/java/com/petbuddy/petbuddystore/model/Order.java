@@ -46,6 +46,10 @@ public class Order {
     @Column(columnDefinition = "NVARCHAR(255)")
     String address;
 
+    Double latitude;
+
+    Double longitude;
+
     BigDecimal shippingFee;
 
     BigDecimal totalAmount;
@@ -69,6 +73,9 @@ public class Order {
     @Column(name = "cancelled_at")
     LocalDateTime cancelledAt;
 
+    @Column(name = "cancel_reason")
+    String cancelReason;
+
     @CreationTimestamp
     @Column(updatable = false)
     LocalDateTime createdAt;
@@ -82,8 +89,8 @@ public class Order {
     List<MediaFile> mediaFiles = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "shipped_by")
-    User shippedBy;
+    @JoinColumn(name = "staff_schedule_id")
+    StaffSchedule staffSchedule;
 
     @Column(name = "shipped_at")
     LocalDateTime shippedAt;

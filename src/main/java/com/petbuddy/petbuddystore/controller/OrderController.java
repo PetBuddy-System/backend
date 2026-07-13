@@ -6,10 +6,8 @@ import com.petbuddy.petbuddystore.dto.request.CancelOrderRequest;
 import com.petbuddy.petbuddystore.dto.request.CreateOrderRequest;
 import com.petbuddy.petbuddystore.dto.request.UpdateOrderRequest;
 import com.petbuddy.petbuddystore.dto.response.OrderResponse;
-import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
 import com.petbuddy.petbuddystore.dto.response.PickingItemResponse;
 import com.petbuddy.petbuddystore.service.OrderService;
-import com.petbuddy.petbuddystore.service.PaymentService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -36,7 +34,6 @@ import java.util.List;
 public class OrderController {
 
     OrderService orderService;
-    PaymentService paymentService;
 
     @PreAuthorize("hasRole('CUSTOMER')")
     @PostMapping
@@ -44,7 +41,7 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Order created successfully", orderService.createOrder(createOrderRequest)));
     }
 
-    @PreAuthorize("hasRole('CUSTOMER')")
+    @PreAuthorize("hasRole('CUSTOMER') ")
     @GetMapping
     public ResponseEntity<ApiResponse<Page<OrderResponse>>> getMyOrders(@ParameterObject @PageableDefault(
             sort = "createdAt",
@@ -76,7 +73,7 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Picking list retrieved successfully", orderService.getPickingList(id)));
     }
 
-    @PreAuthorize("hasRole('STAFF')")
+    @PreAuthorize("hasRole('STAFF')or hasRole('MANAGER')")
     @GetMapping("/all")
     public ResponseEntity<ApiResponse<Page<OrderResponse>>> getAllOrders(Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success("Orders retrieved successfully", orderService.getAllOrder(pageable)));
@@ -89,15 +86,15 @@ public class OrderController {
                 orderService.updateOrder(orderId, request)));
     }
     @PostMapping("/{orderId}/cancel-request")
-    public ApiResponse<PaymentResponse> requestCancel(
+    public ResponseEntity<ApiResponse<OrderResponse>> requestCancel(
             @PathVariable Long orderId,
             @RequestBody @Valid CancelOrderRequest request) {
-        return ApiResponse.success(paymentService.requestCancelOrder(orderId, request.getCancelReason()));
+        return ResponseEntity.ok(ApiResponse.success("Create request cancel successfully",orderService.requestCancelOrder(orderId, request.getCancelReason())));
     }
 
     @PreAuthorize("hasRole('STAFF')")
     @PostMapping("/{orderId}/cancel-confirm")
-    public ApiResponse<PaymentResponse> confirmCancel(@PathVariable Long orderId) {
-        return ApiResponse.success(paymentService.confirmCancelOrder(orderId));
+    public ResponseEntity<ApiResponse<OrderResponse>> confirmCancel(@PathVariable Long orderId) {
+        return ResponseEntity.ok(ApiResponse.success("Cancel order successfully",orderService.confirmCancelOrder(orderId)));
     }
 }
