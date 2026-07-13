@@ -15,6 +15,7 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.DayOfWeek;
@@ -85,5 +86,14 @@ public class CatalogTimeSlotController {
             @RequestParam @NotNull Boolean isActive) {
         return ResponseEntity.ok(ApiResponse.success("Catalog time slot status updated successfully",
                 catalogTimeSlotService.updateActiveStatus(timeSlotId, isActive)));
+    }
+
+    @PutMapping("/{timeSlotId}/toggle-active")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Toggle catalog time slot active status")
+    public ResponseEntity<ApiResponse<TimeSlotResponse>> toggleTimeSlotActive(
+            @PathVariable Integer timeSlotId) {
+        return ResponseEntity.ok(ApiResponse.success("Catalog time slot active status toggled successfully",
+                catalogTimeSlotService.toggleTimeSlotActive(timeSlotId)));
     }
 }

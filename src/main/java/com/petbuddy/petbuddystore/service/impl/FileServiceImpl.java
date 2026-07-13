@@ -85,6 +85,11 @@ public class FileServiceImpl implements FileService {
         return uploadImage(file, MediaPurpose.SHIPPING, "orders/shipping-proof");
     }
 
+    @Override
+    public MediaFile uploadBookingImage(MultipartFile file) {
+        return uploadImage(file, MediaPurpose.BOOKING, "bookings");
+    }
+
     private MediaFile uploadImage(MultipartFile file, MediaPurpose mediaPurpose, String folder) {
         validateFile(file);
 

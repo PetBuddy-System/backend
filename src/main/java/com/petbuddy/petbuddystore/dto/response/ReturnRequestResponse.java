@@ -35,6 +35,7 @@ public class ReturnRequestResponse {
     LocalDateTime processedAt;
     LocalDateTime completedAt;
     LocalDateTime updatedAt;
+    LocalDateTime restockedAt;
     List<ReturnItemResponse> returnItems;
     List<MediaFileResponse> mediaFiles;
 }

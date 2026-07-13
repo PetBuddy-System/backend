@@ -9,5 +9,7 @@ import org.mapstruct.Mapping;
 public interface PaymentMapper {
     @Mapping(source = "order.orderId",   target = "orderId")
     @Mapping(source = "order.orderCode", target = "orderCode")
+    @Mapping(source = "booking.bookingId", target = "bookingId")
+    @Mapping(source = "booking.bookingCode", target = "bookingCode")
     PaymentResponse toPaymentResponse(Payment payment);
 }

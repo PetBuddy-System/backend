@@ -33,7 +33,6 @@ public class AttendanceScheduler {
 
             if (now.isAfter(absentTime)) {
                 schedule.setAttendanceStatus(AttendanceStatus.ABSENT);
-                schedule.setScheduleStatus(ScheduleStatus.ABSENT);
             }
         }
     }

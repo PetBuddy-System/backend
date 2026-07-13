@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thông báo đặt lịch - PetBuddy</title>
+</head>
+
+<body style="margin:0;padding:0;background:#fff7ed;font-family:Arial, sans-serif;color:#3f2f1f">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:30px 10px;background:#fff7ed">
+    <tr>
+        <td align="center">
+
+            <table width="620" cellpadding="0" cellspacing="0"
+                   style="background:#ffffff;border-radius:18px;border:1px solid #fed7aa;box-shadow:0 10px 28px rgba(180,103,28,0.16);overflow:hidden">
+
+                <tr>
+                    <td align="center" style="background:#fbbf24;padding:28px 30px">
+                        <h1 style="margin:0;color:#5c3513;font-size:28px">PetBuddy</h1>
+                        <p style="margin:8px 0 0;color:#7c4a16;font-size:14px">
+                            Cửa hàng chăm sóc thú cưng
+                        </p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:30px">
+                        <div style="
+                            display:inline-block;
+                            margin-bottom:18px;
+                            padding:8px 14px;
+                            background:#ffedd5;
+                            border-radius:999px;
+                            color:#c2410c;
+                            font-size:13px;
+                            font-weight:bold;
+                        " th:text="${bookingStatus}">
+                            Trạng thái đặt lịch
+                        </div>
+
+                        <h2 style="margin:0 0 12px;color:#4a2b10;font-size:24px;line-height:1.3">
+                            Xin chào <span th:text="${customerName}">Quý khách</span>,
+                        </h2>
+
+                        <p style="margin:0 0 24px;color:#6b4a2b;font-size:15px;line-height:1.7" th:text="${messageBody}">
+                            PetBuddy có cập nhật mới về lịch hẹn của bạn.
+                        </p>
+
+                        <table width="100%" cellpadding="0" cellspacing="0"
+                               style="background:#fffaf3;border:1px solid #fed7aa;border-radius:14px;overflow:hidden;border-collapse:separate;border-spacing:0">
+                            <tr>
+                                <td style="padding:15px 18px;width:38%;border-bottom:1px solid #fed7aa;color:#9a5b19;font-size:13px;font-weight:bold">
+                                    Mã đơn đặt lịch
+                                </td>
+                                <td style="padding:15px 18px;border-bottom:1px solid #fed7aa;color:#3f2f1f;font-size:15px;font-weight:bold"
+                                    th:text="${bookingCode}">
+                                    BK-000000
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:15px 18px;border-bottom:1px solid #fed7aa;color:#9a5b19;font-size:13px;font-weight:bold">
+                                    Tên khách hàng
+                                </td>
+                                <td style="padding:15px 18px;border-bottom:1px solid #fed7aa;color:#3f2f1f;font-size:15px"
+                                    th:text="${customerName}">
+                                    Nguyễn Văn A
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:15px 18px;color:#9a5b19;font-size:13px;font-weight:bold">
+                                    Lời nhắn
+                                </td>
+                                <td style="padding:15px 18px;color:#3f2f1f;font-size:15px;line-height:1.6"
+                                    th:text="${messageBody}">
+                                    Nội dung thông báo đặt lịch.
+                                </td>
+                            </tr>
+                        </table>
+
+                        <div style="
+                            margin-top:24px;
+                            padding:15px 18px;
+                            background:#fef3c7;
+                            border-radius:12px;
+                            color:#7c4a16;
+                            font-size:14px;
+                            line-height:1.6;
+                        ">
+                            Cảm ơn bạn đã tin tưởng PetBuddy. Chúng tôi sẽ chăm sóc các bé thú cưng thật chu đáo và an toàn.
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td align="center" style="padding:20px 30px;background:#fff7ed;color:#9a5b19;font-size:12px;line-height:1.6">
+                        Đây là email tự động từ hệ thống PetBuddy.<br>
+                        Nếu cần thay đổi lịch hẹn, vui lòng liên hệ cửa hàng để được hỗ trợ.
+                    </td>
+                </tr>
+
+            </table>
+
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

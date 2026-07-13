@@ -1,9 +1,6 @@
 package com.petbuddy.petbuddystore.service.impl;
 
-import com.petbuddy.petbuddystore.common.enums.OrderStatus;
-import com.petbuddy.petbuddystore.common.enums.PaymentMethod;
-import com.petbuddy.petbuddystore.common.enums.PaymentStatus;
-import com.petbuddy.petbuddystore.common.enums.ProductStatus;
+import com.petbuddy.petbuddystore.common.enums.*;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
@@ -12,6 +9,7 @@ import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.*;
 import com.petbuddy.petbuddystore.service.CartService;
 import com.petbuddy.petbuddystore.service.PaymentService;
+import com.stripe.Stripe;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
@@ -30,6 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,6 +42,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     final PaymentRepository paymentRepository;
     final OrderRepository orderRepository;
+    final BookingRepository bookingRepository;
     final UserRepository userRepository;
     final ProductBatchRepository productBatchRepository;
     final OrderBatchLocationRepository orderBatchLocationRepository;
@@ -73,6 +73,26 @@ public class PaymentServiceImpl implements PaymentService {
             createStripePayment(payment);
         }
         paymentRepository.save(payment);
+    }
+
+    @Override
+    @Transactional
+    public Payment createBookingDepositPayment(Booking booking, PaymentMethod method) {
+        Payment payment = Payment.builder()
+                .booking(booking)
+                .paymentMethod(method)
+                .amount(booking.getDepositAmount())
+                .status(PaymentStatus.PENDING)
+                .build();
+
+        booking.getPayments().add(payment);
+        paymentRepository.save(payment);
+
+        if (method == PaymentMethod.CARD) {
+            createStripeBookingDepositPayment(payment);
+        }
+
+        return paymentRepository.save(payment);
     }
 
     @Transactional
@@ -219,6 +239,83 @@ public class PaymentServiceImpl implements PaymentService {
         paymentRepository.save(payment);
     }
 
+    @Override
+    @Transactional
+    public void refundForReturn(ReturnRequest returnRequest) {
+        Payment payment = returnRequest.getOrder().getPayment();
+        RefundMethod refundMethod = returnRequest.getRefundMethod();
+
+        // ✅ NẾU LÀ BANK_TRANSFER hoặc CASH → KHÔNG GỌI STRIPE
+        if (payment.getPaymentMethod() == PaymentMethod.CASH
+                || refundMethod == RefundMethod.BANK_TRANSFER) {
+            payment.setStatus(PaymentStatus.REFUNDED);
+            payment.setRefundedAt(LocalDateTime.now());
+            paymentRepository.save(payment);
+            log.info("Hoàn tiền thủ công (không qua Stripe) cho return request {}",
+                    returnRequest.getReturnCode());
+            return;
+        }
+
+        // ✅ CHỈ GỌI STRIPE KHI CARD + STRIPE_PAYMENT
+        if (payment.getPaymentMethod() != PaymentMethod.CARD) {
+            throw new AppException(ErrorCode.REFUND_NOT_SUPPORTED);
+        }
+
+        // Tính số tiền còn lại có thể refund
+        BigDecimal refundedAmount = payment.getRefundedAmount() != null ? payment.getRefundedAmount() : BigDecimal.ZERO;
+        BigDecimal remainingAmount = payment.getAmount().subtract(refundedAmount);
+
+        if (remainingAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new AppException(ErrorCode.NO_REMAINING_AMOUNT_TO_REFUND);
+        }
+
+        BigDecimal refundAmount = returnRequest.getRefundAmount();
+
+        if (refundAmount.compareTo(remainingAmount) > 0) {
+            throw new AppException(ErrorCode.REFUND_AMOUNT_EXCEEDS_REMAINING);
+        }
+
+        // Gọi Stripe refund
+        createStripeRefundForReturn(payment, refundAmount, returnRequest);
+
+        // Cập nhật số tiền đã refund
+        payment.setRefundedAmount(refundedAmount.add(refundAmount));
+        payment.setRefundedAt(LocalDateTime.now());
+
+        // Cập nhật status dựa trên số tiền còn lại
+        if (payment.getRefundedAmount().compareTo(payment.getAmount()) >= 0) {
+            payment.setStatus(PaymentStatus.REFUNDED);
+        } else {
+            payment.setStatus(PaymentStatus.PARTIALLY_REFUNDED);
+        }
+
+        paymentRepository.save(payment);
+        log.info("Đã hoàn tiền {} cho return request {}", refundAmount, returnRequest.getReturnCode());
+    }
+
+    private void createStripeRefundForReturn(Payment payment, BigDecimal amount, ReturnRequest returnRequest) {
+        try {
+            long amountInVnd = amount.longValue();
+
+            RefundCreateParams params = RefundCreateParams.builder()
+                    .setPaymentIntent(payment.getStripePaymentIntentId())
+                    .setAmount(amountInVnd)  // ← 394.000 (không nhân 100)
+                    .putMetadata("order_id", String.valueOf(payment.getOrder().getOrderId()))
+                    .putMetadata("order_code", payment.getOrder().getOrderCode())
+                    .putMetadata("return_code", returnRequest.getReturnCode())
+                    .putMetadata("refund_amount", amount.toString())
+                    .build();
+
+            Refund refund = Refund.create(params);
+            payment.setStripeRefundId(refund.getId());
+
+        } catch (StripeException ex) {
+            log.error("Lỗi khi tạo refund Stripe cho return request {}: {}",
+                    returnRequest.getReturnCode(), ex.getMessage());
+            throw new AppException(ErrorCode.STRIPE_REFUND_FAILED);
+        }
+    }
+
     private void createStripeRefund(Payment payment) {
         try {
             RefundCreateParams params = RefundCreateParams.builder()
@@ -326,23 +423,62 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    private void createStripeBookingDepositPayment(Payment payment) {
+        try {
+            Booking booking = payment.getBooking();
+            PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
+                    .setAmount(payment.getAmount().longValue())
+                    .setCurrency("vnd")
+                    .putMetadata("booking_id", String.valueOf(booking.getBookingId()))
+                    .putMetadata("booking_code", booking.getBookingCode())
+                    .build();
+
+            PaymentIntent intent = PaymentIntent.create(params);
+
+            payment.setStripePaymentIntentId(intent.getId());
+            payment.setStripeClientSecret(intent.getClientSecret());
+            payment.setStatus(PaymentStatus.PROCESSING);
+        } catch (StripeException ex) {
+            log.error("Stripe error khi tạo PaymentIntent cho booking {}: {}",
+                    payment.getBooking().getBookingId(), ex.getMessage());
+            throw new AppException(ErrorCode.PAYMENT_STRIPE_ERROR);
+        }
+    }
+
     private void handlePaymentSucceeded(Event event) {
         String intentId = extractPaymentIntentId(event);
         Payment payment = findByStripeIntentId(intentId);
-        User user = payment.getOrder().getUser();
-        Order order = payment.getOrder();
-        if (payment.getStatus() == PaymentStatus.PAID
-                || order.getStatus() == OrderStatus.EXPIRED
-                || order.getStatus() == OrderStatus.CANCELLED) {
+        if (payment.getOrder() != null) {
+            User user = payment.getOrder().getUser();
+            Order order = payment.getOrder();
+            if (payment.getStatus() == PaymentStatus.PAID
+                    || order.getStatus() == OrderStatus.EXPIRED
+                    || order.getStatus() == OrderStatus.CANCELLED) {
+                return;
+            }
+            markPaymentSucceeded(order);
+
+            payment.setStatus(PaymentStatus.PAID);
+            payment.setPaidAt(LocalDateTime.now());
+            cartService.clearCart(order.getUser());
+            paymentRepository.save(payment);
+            user.setPaymentFailStreak(0);
             return;
         }
-        markPaymentSucceeded(order);
 
-        payment.setStatus(PaymentStatus.PAID);
-        payment.setPaidAt(LocalDateTime.now());
-        cartService.clearCart(order.getUser());
-        paymentRepository.save(payment);
-        user.setPaymentFailStreak(0);
+        if (payment.getBooking() != null) {
+            Booking booking = payment.getBooking();
+            if (payment.getStatus() == PaymentStatus.PAID
+                    || booking.getBookingStatus() == BookingStatus.CANCELLED
+                    || booking.getBookingStatus() == BookingStatus.FAILED) {
+                return;
+            }
+            payment.setStatus(PaymentStatus.PAID);
+            payment.setPaidAt(LocalDateTime.now());
+            booking.setBookingStatus(BookingStatus.PENDING_ACCEPTANCE);
+            paymentRepository.save(payment);
+            bookingRepository.save(booking);
+        }
     }
 
     private void handlePaymentFailed(Event event) {
@@ -351,7 +487,14 @@ public class PaymentServiceImpl implements PaymentService {
 
         payment.setStatus(PaymentStatus.FAILED);
         paymentRepository.save(payment);
-        releaseOrderStock(payment.getOrder());
+        if (payment.getOrder() != null) {
+            releaseOrderStock(payment.getOrder());
+        }
+        if (payment.getBooking() != null) {
+            Booking booking = payment.getBooking();
+            booking.setBookingStatus(BookingStatus.FAILED);
+            bookingRepository.save(booking);
+        }
     }
 
     private void handlePaymentCanceled(Event event) {
@@ -360,7 +503,14 @@ public class PaymentServiceImpl implements PaymentService {
 
         payment.setStatus(PaymentStatus.CANCELLED);
         paymentRepository.save(payment);
-        releaseOrderStock(payment.getOrder());
+        if (payment.getOrder() != null) {
+            releaseOrderStock(payment.getOrder());
+        }
+        if (payment.getBooking() != null) {
+            Booking booking = payment.getBooking();
+            booking.setBookingStatus(BookingStatus.CANCELLED);
+            bookingRepository.save(booking);
+        }
     }
 
     private void handleRefundUpdated(Event event) {

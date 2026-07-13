@@ -41,6 +41,32 @@ public interface StaffScheduleRepository extends JpaRepository<StaffSchedule, St
     """)
     boolean existsByWorkScheduleIdAndStatusIn(@Param("workScheduleId") String workScheduleId, @Param("statuses") List<ScheduleStatus> statuses);
 
+    @Query("""
+        SELECT ss
+        FROM StaffSchedule ss
+        JOIN FETCH ss.workSchedule ws
+        JOIN FETCH ss.staff s
+        WHERE s.userId = :staffId
+          AND ws.workDate = :date
+          AND ss.scheduleStatus = :status
+    """)
+    Optional<StaffSchedule> findWorkingSchedule(@Param("staffId") String staffId,
+                                                @Param("date") LocalDate date,
+                                                @Param("status") ScheduleStatus status);
+
+    @Query("""
+        SELECT ss
+        FROM StaffSchedule ss
+        JOIN FETCH ss.workSchedule ws
+        JOIN FETCH ss.staff s
+        WHERE s.userId = :staffId
+          AND ws.workDate = :date
+          AND ss.scheduleStatus IN :statuses
+        ORDER BY ws.startTime ASC
+    """)
+    Optional<StaffSchedule> findScheduleForDate(@Param("staffId") String staffId,
+                                                @Param("date") LocalDate date,
+                                                @Param("statuses") List<ScheduleStatus> statuses);
 
     @Query("""
         SELECT ss

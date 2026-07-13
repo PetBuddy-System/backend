@@ -50,6 +50,9 @@ public class StaffSchedule {
     @UpdateTimestamp
     LocalDateTime updatedAt;
 
+    @OneToMany(mappedBy = "staffSchedule", cascade = CascadeType.ALL)
+    List<Booking> bookings;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "staff_id", nullable = false)
     User staff;

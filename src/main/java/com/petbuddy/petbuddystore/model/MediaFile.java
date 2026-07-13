@@ -66,6 +66,10 @@ public class MediaFile {
     Product product;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "booking_detail_id")
+    BookingDetail bookingDetail;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id")
     Order order;
 

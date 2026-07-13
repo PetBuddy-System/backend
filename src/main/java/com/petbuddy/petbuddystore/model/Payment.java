@@ -28,6 +28,10 @@ public class Payment {
     @JoinColumn(name = "order_id", unique = true)
     Order order;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "booking_id")
+    Booking booking;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_method")
     PaymentMethod paymentMethod;
@@ -59,4 +63,7 @@ public class Payment {
 
     @Column(name = "refunded_at")
     LocalDateTime refundedAt;
+
+    @Column(name = "refunded_amount")
+    private BigDecimal refundedAmount;
 }

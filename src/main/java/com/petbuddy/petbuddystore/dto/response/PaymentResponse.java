@@ -20,6 +20,8 @@ public class PaymentResponse {
     Long paymentId;
     Long orderId;
     String orderCode;
+    Integer bookingId;
+    String bookingCode;
     PaymentMethod paymentMethod;
     PaymentStatus status;
     BigDecimal amount;
