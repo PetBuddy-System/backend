@@ -182,20 +182,8 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                     errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_UNIT_REQUIRED"));
                 }
 
-                if (description != null && description.length() > 5000) {
-                    errors.add(new ProductImportResponse.Error(rowNum, "DESCRIPTION_TOO_LONG"));
-                }
-
                 if (brandName != null && brandName.length() > 100) {
                     errors.add(new ProductImportResponse.Error(rowNum, "BRAND_NAME_TOO_LONG"));
-                }
-
-                if (ingredients != null && ingredients.length() > 2000) {
-                    errors.add(new ProductImportResponse.Error(rowNum, "INGREDIENTS_TOO_LONG"));
-                }
-
-                if (usageInstructions != null && usageInstructions.length() > 2000) {
-                    errors.add(new ProductImportResponse.Error(rowNum, "USAGE_INSTRUCTIONS_TOO_LONG"));
                 }
 
                 if (expiryDate != null && !expiryDate.isAfter(LocalDate.now())) {

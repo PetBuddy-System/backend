@@ -23,13 +23,10 @@ public class ProductCreationRequest {
     @Size(max = 255, message = "PRODUCT_NAME_INVALID")
     String name;
 
-    @Size(max = 2000, message = "PRODUCT_DESCRIPTION_INVALID")
     String description;
 
-    @Size(max = 1000, message = "PRODUCT_INGREDIENTS_INVALID")
     String ingredients;
 
-    @Size(max = 1000, message = "PRODUCT_USAGE_INSTRUCTIONS_INVALID")
     String usageInstructions;
 
     @NotNull(message = "PRODUCT_PRICE_REQUIRED")
