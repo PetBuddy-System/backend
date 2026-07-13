@@ -42,6 +42,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     final PaymentRepository paymentRepository;
     final OrderRepository orderRepository;
+    final BookingRepository bookingRepository;
     final UserRepository userRepository;
     final ProductBatchRepository productBatchRepository;
     final OrderBatchLocationRepository orderBatchLocationRepository;
@@ -72,6 +73,26 @@ public class PaymentServiceImpl implements PaymentService {
             createStripePayment(payment);
         }
         paymentRepository.save(payment);
+    }
+
+    @Override
+    @Transactional
+    public Payment createBookingDepositPayment(Booking booking, PaymentMethod method) {
+        Payment payment = Payment.builder()
+                .booking(booking)
+                .paymentMethod(method)
+                .amount(booking.getDepositAmount())
+                .status(PaymentStatus.PENDING)
+                .build();
+
+        booking.getPayments().add(payment);
+        paymentRepository.save(payment);
+
+        if (method == PaymentMethod.CARD) {
+            createStripeBookingDepositPayment(payment);
+        }
+
+        return paymentRepository.save(payment);
     }
 
     @Transactional
@@ -435,23 +456,62 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    private void createStripeBookingDepositPayment(Payment payment) {
+        try {
+            Booking booking = payment.getBooking();
+            PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
+                    .setAmount(payment.getAmount().longValue())
+                    .setCurrency("vnd")
+                    .putMetadata("booking_id", String.valueOf(booking.getBookingId()))
+                    .putMetadata("booking_code", booking.getBookingCode())
+                    .build();
+
+            PaymentIntent intent = PaymentIntent.create(params);
+
+            payment.setStripePaymentIntentId(intent.getId());
+            payment.setStripeClientSecret(intent.getClientSecret());
+            payment.setStatus(PaymentStatus.PROCESSING);
+        } catch (StripeException ex) {
+            log.error("Stripe error khi tạo PaymentIntent cho booking {}: {}",
+                    payment.getBooking().getBookingId(), ex.getMessage());
+            throw new AppException(ErrorCode.PAYMENT_STRIPE_ERROR);
+        }
+    }
+
     private void handlePaymentSucceeded(Event event) {
         String intentId = extractPaymentIntentId(event);
         Payment payment = findByStripeIntentId(intentId);
-        User user = payment.getOrder().getUser();
-        Order order = payment.getOrder();
-        if (payment.getStatus() == PaymentStatus.PAID
-                || order.getStatus() == OrderStatus.EXPIRED
-                || order.getStatus() == OrderStatus.CANCELLED) {
+        if (payment.getOrder() != null) {
+            User user = payment.getOrder().getUser();
+            Order order = payment.getOrder();
+            if (payment.getStatus() == PaymentStatus.PAID
+                    || order.getStatus() == OrderStatus.EXPIRED
+                    || order.getStatus() == OrderStatus.CANCELLED) {
+                return;
+            }
+            markPaymentSucceeded(order);
+
+            payment.setStatus(PaymentStatus.PAID);
+            payment.setPaidAt(LocalDateTime.now());
+            cartService.clearCart(order.getUser());
+            paymentRepository.save(payment);
+            user.setPaymentFailStreak(0);
             return;
         }
-        markPaymentSucceeded(order);
 
-        payment.setStatus(PaymentStatus.PAID);
-        payment.setPaidAt(LocalDateTime.now());
-        cartService.clearCart(order.getUser());
-        paymentRepository.save(payment);
-        user.setPaymentFailStreak(0);
+        if (payment.getBooking() != null) {
+            Booking booking = payment.getBooking();
+            if (payment.getStatus() == PaymentStatus.PAID
+                    || booking.getBookingStatus() == BookingStatus.CANCELLED
+                    || booking.getBookingStatus() == BookingStatus.FAILED) {
+                return;
+            }
+            payment.setStatus(PaymentStatus.PAID);
+            payment.setPaidAt(LocalDateTime.now());
+            booking.setBookingStatus(BookingStatus.PENDING_ACCEPTANCE);
+            paymentRepository.save(payment);
+            bookingRepository.save(booking);
+        }
     }
 
     private void handlePaymentFailed(Event event) {
@@ -460,7 +520,14 @@ public class PaymentServiceImpl implements PaymentService {
 
         payment.setStatus(PaymentStatus.FAILED);
         paymentRepository.save(payment);
-        releaseOrderStock(payment.getOrder());
+        if (payment.getOrder() != null) {
+            releaseOrderStock(payment.getOrder());
+        }
+        if (payment.getBooking() != null) {
+            Booking booking = payment.getBooking();
+            booking.setBookingStatus(BookingStatus.FAILED);
+            bookingRepository.save(booking);
+        }
     }
 
     private void handlePaymentCanceled(Event event) {
@@ -469,7 +536,14 @@ public class PaymentServiceImpl implements PaymentService {
 
         payment.setStatus(PaymentStatus.CANCELLED);
         paymentRepository.save(payment);
-        releaseOrderStock(payment.getOrder());
+        if (payment.getOrder() != null) {
+            releaseOrderStock(payment.getOrder());
+        }
+        if (payment.getBooking() != null) {
+            Booking booking = payment.getBooking();
+            booking.setBookingStatus(BookingStatus.CANCELLED);
+            bookingRepository.save(booking);
+        }
     }
 
     private void handleRefundUpdated(Event event) {

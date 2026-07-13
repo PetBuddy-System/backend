@@ -69,7 +69,10 @@ public class PetServiceImpl implements PetService {
 
     @Override
     public List<PetProfileResponse> getAllPetProfiles() {
-        return petRepository.findAll().stream()
+        String userId = SecurityContextHolder.getContext().getAuthentication().getName();
+        User user = userService.getUserEntityById(userId);
+
+        return petRepository.findByUser(user).stream()
                 .map(petMapper::toPetProfileResponse)
                 .collect(Collectors.toList());
     }

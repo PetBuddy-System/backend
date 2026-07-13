@@ -92,4 +92,36 @@ public class EmailServiceImpl implements EmailService {
                 "failCount", failCount
         ));
     }
+
+    @Override
+    public void sendBookingNotification(
+            String to,
+            String customerName,
+            String serviceName,
+            String date,
+            String time,
+            String totalAmount
+    ) {
+        try {
+            Context context = new Context();
+            context.setVariable("customerName", customerName);
+            context.setVariable("serviceName", serviceName);
+            context.setVariable("date", date);
+            context.setVariable("time", time);
+            context.setVariable("totalAmount", totalAmount);
+
+            String html = templateEngine.process("booking-notification", context);
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail);
+            helper.setTo(to);
+            helper.setSubject("PetBuddy - Booking notification");
+            helper.setText(html, true);
+            mailSender.send(message);
+        } catch (Exception e) {
+            log.info("Booking notification fallback: to={}, customerName={}, serviceName={}, date={}, time={}, totalAmount={}",
+                    to, customerName, serviceName, date, time, totalAmount);
+        }
+    }
 }

@@ -110,6 +110,13 @@ public class CatalogTimeSlotServiceImpl implements CatalogTimeSlotService {
         return timeSlotMapper.toCatalogTimeSlotResponse(catalogTimeSlotRepository.save(catalogTimeSlot));
     }
 
+    @Override
+    public TimeSlotResponse toggleTimeSlotActive(Integer timeSlotId) {
+        CatalogTimeSlot catalogTimeSlot = getTimeSlotEntity(timeSlotId);
+        catalogTimeSlot.setIsActive(!Boolean.TRUE.equals(catalogTimeSlot.getIsActive()));
+        return timeSlotMapper.toCatalogTimeSlotResponse(catalogTimeSlotRepository.save(catalogTimeSlot));
+    }
+
     private CatalogTimeSlot getTimeSlotEntity(Integer timeSlotId) {
         return catalogTimeSlotRepository.findById(timeSlotId)
                 .orElseThrow(() -> new AppException(ErrorCode.CATALOG_TIME_SLOT_NOT_FOUND));
