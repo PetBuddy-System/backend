@@ -300,6 +300,11 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private String generateAccessToken(User user){
         JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
 
+        StringBuilder scope = new StringBuilder("ROLE_" + user.getRole());
+        if (user.getStaffTask() != null) {
+            scope.append(" TASK_").append(user.getStaffTask().name());
+        }
+
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .subject(user.getUserId())
                 .issuer("petbuddy.com")
@@ -308,7 +313,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                         Instant.now().plus(20, ChronoUnit.MINUTES).toEpochMilli()
                 ))
                 .jwtID(UUID.randomUUID().toString())
-                .claim("scope", "ROLE_" + user.getRole())
+                .claim("scope", scope.toString())
                 .build();
 
         Payload payload = new Payload(claims.toJSONObject());
