@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.service.impl;
 
 import com.petbuddy.petbuddystore.common.enums.FileType;
+import com.petbuddy.petbuddystore.common.enums.MediaPurpose;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.AddToCartRequest;
@@ -27,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -201,11 +203,23 @@ public class CartServiceImpl implements CartService {
                     .description(product.getDescription())
                     .price(response.getSalePrice())
                     .salePrice(unitPrice)
-                    .imageUrl(response.getThumbnailUrl())
+                    .imageUrl(getFirstImageUrl(product))
                     .quantity(quantity)
                     .subtotal(unitPrice.multiply(BigDecimal.valueOf(quantity)))
                     .build();
         }
+    }
+
+    private String getFirstImageUrl(Product product) {
+        if (product.getMediaFiles() == null || product.getMediaFiles().isEmpty()) {
+            return null;
+        }
+        return product.getMediaFiles().stream()
+                .filter(media -> media.getFileType() == FileType.IMAGE)
+                .filter(media -> media.getMediaPurpose() == MediaPurpose.PRODUCT)
+                .min(Comparator.comparing(MediaFile::getMediaFileId))
+                .map(MediaFile::getFileUrl)
+                .orElse(null);
     }
 
     private CartItem findItemByProduct(Cart cart, UUID productId) {

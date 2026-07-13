@@ -59,6 +59,10 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
         List<ShipperSuggestionResponse> suggestions = new ArrayList<>();
 
         for (StaffSchedule schedule : onDuty) {
+            if (schedule.getStaff().getRole() != Role.STAFF
+                    || schedule.getStaff().getStaffTask() != StaffTask.SHIPPER) {
+                continue;
+            }
             int currentLoad = schedule.getOrders().size();
             if (currentLoad >= schedule.getMaxOrderCapacity()) continue;
 
@@ -76,6 +80,7 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
             suggestions.add(ShipperSuggestionResponse.builder()
                     .staffId(schedule.getStaff().getUserId())
                     .staffName(schedule.getStaff().getFullName())
+                    .staffEmail(schedule.getStaff().getEmail())
                     .currentLoad(currentLoad)
                     .maxCapacity(schedule.getMaxOrderCapacity())
                     .distanceToClusterKm(distance)
