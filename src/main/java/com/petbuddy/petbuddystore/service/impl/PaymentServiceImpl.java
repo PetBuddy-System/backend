@@ -255,41 +255,54 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     public void refundForReturn(ReturnRequest returnRequest) {
         Payment payment = returnRequest.getOrder().getPayment();
-
-        // ✅ LẤY REFUND METHOD TỪ RETURN REQUEST
         RefundMethod refundMethod = returnRequest.getRefundMethod();
 
-        // ✅ KIỂM TRA PHƯƠNG THỨC HOÀN TIỀN
-        if (refundMethod == RefundMethod.STRIPE_PAYMENT) {
-            // Hoàn qua Stripe (thẻ)
-            if (payment.getPaymentMethod() != PaymentMethod.CARD) {
-                throw new AppException(ErrorCode.REFUND_NOT_SUPPORTED);
-            }
-
-            if (payment.getStatus() != PaymentStatus.PAID) {
-                throw new AppException(ErrorCode.PAYMENT_NOT_PAID);
-            }
-
-            BigDecimal refundAmount = returnRequest.getRefundAmount();
-            createStripeRefundForReturn(payment, refundAmount, returnRequest);
-
+        // ✅ NẾU LÀ BANK_TRANSFER hoặc CASH → KHÔNG GỌI STRIPE
+        if (payment.getPaymentMethod() == PaymentMethod.CASH
+                || refundMethod == RefundMethod.BANK_TRANSFER) {
             payment.setStatus(PaymentStatus.REFUNDED);
             payment.setRefundedAt(LocalDateTime.now());
             paymentRepository.save(payment);
-
-        } else if (refundMethod == RefundMethod.BANK_TRANSFER) {
-            // Hoàn qua chuyển khoản ngân hàng
-            // Staff sẽ xử lý thủ công bên ngoài hệ thống
-            // Chỉ cần set status là REFUNDED
-            payment.setStatus(PaymentStatus.REFUNDED);
-            payment.setRefundedAt(LocalDateTime.now());
-            paymentRepository.save(payment);
-
-            log.info("Yêu cầu hoàn tiền qua chuyển khoản cho return request {}",
+            log.info("Hoàn tiền thủ công (không qua Stripe) cho return request {}",
                     returnRequest.getReturnCode());
-        } else {
-            throw new AppException(ErrorCode.REFUND_METHOD_NOT_SUPPORTED);
+            return;
         }
+
+        // ✅ CHỈ GỌI STRIPE KHI CARD + STRIPE_PAYMENT
+        if (payment.getPaymentMethod() != PaymentMethod.CARD) {
+            throw new AppException(ErrorCode.REFUND_NOT_SUPPORTED);
+        }
+
+        // Tính số tiền còn lại có thể refund
+        BigDecimal refundedAmount = payment.getRefundedAmount() != null ? payment.getRefundedAmount() : BigDecimal.ZERO;
+        BigDecimal remainingAmount = payment.getAmount().subtract(refundedAmount);
+
+        if (remainingAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new AppException(ErrorCode.NO_REMAINING_AMOUNT_TO_REFUND);
+        }
+
+        BigDecimal refundAmount = returnRequest.getRefundAmount();
+
+        if (refundAmount.compareTo(remainingAmount) > 0) {
+            throw new AppException(ErrorCode.REFUND_AMOUNT_EXCEEDS_REMAINING);
+        }
+
+        // Gọi Stripe refund
+        createStripeRefundForReturn(payment, refundAmount, returnRequest);
+
+        // Cập nhật số tiền đã refund
+        payment.setRefundedAmount(refundedAmount.add(refundAmount));
+        payment.setRefundedAt(LocalDateTime.now());
+
+        // Cập nhật status dựa trên số tiền còn lại
+        if (payment.getRefundedAmount().compareTo(payment.getAmount()) >= 0) {
+            payment.setStatus(PaymentStatus.REFUNDED);
+        } else {
+            payment.setStatus(PaymentStatus.PARTIALLY_REFUNDED);
+        }
+
+        paymentRepository.save(payment);
+        log.info("Đã hoàn tiền {} cho return request {}", refundAmount, returnRequest.getReturnCode());
     }
 
     private void createStripeRefundForReturn(Payment payment, BigDecimal amount, ReturnRequest returnRequest) {

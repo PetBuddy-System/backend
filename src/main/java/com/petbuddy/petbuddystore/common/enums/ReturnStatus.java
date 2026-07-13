@@ -5,11 +5,13 @@ public enum ReturnStatus {
 
     APPROVED,
 
+    PICKED_UP,
+
     REJECTED,
 
     COMPLETED,
 
     CANCELLED,
 
-    EXCHANGE_FAILED
+    DELIVERY_FAILED
 }

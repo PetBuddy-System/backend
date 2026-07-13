@@ -62,4 +62,7 @@ public class Payment {
 
     @Column(name = "cancel_reason")
     String cancelReason;
+
+    @Column(name = "refunded_amount")
+    private BigDecimal refundedAmount;
 }

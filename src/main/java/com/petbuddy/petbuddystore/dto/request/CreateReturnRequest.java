@@ -25,7 +25,6 @@ public class CreateReturnRequest {
 
     String description;
 
-    @NotNull(message = "INVALID_KEY")
     String refundMethod;
 
     String bankName;

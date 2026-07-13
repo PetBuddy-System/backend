@@ -136,6 +136,7 @@ public enum ErrorCode {
     NOT_SHIPPER(5210, "You are not the shipper of this order", HttpStatus.FORBIDDEN),
     SHIPPER_NOT_ON_DUTY(5211, "Shipper is not on duty", HttpStatus.FORBIDDEN),
     NOT_THE_ASSIGNED_SHIPPER(5212, "You are not the assigned shipper for this order", HttpStatus.FORBIDDEN),
+    CANCELLED_NOT_ALLOWED(5513,"Không thể hủy yêu cầu khi đang trong quá trình vận chuyển", HttpStatus.BAD_REQUEST),
 
     VOUCHER_NOT_FOUND(5301, "Voucher not found", HttpStatus.NOT_FOUND),
     VOUCHER_CODE_EXISTED(5302, "Voucher code already exists", HttpStatus.BAD_REQUEST),
@@ -171,11 +172,20 @@ public enum ErrorCode {
     PAYMENT_NOT_PAID(5513,"Đơn hàng chưa được thanh toán", HttpStatus.BAD_REQUEST),
     STRIPE_REFUND_FAILED(5514,"Hoàn tiền qua Stripe thất bại, vui lòng thử lại", HttpStatus.BAD_REQUEST),
     REFUND_METHOD_NOT_SUPPORTED(5515,"Phương thức hoàn tiền không được hỗ trợ", HttpStatus.BAD_REQUEST),
+    NO_REMAINING_AMOUNT_TO_REFUND(5516,"Không còn số tiền nào để hoàn trả", HttpStatus.BAD_REQUEST),
+    REFUND_AMOUNT_EXCEEDS_REMAINING(5517,"Số tiền hoàn trả vượt quá số tiền còn lại", HttpStatus.BAD_REQUEST),
 
 
     PROMOTION_NOT_FOUND(5601, "Promotion not found", HttpStatus.NOT_FOUND),
     PROMOTION_INVALID_DATE(5602, "Promotion date is invalid", HttpStatus.BAD_REQUEST),
     PROMOTION_DISCOUNT_INVALID(5603, "Discount value is invalid", HttpStatus.BAD_REQUEST),
+    PROMOTION_START_DATE_MUST_BE_FUTURE(5604, "Ngày bắt đầu khuyến mãi phải là ngày trong tương lai", HttpStatus.BAD_REQUEST),
+    PROMOTION_END_DATE_MUST_BE_AFTER_START_DATE(5605, "Ngày kết thúc phải sau ngày bắt đầu", HttpStatus.BAD_REQUEST),
+    PROMOTION_NAME_REQUIRED(5606, "Tên khuyến mãi là bắt buộc", HttpStatus.BAD_REQUEST),
+    PROMOTION_START_DATE_REQUIRED(5607, "Ngày bắt đầu khuyến mãi là bắt buộc", HttpStatus.BAD_REQUEST),
+    PROMOTION_END_DATE_REQUIRED(5608, "Ngày kết thúc khuyến mãi là bắt buộc", HttpStatus.BAD_REQUEST),
+    PROMOTION_NOTE_TOO_LONG(5609, "Ghi chú không được vượt quá 1000 ký tự", HttpStatus.BAD_REQUEST),
+    PROMOTION_REASON_TOO_LONG(5610, "Lý do không được vượt quá 500 ký tự", HttpStatus.BAD_REQUEST),
 
     AUDIT_LOG_NOT_FOUND(6001, "Audit log not found", HttpStatus.NOT_FOUND),
 

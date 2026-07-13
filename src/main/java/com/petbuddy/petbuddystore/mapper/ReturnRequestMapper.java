@@ -16,6 +16,7 @@ public interface ReturnRequestMapper {
     @Mapping(target = "processedBy", source = "processedBy")
     @Mapping(target = "returnItems", source = "returnItems")
     @Mapping(target = "mediaFiles", source = "mediaFiles")
+    @Mapping(target = "restockedAt", source = "restockedAt")
     ReturnRequestResponse toReturnRequestResponse(ReturnRequest returnRequest);
 
     @Mapping(target = "orderDetailId", source = "orderDetail.orderDetailId")
