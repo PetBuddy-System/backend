@@ -38,13 +38,13 @@ public class Product {
     @Column(nullable = false, columnDefinition = "NVARCHAR(255)")
     String name;
 
-    @Column(columnDefinition = "NVARCHAR(2000)")
+    @Column(columnDefinition = "TEXT")
     String description;
 
-    @Column(columnDefinition = "NVARCHAR(1000)")
+    @Column(columnDefinition = "TEXT")
     private String ingredients;
 
-    @Column(columnDefinition = "NVARCHAR(1000)")
+    @Column(columnDefinition = "TEXT")
     private String usageInstructions;
 
     @Column(nullable = false)
