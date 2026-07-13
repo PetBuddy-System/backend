@@ -255,9 +255,6 @@ public enum ErrorCode {
 
     PROMOTION_PRODUCT_NOT_FOUND(5504, "Product in promotion details not found", HttpStatus.BAD_REQUEST),
     PROMOTION_STATUS_REQUIRED(5505, "Promotion status is required", HttpStatus.BAD_REQUEST),
-    PROMOTION_NAME_REQUIRED(5506, "Promotion name is required", HttpStatus.BAD_REQUEST),
-    PROMOTION_START_DATE_REQUIRED(5507, "Start date is required", HttpStatus.BAD_REQUEST),
-    PROMOTION_END_DATE_REQUIRED(5508, "End date is required", HttpStatus.BAD_REQUEST),
     PROMOTION_DISCOUNT_TYPE_REQUIRED(5509, "Discount type is required", HttpStatus.BAD_REQUEST),
     PROMOTION_DISCOUNT_VALUE_REQUIRED(5510, "Discount value is required", HttpStatus.BAD_REQUEST),
     PROMOTION_PRODUCT_REQUIRED(5511, "Product is required", HttpStatus.BAD_REQUEST),
