@@ -48,9 +48,9 @@ public class ApplicationInitConfig {
                 log.warn("Manager has been created");
             }
 
-            if (userRepository.findByEmail("staff1@gmail.com").isEmpty()) {
+            if (userRepository.findByEmail("groomer@gmail.com").isEmpty()) {
                 User user = User.builder()
-                        .email("staff1@gmail.com")
+                        .email("groomer@gmail.com")
                         .password(passwordEncoder.encode("Groomer@1234"))
                         .fullName("Groomer Staff")
                         .role(Role.STAFF)
@@ -61,22 +61,22 @@ public class ApplicationInitConfig {
                 log.warn("Groomer Staff has been created");
             }
 
-            if (userRepository.findByEmail("staff2@gmail.com").isEmpty()) {
+            if (userRepository.findByEmail("coordinator@gmail.com").isEmpty()) {
                 User user = User.builder()
-                        .email("staff2@gmail.com")
-                        .password(passwordEncoder.encode("Cashier@1234"))
-                        .fullName("Cashier Staff")
+                        .email("coordinator@gmail.com")
+                        .password(passwordEncoder.encode("Coordinator@1234"))
+                        .fullName("Coordinator Staff")
                         .role(Role.STAFF)
-                        .staffTask(StaffTask.CASHIER)
+                        .staffTask(StaffTask.COORDINATOR)
                         .status(UserStatus.ACTIVE)
                         .build();
                 userRepository.save(user);
-                log.warn("Cashier Staff has been created");
+                log.warn("Coordinator Staff has been created");
             }
 
-            if (userRepository.findByEmail("staff3@gmail.com").isEmpty()) {
+            if (userRepository.findByEmail("shipper@gmail.com").isEmpty()) {
                 User user = User.builder()
-                        .email("staff3@gmail.com")
+                        .email("shipper@gmail.com")
                         .password(passwordEncoder.encode("Shipper@1234"))
                         .fullName("Shipper Staff")
                         .role(Role.STAFF)
@@ -87,16 +87,16 @@ public class ApplicationInitConfig {
                 log.warn("Shipper Staff has been created");
             }
 
-            if (userRepository.findByEmail("user@gmail.com").isEmpty()) {
+            if (userRepository.findByEmail("customer@gmail.com").isEmpty()) {
                 User user = User.builder()
-                        .email("user@gmail.com")
-                        .password(passwordEncoder.encode("User@1234"))
-                        .fullName("User")
+                        .email("customer@gmail.com")
+                        .password(passwordEncoder.encode("Customer@1234"))
+                        .fullName("Customer")
                         .role(Role.CUSTOMER)
                         .status(UserStatus.ACTIVE)
                         .build();
                 userRepository.save(user);
-                log.warn("User has been created");
+                log.warn("Customer has been created");
             }
         };
     }
