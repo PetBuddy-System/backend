@@ -368,9 +368,8 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
-        // ✅ CHỈ CHO HỦY KHI PENDING HOẶC APPROVED
-        if (returnRequest.getStatus() != ReturnStatus.PENDING
-                && returnRequest.getStatus() != ReturnStatus.APPROVED) {
+        // CHỈ CHO HỦY KHI PENDING
+        if (returnRequest.getStatus() != ReturnStatus.PENDING) {
             throw new AppException(ErrorCode.CANCELLED_NOT_ALLOWED);
         }
 
@@ -473,9 +472,7 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
         checkLogin();
         User currentUser = getCurrentUser();
 
-        ReturnRequest returnRequest = returnRequestRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RETURN_REQUEST_NOT_FOUND));
-
+        ReturnRequest returnRequest = returnRequestRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.RETURN_REQUEST_NOT_FOUND));
         ReturnStatus newStatus;
         try {
             newStatus = ReturnStatus.valueOf(request.getStatus());
@@ -485,64 +482,67 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
 
         ReturnStatus currentStatus = returnRequest.getStatus();
 
-        validateStatusTransition(currentStatus, newStatus);
+        validateStatusTransition(returnRequest.getType(), currentStatus, newStatus);
 
         // ============ XỬ LÝ EXCHANGE ============
         if (returnRequest.getType() == ReturnType.EXCHANGE) {
             switch (newStatus) {
                 case APPROVED:
-                    returnStockService.confirmStockForExchange(returnRequest);
+                    // Đã reserve stock khi tạo request, không cần confirm ở đây
                     break;
-                case PICKED_UP:
-                    // ✅ Shipper đã lấy hàng, đang vận chuyển
-                    // Không xử lý stock
-                    log.info("Shipper đã lấy hàng cho yêu cầu đổi hàng {}", returnRequest.getReturnCode());
-                    break;
+
                 case COMPLETED:
-                    // ✅ Giao hàng thành công
+                    // Đổi hàng thành công -> xác nhận sử dụng stock đã reserve
+                    returnStockService.confirmStockForExchange(returnRequest);
                     log.info("Đổi hàng thành công cho yêu cầu {}", returnRequest.getReturnCode());
                     break;
+
                 case DELIVERY_FAILED:
-                    // ✅ Giao hàng thất bại → Trả lại stock
-                    returnStockService.returnStockForExchange(returnRequest);
+                    // Giao hàng thất bại -> trả lại đúng stock đã reserve
+                    returnStockService.releaseReservedStock(returnRequest);
                     break;
+
                 case REJECTED:
-                case CANCELLED:
+                    // Từ chối -> trả lại đúng stock đã reserve
                     returnStockService.releaseReservedStock(returnRequest);
                     break;
             }
         }
 
-        // ============ XỬ LÝ RETURN ============
         if (returnRequest.getType() == ReturnType.RETURN) {
             switch (newStatus) {
                 case APPROVED:
-                    // Chấp nhận hoàn tiền
+                    // Chấp nhận yêu cầu trả hàng
                     break;
+
                 case PICKED_UP:
-                    // ✅ Shipper đã lấy hàng, đang vận chuyển
+                    // Shipper đã lấy hàng từ khách
                     log.info("Shipper đã lấy hàng cho yêu cầu trả hàng {}", returnRequest.getReturnCode());
                     break;
+
                 case COMPLETED:
-                    // ✅ Lấy hàng thành công → Hoàn tiền
+                    // Đã nhận hàng thành công -> hoàn tiền
                     paymentService.refundForReturn(returnRequest);
                     returnRequest.setRefundStatus(RefundStatus.SUCCESS);
                     break;
+
                 case DELIVERY_FAILED:
-                    // ✅ Lấy hàng thất bại
+                    // Không lấy được hàng
                     returnRequest.setRefundStatus(RefundStatus.FAILED);
                     break;
+
                 case REJECTED:
-                case CANCELLED:
                     returnRequest.setRefundStatus(RefundStatus.FAILED);
                     break;
             }
         }
 
         returnRequest.setStatus(newStatus);
+
         if (request.getStaffNote() != null) {
             returnRequest.setStaffNote(request.getStaffNote());
         }
+
         returnRequest.setProcessedBy(currentUser);
         returnRequest.setProcessedAt(LocalDateTime.now());
 
@@ -554,37 +554,51 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
         return returnRequestMapper.toReturnRequestResponse(saved);
     }
 
-
-    private void validateStatusTransition(ReturnStatus current, ReturnStatus next) {
+    private void validateStatusTransition(ReturnType type, ReturnStatus current, ReturnStatus next) {
         // Trạng thái cuối không thể chuyển tiếp
-        if (current == ReturnStatus.REJECTED || current == ReturnStatus.COMPLETED
-                || current == ReturnStatus.CANCELLED || current == ReturnStatus.DELIVERY_FAILED) {
+        if (current == ReturnStatus.REJECTED
+                || current == ReturnStatus.COMPLETED
+                || current == ReturnStatus.CANCELLED
+                || current == ReturnStatus.DELIVERY_FAILED) {
             throw new AppException(ErrorCode.RETURN_REQUEST_ALREADY_PROCESSED);
         }
 
-        // PENDING → APPROVED, REJECTED, CANCELLED
+        // PENDING -> APPROVED, REJECTED
         if (current == ReturnStatus.PENDING) {
-            if (next != ReturnStatus.APPROVED && next != ReturnStatus.REJECTED
-                    && next != ReturnStatus.CANCELLED) {
+            if (next != ReturnStatus.APPROVED
+                    && next != ReturnStatus.REJECTED) {
                 throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
             }
             return;
         }
 
-        // APPROVED → PICKED_UP, CANCELLED (chỉ EXCHANGE có thể CANCELLED)
+        // APPROVED
         if (current == ReturnStatus.APPROVED) {
-            if (next != ReturnStatus.PICKED_UP && next != ReturnStatus.CANCELLED) {
-                throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+
+            if (type == ReturnType.RETURN) {
+                // RETURN:
+                // APPROVED -> PICKED_UP hoặc DELIVERY_FAILED
+                if (next != ReturnStatus.PICKED_UP
+                        && next != ReturnStatus.DELIVERY_FAILED) {
+                    throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                }
+            } else {
+                // EXCHANGE:
+                // APPROVED -> COMPLETED hoặc DELIVERY_FAILED
+                if (next != ReturnStatus.COMPLETED
+                        && next != ReturnStatus.DELIVERY_FAILED) {
+                    throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                }
             }
             return;
         }
 
-        // PICKED_UP → COMPLETED, DELIVERY_FAILED (KHÔNG cho CANCELLED)
+        // Chỉ RETURN mới có PICKED_UP
         if (current == ReturnStatus.PICKED_UP) {
-            if (next != ReturnStatus.COMPLETED && next != ReturnStatus.DELIVERY_FAILED) {
+            // PICKED_UP -> COMPLETED
+            if (next != ReturnStatus.COMPLETED) {
                 throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
             }
-            return;
         }
     }
     private BigDecimal getRefundPolicyFactor(ReturnReason reason, long days) {

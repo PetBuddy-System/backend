@@ -3,6 +3,7 @@ package com.petbuddy.petbuddystore.dto.response;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Data
@@ -16,4 +17,6 @@ public class RestockBatchResponse {
     Integer deductedQuantity;
     Integer availableToRestock;
     Integer restockQuantity;
+    LocalDateTime restockedAt;
+    String restockedBy;
 }
