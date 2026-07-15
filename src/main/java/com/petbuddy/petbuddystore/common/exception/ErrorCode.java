@@ -254,6 +254,8 @@ public enum ErrorCode {
     STAFF_OVERLAP_BOOKING(9029, "Staff already has another booking at this time", HttpStatus.CONFLICT),
     INVALID_BOOKING_TYPE(9030, "Booking type does not match the service location", HttpStatus.BAD_REQUEST),
     INVALID_PET_SPECIES(9031, "Pet species does not match the service", HttpStatus.BAD_REQUEST),
+    PET_WEIGHT_REQUIRED(9032, "Pet weight is required for this service", HttpStatus.BAD_REQUEST),
+    INVALID_PET_WEIGHT_RANGE(9033, "Pet weight range is not supported by this service", HttpStatus.BAD_REQUEST),
 
     WORK_SCHEDULE_IN_THE_PAST(9017, "Cannot create a work schedule in the past", HttpStatus.BAD_REQUEST),
     TOO_EARLY_TO_CHECKIN(9018, "It's not time to check in yet", HttpStatus.BAD_REQUEST),

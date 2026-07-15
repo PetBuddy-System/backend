@@ -23,4 +23,6 @@ public class TimeSlotCreationRequest {
     LocalTime startTime;
 
     Boolean isActive = true;
+
+    Integer maxPets = 5;
 }

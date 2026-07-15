@@ -22,4 +22,7 @@ public class TimeSlotUpdateRequest {
 
     @NotNull
     Boolean isActive;
+
+    @NotNull
+    Integer maxPets;
 }

@@ -47,6 +47,9 @@ public class CatalogTimeSlotServiceImpl implements CatalogTimeSlotService {
         if (catalogTimeSlot.getIsActive() == null) {
             catalogTimeSlot.setIsActive(true);
         }
+        if (catalogTimeSlot.getMaxPets() == null) {
+            catalogTimeSlot.setMaxPets(5);
+        }
 
         return timeSlotMapper.toCatalogTimeSlotResponse(catalogTimeSlotRepository.save(catalogTimeSlot));
     }

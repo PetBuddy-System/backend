@@ -264,11 +264,21 @@ public class BookingServiceImpl implements BookingService {
                 to,
                 List.of(BookingStatus.FAILED, BookingStatus.CANCELLED)
         );
-        if (bookedPets + reservedInRequest >= MAX_PETS_PER_SLOT) {
+        int maxPets = timeSlot.getMaxPets() != null ? timeSlot.getMaxPets() : 5;
+        if (bookedPets + reservedInRequest >= maxPets) {
             throw new AppException(ErrorCode.BOOKING_SLOT_UNAVAILABLE);
         }
 
-        BigDecimal unitPrice = catalog.getPrice();
+        // Tính phụ thu theo hạng cân thú cưng
+        BigDecimal surcharge = BigDecimal.ZERO;
+        if (catalog.getSurchargeConfig() != null && !catalog.getSurchargeConfig().isBlank()) {
+            if (pet.getWeight() == null) {
+                throw new AppException(ErrorCode.PET_WEIGHT_REQUIRED);
+            }
+            WeightRange petWeightRange = WeightRange.fromWeight(pet.getWeight());
+            surcharge = parseSurcharge(catalog.getSurchargeConfig(), petWeightRange);
+        }
+        BigDecimal unitPrice = catalog.getPrice().add(surcharge);
         return BookingDetail.builder()
                 .booking(booking)
                 .pet(pet)
@@ -547,5 +557,15 @@ public class BookingServiceImpl implements BookingService {
                 .createdAt(payment.getCreatedAt())
                 .updatedAt(payment.getUpdatedAt())
                 .build();
+    }
+
+    private BigDecimal parseSurcharge(String surchargeConfig, WeightRange weightRange) {
+        for (String part : surchargeConfig.split(";")) {
+            String[] kv = part.split(":");
+            if (kv.length == 2 && kv[0].trim().equalsIgnoreCase(weightRange.name())) {
+                return new BigDecimal(kv[1].trim());
+            }
+        }
+        return BigDecimal.ZERO;
     }
 }

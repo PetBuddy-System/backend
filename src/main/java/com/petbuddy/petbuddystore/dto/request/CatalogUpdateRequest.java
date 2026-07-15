@@ -22,4 +22,5 @@ public class CatalogUpdateRequest {
     Integer durationMinute;
     Integer bufferTime;
     CatalogStatus status;
+    String surchargeConfig;
 }

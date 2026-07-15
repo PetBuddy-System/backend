@@ -39,6 +39,10 @@ public class CatalogTimeSlot {
     @Column(name = "is_active", nullable = false)
     Boolean isActive = true;
 
+    @Builder.Default
+    @Column(name = "max_pets")
+    Integer maxPets = 5;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "catalog_id", nullable = false)
     Catalog catalog;

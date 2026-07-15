@@ -8,4 +8,13 @@ public enum WeightRange {
     EXTRA_LARGE,    // 18kg - 25kg
     EXTRA_EXTRA_LARGE // Trên 25kg
     ;
+
+    public static WeightRange fromWeight(double weight) {
+        if (weight < 5.0)  return EXTRA_SMALL;
+        if (weight < 8.0)  return SMALL;
+        if (weight < 12.0) return MEDIUM;
+        if (weight < 18.0) return LARGE;
+        if (weight < 25.0) return EXTRA_LARGE;
+        return EXTRA_EXTRA_LARGE;
+    }
 }
