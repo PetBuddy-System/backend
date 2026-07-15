@@ -1,4 +1,4 @@
-package com.petbuddy.petbuddystore.common.scheduler;
+package com.petbuddy.petbuddystore.scheduler;
 
 import com.petbuddy.petbuddystore.service.ProductBatchService;
 import lombok.AccessLevel;

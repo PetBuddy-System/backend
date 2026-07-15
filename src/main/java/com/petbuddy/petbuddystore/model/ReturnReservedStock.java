@@ -27,6 +27,15 @@ public class ReturnReservedStock {
     @JoinColumn(name = "batch_id")
     ProductBatch batch;
 
+    @Column(name = "restocked_quantity", nullable = true)
+    Integer restockedQuantity;
+
+    @Column(name = "restocked_at", nullable = true)
+    LocalDateTime restockedAt;
+
+    @Column(name = "restocked_by", nullable = true)
+    String restockedBy;
+
     Integer quantity;
 
     LocalDateTime reservedAt;
