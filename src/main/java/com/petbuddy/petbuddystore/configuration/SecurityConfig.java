@@ -61,11 +61,8 @@ public class SecurityConfig {
                         .authenticationEntryPoint(new JwtAuthenticationEntryPoint())
         );
 
-//        httpSecurity.oauth2Login(Customizer.withDefaults());
-
         httpSecurity.csrf(AbstractHttpConfigurer::disable);
         httpSecurity.cors(cors -> cors.configurationSource(corsConfigurationSource()));
-
         return httpSecurity.build();
     }
 
