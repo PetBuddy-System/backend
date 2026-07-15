@@ -19,4 +19,5 @@ public interface UserService {
     User getUserEntityById(String userId);
     UserResponse updateUser(String userId, UserUpdateRequest request, List<MultipartFile> images);
     UserResponse updateUserStatus(String userId, UserUpdateStatusRequest request);
+    UserResponse getCurrentUser();
 }

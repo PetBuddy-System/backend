@@ -2,6 +2,7 @@ package com.petbuddy.petbuddystore.service.impl;
 
 import com.petbuddy.petbuddystore.common.enums.AuditAction;
 import com.petbuddy.petbuddystore.common.enums.AuditEntityType;
+import com.petbuddy.petbuddystore.common.enums.PaymentStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.AuditLogFilterRequest;
@@ -584,5 +585,155 @@ public class AuditServiceImpl implements AuditService {
         }
 
         return ids;
+    }
+
+    @Override
+    @Transactional
+    public void logPaymentPaid(Payment payment, User performedBy) {
+        List<AuditChange> changes = new ArrayList<>();
+        changes.add(AuditChange.builder().field("orderCode")
+                .oldValue(null)
+                .newValue(payment.getOrder() != null ? payment.getOrder().getOrderCode() : null)
+                .build());
+        changes.add(AuditChange.builder().field("amount")
+                .oldValue(null)
+                .newValue(payment.getAmount() != null ? payment.getAmount().toString() : null)
+                .build());
+        changes.add(AuditChange.builder().field("paymentMethod")
+                .oldValue(null)
+                .newValue(payment.getPaymentMethod() != null ? payment.getPaymentMethod().name() : null)
+                .build());
+        changes.add(AuditChange.builder().field("status")
+                .oldValue(null)
+                .newValue(PaymentStatus.PAID.name())
+                .build());
+
+        AuditLog auditLog = AuditLog.builder()
+                .entityType(AuditEntityType.PAYMENT)
+                .entityId(longToUuid(payment.getPaymentId()))
+                .entityCode(payment.getOrder() != null ? payment.getOrder().getOrderCode()
+                        : ("PAY-" + payment.getPaymentId()))
+                .action(AuditAction.PAY)
+                .changes(changes)
+                .reason("PAYMENT_SUCCEEDED")
+                .performedBy(performedBy)
+                .performedAt(LocalDateTime.now())
+                .build();
+
+        auditLogRepository.save(auditLog);
+    }
+
+    @Override
+    @Transactional
+    public void logPaymentRefund(Payment payment, BigDecimal refundAmount, boolean isFullRefund,
+                                 String reason, User performedBy) {
+        List<AuditChange> changes = new ArrayList<>();
+        changes.add(AuditChange.builder().field("refundAmount")
+                .oldValue(null)
+                .newValue(refundAmount != null ? refundAmount.toString() : null)
+                .build());
+        changes.add(AuditChange.builder().field("totalRefundedAmount")
+                .oldValue(null)
+                .newValue(payment.getRefundedAmount() != null ? payment.getRefundedAmount().toString() : null)
+                .build());
+        changes.add(AuditChange.builder().field("status")
+                .oldValue(null)
+                .newValue(payment.getStatus() != null ? payment.getStatus().name() : null)
+                .build());
+        changes.add(AuditChange.builder().field("stripeRefundId")
+                .oldValue(null)
+                .newValue(payment.getStripeRefundId())
+                .build());
+
+        AuditLog auditLog = AuditLog.builder()
+                .entityType(AuditEntityType.PAYMENT)
+                .entityId(longToUuid(payment.getPaymentId()))
+                .entityCode(payment.getOrder() != null ? payment.getOrder().getOrderCode()
+                        : ("PAY-" + payment.getPaymentId()))
+                .action(AuditAction.REFUND)
+                .changes(changes)
+                .reason(reason != null ? reason : (isFullRefund ? "FULL_REFUND" : "PARTIAL_REFUND"))
+                .performedBy(performedBy)
+                .performedAt(LocalDateTime.now())
+                .build();
+
+        auditLogRepository.save(auditLog);
+    }
+
+    @Override
+    @Transactional
+    public void logVoucherCreate(Voucher voucher, String reason, String note, User performedBy) {
+        List<AuditChange> changes = new ArrayList<>();
+        changes.add(AuditChange.builder().field("voucherCode").oldValue(null).newValue(voucher.getVoucherCode()).build());
+        changes.add(AuditChange.builder().field("voucherName").oldValue(null).newValue(voucher.getVoucherName()).build());
+        changes.add(AuditChange.builder().field("discountType").oldValue(null)
+                .newValue(voucher.getDiscountType() != null ? voucher.getDiscountType().name() : null).build());
+        changes.add(AuditChange.builder().field("discountValue").oldValue(null)
+                .newValue(voucher.getDiscountValue() != null ? voucher.getDiscountValue().toString() : null).build());
+        changes.add(AuditChange.builder().field("maxDiscount").oldValue(null)
+                .newValue(voucher.getMaxDiscount() != null ? voucher.getMaxDiscount().toString() : null).build());
+        changes.add(AuditChange.builder().field("minOrderValue").oldValue(null)
+                .newValue(voucher.getMinOrderValue() != null ? voucher.getMinOrderValue().toString() : null).build());
+        changes.add(AuditChange.builder().field("applyScope").oldValue(null)
+                .newValue(voucher.getApplyScope() != null ? voucher.getApplyScope().name() : null).build());
+        changes.add(AuditChange.builder().field("usageLimit").oldValue(null)
+                .newValue(voucher.getUsageLimit() != null ? voucher.getUsageLimit().toString() : null).build());
+        changes.add(AuditChange.builder().field("perUserLimit").oldValue(null)
+                .newValue(voucher.getPerUserLimit() != null ? voucher.getPerUserLimit().toString() : null).build());
+        changes.add(AuditChange.builder().field("startAt").oldValue(null)
+                .newValue(voucher.getStartAt() != null ? voucher.getStartAt().toString() : null).build());
+        changes.add(AuditChange.builder().field("expiredAt").oldValue(null)
+                .newValue(voucher.getExpiredAt() != null ? voucher.getExpiredAt().toString() : null).build());
+        changes.add(AuditChange.builder().field("status").oldValue(null)
+                .newValue(voucher.getStatus() != null ? voucher.getStatus().name() : null).build());
+
+        AuditLog auditLog = AuditLog.builder()
+                .entityType(AuditEntityType.VOUCHER)
+                .entityId(voucher.getVoucherId())
+                .entityCode(voucher.getVoucherCode())
+                .action(AuditAction.CREATE)
+                .changes(changes)
+                .reason(reason != null ? reason : "CREATE_VOUCHER")
+                .note(note)
+                .performedBy(performedBy)
+                .performedAt(LocalDateTime.now())
+                .build();
+
+        auditLogRepository.save(auditLog);
+    }
+
+    @Override
+    @Transactional
+    public void logVoucherUsage(UserVouchers userVoucher, User performedBy) {
+        List<AuditChange> changes = new ArrayList<>();
+        changes.add(AuditChange.builder().field("voucherCode")
+                .oldValue(null)
+                .newValue(userVoucher.getVoucher() != null ? userVoucher.getVoucher().getVoucherCode() : null)
+                .build());
+        changes.add(AuditChange.builder().field("userEmail")
+                .oldValue(null)
+                .newValue(userVoucher.getUser() != null ? userVoucher.getUser().getEmail() : null)
+                .build());
+        changes.add(AuditChange.builder().field("usedAt")
+                .oldValue(null)
+                .newValue(userVoucher.getUsedAt() != null ? userVoucher.getUsedAt().toString() : null)
+                .build());
+
+        AuditLog auditLog = AuditLog.builder()
+                .entityType(AuditEntityType.VOUCHER_USAGE)
+                .entityId(userVoucher.getUserVoucherId())
+                .entityCode(userVoucher.getVoucher() != null ? userVoucher.getVoucher().getVoucherCode() : null)
+                .action(AuditAction.USE)
+                .changes(changes)
+                .reason("VOUCHER_APPLIED")
+                .performedBy(performedBy)
+                .performedAt(LocalDateTime.now())
+                .build();
+
+        auditLogRepository.save(auditLog);
+    }
+
+    private UUID longToUuid(Long id) {
+        return UUID.nameUUIDFromBytes(("PAYMENT:" + id).toString().getBytes());
     }
 }

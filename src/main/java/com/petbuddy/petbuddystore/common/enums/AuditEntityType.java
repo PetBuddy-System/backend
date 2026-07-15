@@ -4,4 +4,7 @@ public enum AuditEntityType {
     PRODUCT,
     PROMOTION,
     BATCH,
+    PAYMENT,
+    VOUCHER,
+    VOUCHER_USAGE
 }

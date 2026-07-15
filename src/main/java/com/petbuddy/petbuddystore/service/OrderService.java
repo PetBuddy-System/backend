@@ -1,12 +1,10 @@
 package com.petbuddy.petbuddystore.service;
 
 import com.petbuddy.petbuddystore.common.enums.OrderStatus;
-import com.petbuddy.petbuddystore.common.enums.PaymentMethod;
 import com.petbuddy.petbuddystore.dto.request.CreateOrderRequest;
 import com.petbuddy.petbuddystore.dto.request.UpdateOrderRequest;
 import com.petbuddy.petbuddystore.dto.response.OrderResponse;
 import com.petbuddy.petbuddystore.dto.response.PickingItemResponse;
-import com.petbuddy.petbuddystore.model.Order;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
@@ -23,5 +21,4 @@ public interface OrderService {
     OrderResponse updateOrder(Long orderId, UpdateOrderRequest request);
     OrderResponse requestCancelOrder(Long orderId, String cancelReason);
     OrderResponse confirmCancelOrder(Long orderId);
-    void expirePendingOrders();
 }

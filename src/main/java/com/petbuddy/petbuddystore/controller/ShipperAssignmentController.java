@@ -22,20 +22,20 @@ public class ShipperAssignmentController {
     ShipperAssignmentService shipperAssignmentService;
 
     @GetMapping("/{orderId}/shipper-suggestions")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_COORDINATOR')")
     public ResponseEntity<ApiResponse<List<ShipperSuggestionResponse>>> getShipperSuggestions(@PathVariable Long orderId) {
         return ResponseEntity.ok(ApiResponse.success("Get shipper suggestion successful", shipperAssignmentService.getShipperSuggestions(orderId)));
     }
 
     @PostMapping("/{orderId}/assign-shipper")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_COORDINATOR')")
     public ResponseEntity<ApiResponse<Void>> assignShipper(@PathVariable Long orderId, @RequestParam String staffId) {
         shipperAssignmentService.assignShipper(orderId, staffId);
         return ResponseEntity.ok(ApiResponse.success("Assign shipper successful"));
     }
 
     @GetMapping("/{staffId}/delivery-route")
-    @PreAuthorize("hasRole('STAFF')")
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_SHIPPER')")
     public ResponseEntity<ApiResponse<List<DeliveryStopResponse>>> suggestDeliveryRoute(@RequestParam String staffId) {
         return ResponseEntity.ok(ApiResponse.success("Suggest delivery route successful", shipperAssignmentService.suggestDeliveryRoute(staffId)));
     }

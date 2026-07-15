@@ -2,10 +2,7 @@ package com.petbuddy.petbuddystore.service;
 
 import com.petbuddy.petbuddystore.common.enums.PaymentMethod;
 import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
-import com.petbuddy.petbuddystore.model.Booking;
-import com.petbuddy.petbuddystore.model.Order;
-import com.petbuddy.petbuddystore.model.ReturnRequest;
-import com.petbuddy.petbuddystore.model.Payment;
+import com.petbuddy.petbuddystore.model.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -20,5 +17,6 @@ public interface PaymentService {
     void releaseOrderStock(Order order);
     void cancelPaymentForOrder(Order order);
     void refundForReturn(ReturnRequest returnRequest);
+    void cancelStripeIntent(String paymentIntentId);
 
 }

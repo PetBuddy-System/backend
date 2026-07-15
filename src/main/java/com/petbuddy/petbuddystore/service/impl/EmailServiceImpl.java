@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 
 @Service
@@ -86,10 +87,12 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
-    public void sendAccountSuspendedEmail(String toEmail, int failCount) {
+    public void sendAccountSuspendedEmail(String toEmail, int failCount, LocalDateTime suspendedAt, LocalDateTime suspendedUntil) {
         String subject = "Tài khoản của bạn đã bị tạm khóa";
         sendHtmlEmail(toEmail, subject, "account-suspended", Map.of(
-                "failCount", failCount
+                "failCount", failCount,
+                "suspendedAt", suspendedAt,
+                "suspendedUntil", suspendedUntil
         ));
     }
 

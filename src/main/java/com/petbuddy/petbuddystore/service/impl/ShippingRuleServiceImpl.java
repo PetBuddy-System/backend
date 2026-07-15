@@ -135,7 +135,6 @@ public class ShippingRuleServiceImpl implements ShippingRuleService {
         try {
             return orsRoutingService.getRoadDistanceKm(storeLat, storeLon, destLat, destLon);
         } catch (Exception e) {
-            log.warn("ORS routing thất bại khi tính phí ship, fallback sang ước tính. Haversine={}km", haversine, e);
             return GeoUtils.estimateRoadDistanceKm(haversine);
         }
     }

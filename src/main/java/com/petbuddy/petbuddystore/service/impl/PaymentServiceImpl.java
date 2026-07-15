@@ -7,17 +7,19 @@ import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
 import com.petbuddy.petbuddystore.mapper.PaymentMapper;
 import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.*;
+import com.petbuddy.petbuddystore.service.AuditService;
 import com.petbuddy.petbuddystore.service.CartService;
 import com.petbuddy.petbuddystore.service.PaymentService;
-import com.stripe.Stripe;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.Refund;
+import com.stripe.model.StripeObject;
 import com.stripe.net.Webhook;
 import com.stripe.param.PaymentIntentCreateParams;
 import com.stripe.param.RefundCreateParams;
+import lombok.experimental.NonFinal;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,20 +39,22 @@ import java.util.UUID;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-@FieldDefaults(level = AccessLevel.PRIVATE)
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PaymentServiceImpl implements PaymentService {
 
-    final PaymentRepository paymentRepository;
-    final OrderRepository orderRepository;
-    final BookingRepository bookingRepository;
-    final UserRepository userRepository;
-    final ProductBatchRepository productBatchRepository;
-    final OrderBatchLocationRepository orderBatchLocationRepository;
-    final CartService cartService;
-    final PaymentMapper paymentMapper;
+    PaymentRepository paymentRepository;
+    OrderRepository orderRepository;
+    BookingRepository bookingRepository;
 
+    ProductBatchRepository productBatchRepository;
+    OrderBatchLocationRepository orderBatchLocationRepository;
+    CartService cartService;
+    AuditService auditService;
+    PaymentMapper paymentMapper;
+
+    @NonFinal
     @Value("${webhook.secret-key}")
-    String webhookSecret;
+    protected String webhookSecret;
 
     @Override
     public void createPayment(Order order, PaymentMethod method) {
@@ -105,12 +109,20 @@ public class PaymentServiceImpl implements PaymentService {
             throw new AppException(ErrorCode.PAYMENT_WEBHOOK_INVALID);
         }
 
-        switch (event.getType()) {
-            case "payment_intent.succeeded"       -> handlePaymentSucceeded(event);
-            case "payment_intent.payment_failed"  -> handlePaymentFailed(event);
-            case "payment_intent.canceled"        -> handlePaymentCanceled(event);
-            case "charge.refunded", "refund.updated" -> handleRefundUpdated(event);
-            default -> log.debug("Bỏ qua event không xử lý: {}", event.getType());
+        try {
+            switch (event.getType()) {
+                case "payment_intent.succeeded"       -> handlePaymentSucceeded(event);
+                case "payment_intent.payment_failed"  -> handlePaymentFailed(event);
+                case "payment_intent.canceled"        -> handlePaymentCanceled(event);
+                case "charge.refunded", "refund.updated" -> handleRefundUpdated(event);
+                default -> log.debug("Bỏ qua event không xử lý: {}", event.getType());
+            }
+        } catch (AppException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Lỗi không xác định khi xử lý webhook event {} (type={}): {}",
+                    event.getId(), event.getType(), ex.getMessage(), ex);
+            throw new AppException(ErrorCode.PAYMENT_WEBHOOK_INVALID);
         }
     }
 
@@ -221,7 +233,6 @@ public class PaymentServiceImpl implements PaymentService {
             createStripeRefund(payment);
             payment.setStatus(PaymentStatus.REFUNDED);
             payment.setRefundedAt(LocalDateTime.now());
-
         } else if (payment.getPaymentMethod() == PaymentMethod.CASH) {
             if (order.getStatus() == OrderStatus.CONFIRMED || order.getStatus() == OrderStatus.PICKING) {
                 releaseOrderStock(order);
@@ -371,35 +382,26 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         orderBatchLocationRepository.saveAll(locations);
-        log.info("Đã giữ hàng tạm thời cho order {}", order.getOrderCode());
+    }
+
+    private <T extends StripeObject> T extractStripeObject(Event event, Class<T> type, ErrorCode errorCodeOnFailure) {
+        var deserializer = event.getDataObjectDeserializer();
+
+        return deserializer.getObject()
+                .map(type::cast)
+                .orElseGet(() -> {
+                    try {
+                        return type.cast(deserializer.deserializeUnsafe());
+                    } catch (Exception e) {
+                        log.error("Không thể deserialize event {} (type={}), có thể do lệch phiên bản API Stripe: {}",
+                                event.getId(), event.getType(), e.getMessage());
+                        throw new AppException(errorCodeOnFailure);
+                    }
+                });
     }
 
     private String extractPaymentIntentId(Event event) {
-        var deserializer = event.getDataObjectDeserializer();
-
-        log.info("Event type: {}, deserializer present: {}",
-                event.getType(), deserializer.getObject().isPresent());
-
-        if (deserializer.getObject().isPresent()) {
-            String id = ((PaymentIntent) deserializer.getObject().get()).getId();
-            log.info("Extracted PaymentIntent ID (object): {}", id);
-            return id;
-        }
-
-        log.warn("Dùng raw JSON fallback cho event: {}", event.getId());
-        try {
-            String rawJson = deserializer.getRawJson();
-            log.info("Raw JSON: {}", rawJson);
-            com.google.gson.JsonObject jsonObject = com.google.gson.JsonParser
-                    .parseString(rawJson)
-                    .getAsJsonObject();
-            String id = jsonObject.get("id").getAsString();
-            log.info("Extracted PaymentIntent ID (raw): {}", id);
-            return id;
-        } catch (Exception e) {
-            log.error("Không thể parse PaymentIntent id: {}", e.getMessage());
-            throw new AppException(ErrorCode.PAYMENT_INTENT_NOT_FOUND);
-        }
+        return extractStripeObject(event, PaymentIntent.class, ErrorCode.PAYMENT_INTENT_NOT_FOUND).getId();
     }
 
     private void createStripePayment(Payment payment) {
@@ -417,8 +419,6 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setStripeClientSecret(intent.getClientSecret());
             payment.setStatus(PaymentStatus.PROCESSING);
         } catch (StripeException ex) {
-            log.error("Stripe error khi tạo PaymentIntent cho order {}: {}",
-                    payment.getOrder().getOrderId(), ex.getMessage());
             throw new AppException(ErrorCode.PAYMENT_STRIPE_ERROR);
         }
     }
@@ -439,8 +439,6 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setStripeClientSecret(intent.getClientSecret());
             payment.setStatus(PaymentStatus.PROCESSING);
         } catch (StripeException ex) {
-            log.error("Stripe error khi tạo PaymentIntent cho booking {}: {}",
-                    payment.getBooking().getBookingId(), ex.getMessage());
             throw new AppException(ErrorCode.PAYMENT_STRIPE_ERROR);
         }
     }
@@ -463,6 +461,8 @@ public class PaymentServiceImpl implements PaymentService {
             cartService.clearCart(order.getUser());
             paymentRepository.save(payment);
             user.setPaymentFailStreak(0);
+
+            auditService.logPaymentPaid(payment, user);
             return;
         }
 
@@ -501,6 +501,9 @@ public class PaymentServiceImpl implements PaymentService {
         String intentId = extractPaymentIntentId(event);
         Payment payment = findByStripeIntentId(intentId);
 
+        if (payment.getStatus() == PaymentStatus.FAILED || payment.getStatus() == PaymentStatus.PAID) {
+            return;
+        }
         payment.setStatus(PaymentStatus.CANCELLED);
         paymentRepository.save(payment);
         if (payment.getOrder() != null) {
@@ -514,36 +517,26 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private void handleRefundUpdated(Event event) {
-        var deserializer = event.getDataObjectDeserializer();
-        Refund refund;
+        Refund refund = extractStripeObject(event, Refund.class, ErrorCode.REFUND_WEBHOOK_PARSE_FAILED);
 
-        if (deserializer.getObject().isPresent()) {
-            refund = (Refund) deserializer.getObject().get();
-        } else {
-            try {
-                com.google.gson.JsonObject json = com.google.gson.JsonParser
-                        .parseString(deserializer.getRawJson())
-                        .getAsJsonObject();
-                refund = Refund.retrieve(json.get("id").getAsString());
-            } catch (Exception e) {
-                return;
-            }
-        }
-
-        Payment payment = paymentRepository.findByStripeRefundId(refund.getId()).orElse(null);
-        if (payment == null) {
-            return;
-        }
+        Payment payment = paymentRepository.findByStripeRefundId(refund.getId())
+                .orElseThrow(() -> new AppException(ErrorCode.REFUND_PAYMENT_NOT_FOUND));
+        User user = payment.getOrder() != null ? payment.getOrder().getUser() : null;
 
         switch (refund.getStatus()) {
             case "succeeded" -> {
                 payment.setStatus(PaymentStatus.REFUNDED);
                 payment.setRefundedAt(LocalDateTime.now());
+                auditService.logPaymentRefund(payment, payment.getAmount(), true, "REFUND_SUCCEEDED", user);
             }
-            case "failed" -> {
-                payment.setStatus(PaymentStatus.PAID);
-            }
-            default -> log.info("Refund {} đang ở trạng thái {}", refund.getId(), refund.getStatus());
+            case "failed" -> payment.setStatus(PaymentStatus.PAID);
+            case "pending", "requires_action" -> log.info(
+                    "Refund {} đang ở trạng thái '{}', chưa cập nhật status payment liên quan",
+                    refund.getId(), refund.getStatus());
+            default -> log.warn(
+                    "Nhận trạng thái refund mới/không xác định '{}' cho refund {} - có thể Stripe " +
+                            "vừa thêm status mới, cần rà soát lại logic xử lý",
+                    refund.getStatus(), refund.getId());
         }
 
         paymentRepository.save(payment);
@@ -562,6 +555,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    @Override
     public void cancelStripeIntent(String paymentIntentId) {
         try {
             PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);

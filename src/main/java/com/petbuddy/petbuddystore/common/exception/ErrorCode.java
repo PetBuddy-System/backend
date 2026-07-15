@@ -151,6 +151,7 @@ public enum ErrorCode {
     VOUCHER_MIN_ORDER_NOT_MET(5307, "Order value does not meet voucher requirement",HttpStatus.BAD_REQUEST),
     VOUCHER_USER_LIMIT_EXCEEDED(5308, "You have reached voucher usage limit",HttpStatus.BAD_REQUEST),
     VOUCHER_INVALID_STATUS(5309, "Voucher is inactive",HttpStatus.BAD_REQUEST),
+    VOUCHER_NOT_APPLICABLE_WITH_PROMOTION(5310, "Voucher is not applicable with promotion",HttpStatus.BAD_REQUEST),
 
     LOCATION_OUTSIDE_HCM(5401,"Location is outside Ho Chi Minh city",HttpStatus.BAD_REQUEST),
     INVALID_COORDINATES(5402,"Invalid coordinates",HttpStatus.BAD_REQUEST),
@@ -172,12 +173,15 @@ public enum ErrorCode {
     PAYMENT_ALREADY_PAID(5509, "Payment is already paid", HttpStatus.BAD_REQUEST),
     PAYMENT_REFUND_NOT_ALLOWED(5510,"Payment refund is not allowed",HttpStatus.BAD_REQUEST),
     PAYMENT_REFUND_FAILED(5511,"Payment refund failed",HttpStatus.INTERNAL_SERVER_ERROR),
-    REFUND_NOT_SUPPORTED(5512,"Phương thức thanh toán không hỗ trợ hoàn tiền", HttpStatus.BAD_REQUEST),
-    PAYMENT_NOT_PAID(5513,"Đơn hàng chưa được thanh toán", HttpStatus.BAD_REQUEST),
-    STRIPE_REFUND_FAILED(5514,"Hoàn tiền qua Stripe thất bại, vui lòng thử lại", HttpStatus.BAD_REQUEST),
-    REFUND_METHOD_NOT_SUPPORTED(5515,"Phương thức hoàn tiền không được hỗ trợ", HttpStatus.BAD_REQUEST),
-    NO_REMAINING_AMOUNT_TO_REFUND(5516,"Không còn số tiền nào để hoàn trả", HttpStatus.BAD_REQUEST),
-    REFUND_AMOUNT_EXCEEDS_REMAINING(5517,"Số tiền hoàn trả vượt quá số tiền còn lại", HttpStatus.BAD_REQUEST),
+    REFUND_WEBHOOK_PARSE_FAILED(5512,"Failed to parse refund webhook",HttpStatus.BAD_REQUEST),
+    REFUND_PAYMENT_NOT_FOUND(5513,"Payment for refund not found",HttpStatus.NOT_FOUND),
+    REFUND_NOT_SUPPORTED(5514,"Phương thức thanh toán không hỗ trợ hoàn tiền", HttpStatus.BAD_REQUEST),
+    PAYMENT_NOT_PAID(5515,"Đơn hàng chưa được thanh toán", HttpStatus.BAD_REQUEST),
+    STRIPE_REFUND_FAILED(5516,"Hoàn tiền qua Stripe thất bại, vui lòng thử lại", HttpStatus.BAD_REQUEST),
+    REFUND_METHOD_NOT_SUPPORTED(5517,"Phương thức hoàn tiền không được hỗ trợ", HttpStatus.BAD_REQUEST),
+    NO_REMAINING_AMOUNT_TO_REFUND(5518,"Không còn số tiền nào để hoàn trả", HttpStatus.BAD_REQUEST),
+    REFUND_AMOUNT_EXCEEDS_REMAINING(5519,"Số tiền hoàn trả vượt quá số tiền còn lại", HttpStatus.BAD_REQUEST),
+
 
 
     PROMOTION_NOT_FOUND(5601, "Promotion not found", HttpStatus.NOT_FOUND),

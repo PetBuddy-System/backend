@@ -108,5 +108,11 @@ public class UserController {
                 .body(ApiResponse.success("User updated successfully",userService.updateUserStatus(userId, request)));
     }
 
+    @GetMapping("/me")
+    @Operation(description = "Lấy thông tin user hiện tại dựa theo JWT token")
+    public ResponseEntity<ApiResponse<UserResponse>> getCurrentUser(){
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(ApiResponse.success(userService.getCurrentUser()));
+    }
 
 }

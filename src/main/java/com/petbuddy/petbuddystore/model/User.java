@@ -47,6 +47,9 @@ public class User {
     @Column(name = "payment_fail_streak", nullable = false)
     int paymentFailStreak = 0;
 
+    @Column(name = "suspended_until")
+    LocalDateTime suspendedUntil;
+
     @Column(columnDefinition = "VARCHAR(50)")
     @Enumerated(EnumType.STRING)
     Role role;
