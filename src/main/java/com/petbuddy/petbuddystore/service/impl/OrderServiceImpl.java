@@ -215,16 +215,16 @@ public class OrderServiceImpl implements OrderService {
                 if (!order.getStaffSchedule().getStaff().getUserId().equals(currentUser.getUserId())){
                     throw new AppException(ErrorCode.NOT_THE_ASSIGNED_SHIPPER);
                 }
-            }
-            case DELIVERED -> {
-                if (newStatus != OrderStatus.COMPLETED)
-                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
                 if (order.getPayment().getStatus() != PaymentStatus.PAID) {
                     Payment payment = order.getPayment();
                     payment.setStatus(PaymentStatus.PAID);
                     payment.setPaidAt(LocalDateTime.now());
                     paymentRepository.save(payment);
                 }
+            }
+            case DELIVERED -> {
+                if (newStatus != OrderStatus.COMPLETED)
+                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
             }
             case COMPLETED, CANCELLED -> throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
         }
@@ -306,7 +306,13 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public Page<OrderResponse> getAllOrder(Pageable pageable) {
         checkLogin();
-        Page<Order> orders = orderRepository.findAll(pageable);
+        User user = getCurrentUser();
+        Page<Order> orders;
+        if (user.getRole() == Role.STAFF && user.getStaffTask() == StaffTask.SHIPPER) {
+            orders = orderRepository.findByStaffSchedule_Staff_UserId(user.getUserId(), pageable);
+        } else {
+            orders = orderRepository.findAll(pageable);
+        }
         return orders.map(orderMapper::toOrderResponse);
     }
 

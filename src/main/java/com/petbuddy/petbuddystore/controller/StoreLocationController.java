@@ -30,7 +30,7 @@ public class StoreLocationController {
                 storeLocationService.createLocation(request)));
     }
 
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('STAFF')")
     @GetMapping("/current")
     public ResponseEntity<ApiResponse<StoreLocationResponse>> getCurrent() {
         return ResponseEntity.ok(ApiResponse.success("Current store location retrieved successfully",
