@@ -3,6 +3,8 @@ package com.petbuddy.petbuddystore.service.impl;
 import com.petbuddy.petbuddystore.common.enums.AttendanceStatus;
 import com.petbuddy.petbuddystore.common.enums.Role;
 import com.petbuddy.petbuddystore.common.enums.ScheduleStatus;
+import com.petbuddy.petbuddystore.common.enums.StaffTask;
+import com.petbuddy.petbuddystore.common.enums.UserStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.response.StaffScheduleResponse;
@@ -50,6 +52,26 @@ public class StaffScheduleServiceImpl implements StaffScheduleService {
         StaffSchedule staffSchedule = staffScheduleRepository.findByIdWithWorkScheduleAndStaff(staffScheduleId)
                 .orElseThrow(() -> new AppException(ErrorCode.STAFF_SCHEDULE_NOT_EXISTED));
         return staffScheduleMapper.toStaffScheduleResponse(staffSchedule);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StaffScheduleResponse> getWorkingGroomers(LocalDate date) {
+        User coordinator = getCurrentStaff();
+        if (coordinator.getStaffTask() != StaffTask.COORDINATOR) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        LocalDate targetDate = date == null ? LocalDate.now() : date;
+        return staffScheduleRepository.findWorkingSchedulesByStaffTask(
+                        targetDate,
+                        ScheduleStatus.WORKING,
+                        StaffTask.GROOMER,
+                        UserStatus.ACTIVE
+                )
+                .stream()
+                .map(staffScheduleMapper::toStaffScheduleResponse)
+                .toList();
     }
 
     @Override

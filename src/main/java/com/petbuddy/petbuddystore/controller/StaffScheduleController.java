@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -39,6 +40,14 @@ public class StaffScheduleController {
     public ResponseEntity<ApiResponse<StaffScheduleResponse>> getStaffSchedule(@PathVariable String staffScheduleId){
         return ResponseEntity.status(HttpStatus.OK)
                 .body(ApiResponse.success(staffScheduleService.getStaffSchedule(staffScheduleId)));
+    }
+
+    @GetMapping("/working-groomers")
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_COORDINATOR')")
+    @Operation(description = "Lấy danh sách Groomer đã check-in để coordinator gán booking")
+    public ResponseEntity<ApiResponse<List<StaffScheduleResponse>>> getWorkingGroomers(
+            @RequestParam(required = false) LocalDate date) {
+        return ResponseEntity.ok(ApiResponse.success(staffScheduleService.getWorkingGroomers(date)));
     }
 
     @PatchMapping("/{staffScheduleId}/check-in")

@@ -31,6 +31,7 @@ public class CatalogTimeSlotController {
     CatalogTimeSlotService catalogTimeSlotService;
 
     @PostMapping
+    @PreAuthorize("hasRole('MANAGER')")
     @Operation(summary = "Create catalog time slot")
     public ResponseEntity<ApiResponse<TimeSlotResponse>> createTimeSlot(
             @RequestBody @Valid TimeSlotCreationRequest request) {
@@ -71,6 +72,7 @@ public class CatalogTimeSlotController {
     }
 
     @PutMapping("/{timeSlotId}")
+    @PreAuthorize("hasRole('MANAGER')")
     @Operation(summary = "Update catalog time slot")
     public ResponseEntity<ApiResponse<TimeSlotResponse>> updateTimeSlot(
             @PathVariable Integer timeSlotId,
@@ -89,7 +91,7 @@ public class CatalogTimeSlotController {
     }
 
     @PutMapping("/{timeSlotId}/toggle-active")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('MANAGER')")
     @Operation(summary = "Toggle catalog time slot active status")
     public ResponseEntity<ApiResponse<TimeSlotResponse>> toggleTimeSlotActive(
             @PathVariable Integer timeSlotId) {

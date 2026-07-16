@@ -26,4 +26,6 @@ public class TimeSlotResponse {
     LocalTime startTime;
 
     Boolean isActive;
+
+    Integer maxPets;
 }

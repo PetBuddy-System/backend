@@ -55,7 +55,7 @@ public class User {
     Role role;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "staff_task")
+    @Column(name = "staff_task", columnDefinition = "VARCHAR(50)")
     StaffTask staffTask;
 
     @Enumerated(EnumType.STRING)

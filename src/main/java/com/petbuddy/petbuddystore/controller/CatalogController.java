@@ -29,6 +29,7 @@ public class CatalogController {
 
 
     @PostMapping("/create")
+    @PreAuthorize("hasRole('MANAGER')")
     @Operation(
             summary = "Create pet service catalog",
             description = "Tạo mới một dịch vụ chăm sóc thú cưng."
@@ -66,6 +67,7 @@ public class CatalogController {
         );
     }
     @PutMapping("/{catalogId}/update")
+    @PreAuthorize("hasRole('MANAGER')")
     @Operation(
             summary = "Update catalog",
             description = "Cập nhật dịch vụ chăm sóc thú cưng (hỗ trợ cập nhật lẻ các trường)."
@@ -82,7 +84,7 @@ public class CatalogController {
     }
 
     @PutMapping("/{catalogId}/status")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('MANAGER')")
     @Operation(summary = "Update catalog status")
     public ResponseEntity<ApiResponse<CatalogResponse>> updateCatalogStatus(
             @PathVariable Integer catalogId,

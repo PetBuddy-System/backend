@@ -21,6 +21,7 @@ public class BookingResponse {
     String customerPhone;
     String address;
     LocalDateTime scheduledAt;
+    LocalDateTime estimatedEndAt;
     BookingStatus bookingStatus;
     BigDecimal totalAmount;
     BigDecimal depositAmount;

@@ -11,4 +11,5 @@ public interface StaffScheduleService {
     StaffScheduleResponse checkIn(String staffScheduleId);
     StaffScheduleResponse checkOut(String staffScheduleId);
     StaffScheduleResponse getStaffSchedule(String staffScheduleId);
+    List<StaffScheduleResponse> getWorkingGroomers(LocalDate date);
 }
