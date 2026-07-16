@@ -155,6 +155,7 @@ public enum ErrorCode {
     VOUCHER_USER_LIMIT_EXCEEDED(5308, "You have reached voucher usage limit",HttpStatus.BAD_REQUEST),
     VOUCHER_INVALID_STATUS(5309, "Voucher is inactive",HttpStatus.BAD_REQUEST),
     VOUCHER_NOT_APPLICABLE_WITH_PROMOTION(5310, "Voucher is not applicable with promotion",HttpStatus.BAD_REQUEST),
+    VOUCHER_SHIPPING_MUST_BE_FIXED_AMOUNT(5311, "Shipping must be fixed amount", HttpStatus.BAD_REQUEST),
 
     LOCATION_OUTSIDE_HCM(5401,"Location is outside Ho Chi Minh city",HttpStatus.BAD_REQUEST),
     INVALID_COORDINATES(5402,"Invalid coordinates",HttpStatus.BAD_REQUEST),

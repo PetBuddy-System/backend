@@ -215,16 +215,18 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
         return route;
     }
 
-    private double resolveDistanceKm(double lat1, double lon1, double lat2, double lon2) {
-        double haversine = GeoUtils.distanceKm(lat1, lon1, lat2, lon2);
+    private double resolveDistanceKm(double storeLat, double storeLon, double destLat, double destLon) {
+        double haversine = GeoUtils.distanceKm(storeLat, storeLon, destLat, destLon);
 
-        if (haversine > MAX_DISTANCE_FOR_ORS_CALL_KM) {
-            return GeoUtils.estimateRoadDistanceKm(haversine);
+        if (haversine < MAX_DISTANCE_FOR_ORS_CALL_KM) {
+            return haversine;
         }
 
         try {
-            return orsRoutingService.getRoadDistanceKm(lat1, lon1, lat2, lon2);
+            return orsRoutingService.getRoadDistanceKm(storeLat, storeLon, destLat, destLon);
         } catch (Exception e) {
+            log.warn("ORS call failed for store=({}, {}) dest=({}, {}), falling back to estimated distance",
+                    storeLat, storeLon, destLat, destLon, e);
             return GeoUtils.estimateRoadDistanceKm(haversine);
         }
     }

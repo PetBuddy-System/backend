@@ -32,7 +32,6 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ShippingRuleServiceImpl implements ShippingRuleService {
 
-    static double FREE_SHIP_RADIUS = 5.0;
     static double MAX_DISTANCE_FOR_ORS_CALL_KM = 15.0;
 
     ShippingRuleRepository shippingRuleRepository;
@@ -57,10 +56,6 @@ public class ShippingRuleServiceImpl implements ShippingRuleService {
 
         double distance = resolveDistanceKm(
                 store.getLatitude(), store.getLongitude(), latitude, longitude);
-
-        if (distance <= FREE_SHIP_RADIUS) {
-            return shippingMapper.toResponse(distance, BigDecimal.ZERO, true);
-        }
 
         ShippingRule config = shippingRuleRepository.findRuleByDistance(distance)
                 .orElseThrow(() -> new AppException(ErrorCode.SHIPPING_CONFIG_NOT_FOUND));
@@ -128,13 +123,15 @@ public class ShippingRuleServiceImpl implements ShippingRuleService {
     private double resolveDistanceKm(double storeLat, double storeLon, double destLat, double destLon) {
         double haversine = GeoUtils.distanceKm(storeLat, storeLon, destLat, destLon);
 
-        if (haversine > MAX_DISTANCE_FOR_ORS_CALL_KM) {
-            return GeoUtils.estimateRoadDistanceKm(haversine);
+        if (haversine < MAX_DISTANCE_FOR_ORS_CALL_KM) {
+            return haversine;
         }
 
         try {
             return orsRoutingService.getRoadDistanceKm(storeLat, storeLon, destLat, destLon);
         } catch (Exception e) {
+            log.warn("ORS call failed for store=({}, {}) dest=({}, {}), falling back to estimated distance",
+                    storeLat, storeLon, destLat, destLon, e);
             return GeoUtils.estimateRoadDistanceKm(haversine);
         }
     }

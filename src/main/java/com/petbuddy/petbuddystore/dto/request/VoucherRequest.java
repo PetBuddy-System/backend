@@ -1,5 +1,7 @@
 package com.petbuddy.petbuddystore.dto.request;
 
+import com.petbuddy.petbuddystore.common.enums.ApplyScope;
+import com.petbuddy.petbuddystore.common.enums.DiscountType;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -16,11 +18,11 @@ import java.time.LocalDateTime;
 public class VoucherRequest {
     String voucherCode;
     String voucherName;
-    String discountType;
+    DiscountType discountType;
     BigDecimal discountValue;
     BigDecimal maxDiscount;
     BigDecimal minOrderValue;
-    String applyScope;
+    ApplyScope applyScope;
     Integer usageLimit;
     Integer perUserLimit;
     LocalDateTime startAt;

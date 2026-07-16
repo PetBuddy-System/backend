@@ -84,6 +84,7 @@ public class OrderServiceImpl implements OrderService {
                 .latitude(request.getLatitude())
                 .note(request.getNote())
                 .shippingFee(shippingFee)
+                .shippingDiscountAmount(BigDecimal.ZERO)
                 .status(OrderStatus.PENDING)
                 .paymentExpiredAt(LocalDateTime.now().plusMinutes(1))
                 .createdAt(LocalDateTime.now())
@@ -121,12 +122,14 @@ public class OrderServiceImpl implements OrderService {
         }
 
         BigDecimal discountAmount = voucherService.applyVoucherToOrder(order, request.getVoucherCode(), user, total);
-        BigDecimal finalAmount = total.subtract(discountAmount);
+        BigDecimal finalAmount = total.subtract(discountAmount)
+                .add(order.getShippingFee())
+                .subtract(order.getShippingDiscountAmount());
 
         order.setOrderDetails(orderDetails);
         order.setTotalAmount(total);
         order.setDiscountAmount(discountAmount);
-        order.setFinalAmount(finalAmount.add(shippingFee));
+        order.setFinalAmount(finalAmount);
         orderRepository.save(order);
 
         paymentService.createPayment(order, method);
@@ -162,10 +165,14 @@ public class OrderServiceImpl implements OrderService {
             BigDecimal discountAmount = voucherService.applyVoucherToOrder(
                     order, request.getVoucherCode(), user, order.getTotalAmount());
             order.setDiscountAmount(discountAmount);
-            order.setFinalAmount(order.getTotalAmount().subtract(discountAmount).add(order.getShippingFee()));
+            order.setFinalAmount(order.getTotalAmount().subtract(discountAmount)
+                    .add(order.getShippingFee())
+                    .subtract(order.getShippingDiscountAmount()));
         }
         else {
+            voucherService.releaseVoucherFromOrder(order);
             order.setDiscountAmount(BigDecimal.ZERO);
+            order.setFinalAmount(order.getTotalAmount().add(order.getShippingFee()));
         }
 
         Order updated = orderRepository.save(order);

@@ -56,6 +56,8 @@ public class Order {
 
     BigDecimal discountAmount;
 
+    BigDecimal shippingDiscountAmount;
+    
     BigDecimal finalAmount;
 
     @Column(columnDefinition = "NVARCHAR(500)")
