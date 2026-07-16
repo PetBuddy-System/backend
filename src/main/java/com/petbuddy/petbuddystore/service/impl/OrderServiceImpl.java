@@ -282,7 +282,7 @@ public class OrderServiceImpl implements OrderService {
         order.setStatus(OrderStatus.CANCELLED);
         order.setUpdatedAt(LocalDateTime.now());
         Order saved = orderRepository.save(order);
-        auditService.logPaymentRefund(order.getPayment(), order.getPayment().getAmount(), true, "CONFIRM_REFUND_SUCCEEDED", getCurrentUser());
+        auditService.logPaymentRefund(order.getPayment(), order.getPayment().getAmount(), order.getCancelReason(), getCurrentUser());
         return orderMapper.toOrderResponse(saved);
     }
 

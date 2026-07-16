@@ -625,8 +625,7 @@ public class AuditServiceImpl implements AuditService {
 
     @Override
     @Transactional
-    public void logPaymentRefund(Payment payment, BigDecimal refundAmount, boolean isFullRefund,
-                                 String reason, User performedBy) {
+    public void logPaymentRefund(Payment payment, BigDecimal refundAmount, String reason, User performedBy) {
         List<AuditChange> changes = new ArrayList<>();
         changes.add(AuditChange.builder().field("refundAmount")
                 .oldValue(null)
@@ -652,7 +651,7 @@ public class AuditServiceImpl implements AuditService {
                         : ("PAY-" + payment.getPaymentId()))
                 .action(AuditAction.REFUND)
                 .changes(changes)
-                .reason(reason != null ? reason : (isFullRefund ? "FULL_REFUND" : "PARTIAL_REFUND"))
+                .reason(reason)
                 .performedBy(performedBy)
                 .performedAt(LocalDateTime.now())
                 .build();
