@@ -86,5 +86,5 @@ public class User {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    List<ProductReview> reviews = new ArrayList<>();
+    List<Review> reviews = new ArrayList<>();
 }

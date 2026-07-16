@@ -2,12 +2,14 @@ package com.petbuddy.petbuddystore.controller;
 
 import com.petbuddy.petbuddystore.common.enums.ReviewStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
+import com.petbuddy.petbuddystore.dto.request.OrderReviewRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductReviewCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductReviewUpdateRequest;
 import com.petbuddy.petbuddystore.dto.request.ReviewStatusUpdateRequest;
+import com.petbuddy.petbuddystore.dto.response.OrderReviewResponse;
 import com.petbuddy.petbuddystore.dto.response.ProductReviewManagerResponse;
 import com.petbuddy.petbuddystore.dto.response.ProductReviewResponse;
-import com.petbuddy.petbuddystore.service.ProductReviewService;
+import com.petbuddy.petbuddystore.service.ReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -22,19 +24,21 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-@Tag(name = "Product Review API", description = "Quản lí đánh giá sản phẩm")
-public class ProductReviewController {
+@Tag(name = "Review API", description = "Quản lý đánh giá")
+public class ReviewController {
 
-    ProductReviewService reviewService;
+    ReviewService reviewService;
 
-    // ============ PUBLIC ============
+    // ========================================
+    // PRODUCT REVIEW APIs (GIỮ NGUYÊN DTO CŨ)
+    // ========================================
+
     @GetMapping("/products/{productId}/reviews")
-    @Operation(description = "Lấy danh sách đánh giá của sản phẩm (có lọc theo số sao)")
+    @Operation(description = "Lấy danh sách đánh giá của sản phẩm")
     public ResponseEntity<ApiResponse<Page<ProductReviewResponse>>> getProductReviews(
             @PathVariable String productId,
             @RequestParam(required = false) Integer rating,
@@ -45,29 +49,32 @@ public class ProductReviewController {
     ) {
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
-        return ResponseEntity.status(HttpStatus.OK)
-                .body(ApiResponse.success(reviewService.getProductReviews(productId, rating, pageable)));
+        return ResponseEntity.ok(
+                ApiResponse.success(reviewService.getProductReviews(productId, rating, pageable))
+        );
     }
 
-    // ============ USER ============
     @PostMapping("/products/{productId}/reviews")
     @Operation(description = "Tạo đánh giá sản phẩm")
-    public ResponseEntity<ApiResponse<ProductReviewResponse>> createReview(
+    public ResponseEntity<ApiResponse<ProductReviewResponse>> createProductReview(
             @PathVariable String productId,
             @Valid @RequestBody ProductReviewCreationRequest request
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Review created successfully", reviewService.createReview(productId, request)));
+                .body(ApiResponse.success(
+                        "Review created successfully",
+                        reviewService.createProductReview(productId, request)
+                ));
     }
 
     @GetMapping("/products/{productId}/reviews/me")
-    @Operation(description = "Lấy đánh giá của tôi cho sản phẩm (trả về null nếu chưa review)")
-    public ResponseEntity<ApiResponse<ProductReviewResponse>> getMyReview(
+    @Operation(description = "Lấy đánh giá của tôi cho sản phẩm")
+    public ResponseEntity<ApiResponse<ProductReviewResponse>> getMyProductReview(
             @PathVariable String productId
     ) {
-        ProductReviewResponse response = reviewService.getMyReview(productId);
-        return ResponseEntity.status(HttpStatus.OK)
-                .body(ApiResponse.success(response));
+        return ResponseEntity.ok(
+                ApiResponse.success(reviewService.getMyProductReview(productId))
+        );
     }
 
     @PutMapping("/reviews/{reviewId}")
@@ -76,8 +83,12 @@ public class ProductReviewController {
             @PathVariable String reviewId,
             @Valid @RequestBody ProductReviewUpdateRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.OK)
-                .body(ApiResponse.success("Review updated successfully", reviewService.updateReview(reviewId, request)));
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Review updated successfully",
+                        reviewService.updateReview(reviewId, request)
+                )
+        );
     }
 
     @DeleteMapping("/reviews/{reviewId}")
@@ -86,18 +97,50 @@ public class ProductReviewController {
             @PathVariable String reviewId
     ) {
         reviewService.deleteReview(reviewId);
-        return ResponseEntity.status(HttpStatus.OK)
-                .body(ApiResponse.success("Review deleted successfully", null));
+        return ResponseEntity.ok(
+                ApiResponse.success("Review deleted successfully", null)
+        );
     }
 
-    // ============ MANAGER/ADMIN ============
+    // ========================================
+    // ORDER REVIEW APIs (THÊM MỚI)
+    // ========================================
+
+    @PostMapping("/orders/{orderId}/reviews")
+    @Operation(description = "Tạo đánh giá đơn hàng")
+    public ResponseEntity<ApiResponse<OrderReviewResponse>> createOrderReview(
+            @PathVariable Long orderId,
+            @Valid @RequestBody OrderReviewRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(
+                        "Order review created successfully",
+                        reviewService.createOrderReview(orderId, request)
+                ));
+    }
+
+    @GetMapping("/orders/{orderId}/reviews")
+    @Operation(description = "Lấy đánh giá của đơn hàng")
+    public ResponseEntity<ApiResponse<OrderReviewResponse>> getOrderReview(
+            @PathVariable Long orderId
+    ) {
+        return ResponseEntity.ok(
+                ApiResponse.success(reviewService.getOrderReview(orderId))
+        );
+    }
+
+    // ========================================
+    // MANAGEMENT APIs (GIỮ NGUYÊN)
+    // ========================================
+
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @GetMapping("/management/reviews")
-    @Operation(description = "Quản lí danh sách đánh giá (tìm kiếm, lọc theo rating và status, sắp xếp)")
+    @Operation(description = "Quản lý danh sách đánh giá")
     public ResponseEntity<ApiResponse<Page<ProductReviewManagerResponse>>> getAllReviews(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Integer rating,
             @RequestParam(required = false) ReviewStatus status,
+            @RequestParam(required = false) String reviewType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
@@ -105,8 +148,9 @@ public class ProductReviewController {
     ) {
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
-        return ResponseEntity.status(HttpStatus.OK)
-                .body(ApiResponse.success(reviewService.getAllReviews(keyword, rating, status, pageable)));
+        return ResponseEntity.ok(
+                ApiResponse.success(reviewService.getAllReviews(keyword, rating, status, reviewType, pageable))
+        );
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
@@ -117,17 +161,19 @@ public class ProductReviewController {
             @Valid @RequestBody ReviewStatusUpdateRequest request
     ) {
         reviewService.updateReviewStatus(reviewId, request);
-        return ResponseEntity.status(HttpStatus.OK)
-                .body(ApiResponse.success("Review status updated successfully", null));
+        return ResponseEntity.ok(
+                ApiResponse.success("Review status updated successfully", null)
+        );
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @GetMapping("/management/reviews/{reviewId}")
-    @Operation(description = "Lấy chi tiết đánh giá (có avatar đầy đủ)")
+    @Operation(description = "Lấy chi tiết đánh giá cho quản lý")
     public ResponseEntity<ApiResponse<ProductReviewManagerResponse>> getReviewDetailForManager(
             @PathVariable String reviewId
     ) {
-        return ResponseEntity.status(HttpStatus.OK)
-                .body(ApiResponse.success(reviewService.getReviewDetailForManager(reviewId)));
+        return ResponseEntity.ok(
+                ApiResponse.success(reviewService.getReviewDetailForManager(reviewId))
+        );
     }
 }
