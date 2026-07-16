@@ -1,6 +1,8 @@
 package com.petbuddy.petbuddystore.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.petbuddy.petbuddystore.common.enums.Role;
+import com.petbuddy.petbuddystore.common.enums.StaffTask;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -31,6 +33,8 @@ public class UserCreationRequest {
     String gender;
 
     @NotNull(message = "DATE_OF_BIRTH_REQUIRED")
-    @JsonFormat(pattern = "dd-MM-yyyy")
     LocalDate dateOfBirth;
+
+    Role role;
+    StaffTask staffTask;
 }
