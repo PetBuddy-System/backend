@@ -19,7 +19,7 @@ import java.util.List;
 public class DashboardResponse {
 
     StatCard totalRevenue;
-    StatCard orderCount;
+    StatCard profit;
     StatCard avgOrderValue;
 
     List<TrendPoint> revenueTrend;

@@ -282,8 +282,23 @@ public class OrderServiceImpl implements OrderService {
         order.setStatus(OrderStatus.CANCELLED);
         order.setUpdatedAt(LocalDateTime.now());
         Order saved = orderRepository.save(order);
-        auditService.logPaymentRefund(order.getPayment(), order.getPayment().getAmount(), true, "CONFIRM_REFUND_SUCCEEDED", getCurrentUser());
+        auditService.logPaymentRefund(order.getPayment(), order.getPayment().getAmount(), order.getCancelReason(), getCurrentUser());
         return orderMapper.toOrderResponse(saved);
+    }
+
+    @Override
+    public Order getOrderEntityById(Long orderId) {
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+    }
+
+    @Override
+    public boolean hasUserPurchasedProduct(String userId, UUID productId) {
+        return orderRepository.existsByUserUserIdAndOrderDetailsProductProductIdAndStatus(
+                userId,
+                productId,
+                OrderStatus.COMPLETED
+        );
     }
 
     @Override

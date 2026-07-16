@@ -122,6 +122,9 @@ public enum ErrorCode {
     REVIEW_NOT_ACTIVE(4308, "Review is not active", HttpStatus.BAD_REQUEST),
     RATING_REQUIRED(4309, "Rating is required", HttpStatus.BAD_REQUEST),
     CONTENT_REQUIRED(4310, "Content is required", HttpStatus.BAD_REQUEST),
+    UNAUTHORIZED_ORDER_ACCESS(4321, "You are not authorized to access this order", HttpStatus.FORBIDDEN),
+    INVALID_OPERATION(4322, "Invalid operation", HttpStatus.BAD_REQUEST),
+    INVALID_REVIEW_TYPE(4323, "Invalid review type", HttpStatus.BAD_REQUEST),
 
     CART_EMPTY(5101, "Cart is empty", HttpStatus.BAD_REQUEST),
     CART_ITEM_NOT_FOUND(5102, "Cart item not found", HttpStatus.NOT_FOUND),

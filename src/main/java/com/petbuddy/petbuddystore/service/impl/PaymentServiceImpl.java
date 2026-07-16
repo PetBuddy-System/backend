@@ -527,7 +527,7 @@ public class PaymentServiceImpl implements PaymentService {
             case "succeeded" -> {
                 payment.setStatus(PaymentStatus.REFUNDED);
                 payment.setRefundedAt(LocalDateTime.now());
-                auditService.logPaymentRefund(payment, payment.getAmount(), true, "REFUND_SUCCEEDED", user);
+                auditService.logPaymentRefund(payment, payment.getAmount(), payment.getOrder().getCancelReason(), user);
             }
             case "failed" -> payment.setStatus(PaymentStatus.PAID);
             case "pending", "requires_action" -> log.info(

@@ -54,6 +54,9 @@ public class DashboardServiceImpl implements DashboardService {
         BigDecimal currentRevenue = sumAmount(currentPayments);
         BigDecimal previousRevenue = sumAmount(previousPayments);
 
+        BigDecimal currentProfit = sumNetAmount(currentPayments);
+        BigDecimal previousProfit = sumNetAmount(previousPayments);
+
         long currentOrderCount = orderRepository.countByCreatedAtBetween(currentStart, currentEnd);
         long previousOrderCount = orderRepository.countByCreatedAtBetween(previousStart, previousEnd);
 
@@ -65,10 +68,11 @@ public class DashboardServiceImpl implements DashboardService {
                 .changePercent(percentChange(currentRevenue, previousRevenue))
                 .build();
 
-        DashboardResponse.StatCard orderCountCard = DashboardResponse.StatCard.builder()
-                .value(BigDecimal.valueOf(currentOrderCount))
-                .changePercent(percentChange(BigDecimal.valueOf(currentOrderCount), BigDecimal.valueOf(previousOrderCount)))
+        DashboardResponse.StatCard profitCard = DashboardResponse.StatCard.builder()
+                .value(currentProfit)
+                .changePercent(percentChange(currentProfit, previousProfit))
                 .build();
+
 
         DashboardResponse.StatCard avgOrderCard = DashboardResponse.StatCard.builder()
                 .value(currentAvgOrder)
@@ -86,11 +90,20 @@ public class DashboardServiceImpl implements DashboardService {
 
         return DashboardResponse.builder()
                 .totalRevenue(totalRevenueCard)
-                .orderCount(orderCountCard)
+                .profit(profitCard)
                 .avgOrderValue(avgOrderCard)
                 .revenueTrend(trend)
                 .revenueComposition(composition)
                 .build();
+    }
+
+    private BigDecimal sumNetAmount(List<Payment> payments) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (Payment p : payments) {
+            BigDecimal refunded = p.getRefundedAmount() != null ? p.getRefundedAmount() : BigDecimal.ZERO;
+            total = total.add(p.getAmount().subtract(refunded));
+        }
+        return total;
     }
 
     private LocalDate[] resolveRange(PeriodType type, LocalDate refDate) {

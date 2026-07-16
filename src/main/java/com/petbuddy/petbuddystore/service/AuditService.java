@@ -29,8 +29,7 @@ public interface AuditService {
 
     void logPaymentPaid(Payment payment, User performedBy);
 
-    void logPaymentRefund(Payment payment, BigDecimal refundAmount, boolean isFullRefund,
-                          String reason, User performedBy);
+    void logPaymentRefund(Payment payment, BigDecimal refundAmount, String reason, User performedBy);
 
     void logVoucherCreate(Voucher voucher, String reason, String note, User performedBy);
 
