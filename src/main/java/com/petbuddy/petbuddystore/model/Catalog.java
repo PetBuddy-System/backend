@@ -55,6 +55,12 @@ public class Catalog {
     @Column(name = "buffer_time")
     Integer bufferTime;
 
+    @Column(name = "surcharge_config")
+    String surchargeConfig;
+
+    @Column(name = "duration_config")
+    String durationConfig;
+
     @Column (name = "status")
     @Enumerated (EnumType.STRING)
     CatalogStatus status;

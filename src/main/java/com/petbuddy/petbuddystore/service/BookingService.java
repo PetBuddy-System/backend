@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.service;
 
 import com.petbuddy.petbuddystore.common.enums.BookingStatus;
+import com.petbuddy.petbuddystore.common.enums.BookingMediaType;
 import com.petbuddy.petbuddystore.dto.request.BookingCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.BookingUpdateRequest;
 import com.petbuddy.petbuddystore.dto.response.BookingResponse;
@@ -18,5 +19,6 @@ public interface BookingService {
     List<BookingResponse> getBookings(BookingStatus status, LocalDate fromDate, LocalDate toDate);
     BookingResponse getBooking(Integer bookingId);
     BookingResponse updateStatus(Integer bookingId, BookingUpdateRequest request);
-    MediaFileResponse uploadBookingMedia(Integer bookingDetailId, MultipartFile file);
+    BookingResponse assignGroomer(Integer bookingId, String groomerId);
+    MediaFileResponse uploadBookingMedia(Integer bookingDetailId, BookingMediaType bookingMediaType, MultipartFile file);
 }

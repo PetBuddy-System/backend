@@ -146,12 +146,32 @@ public class BookingServiceImpl implements BookingService {
         User user = getCurrentUser();
 
         if (user.getRole() == Role.STAFF) {
-            getCurrentWorkingSchedule(user);
-            List<Booking> poolBookings = bookingRepository.findByBookingStatusOrderByCreateAtAsc(BookingStatus.PENDING_ACCEPTANCE);
-            List<Booking> myBookings = bookingRepository.findByStaffSchedule_Staff_UserIdOrderByCreateAtDesc(user.getUserId());
-            return mergeAndFilter(poolBookings, myBookings, status, fromDate, toDate).stream()
-                    .map(bookingMapper::toBookingResponse)
-                    .toList();
+            if (user.getStaffTask() == StaffTask.COORDINATOR) {
+                return filterBookings(
+                                bookingRepository.findByBookingStatusOrderByCreateAtAsc(BookingStatus.PENDING_ACCEPTANCE),
+                                status,
+                                fromDate,
+                                toDate
+                        )
+                        .stream()
+                        .map(bookingMapper::toBookingResponse)
+                        .toList();
+            }
+
+            if (user.getStaffTask() == StaffTask.GROOMER) {
+                getCurrentWorkingSchedule(user);
+                return filterBookings(
+                                bookingRepository.findByStaffSchedule_Staff_UserIdOrderByCreateAtDesc(user.getUserId()),
+                                status,
+                                fromDate,
+                                toDate
+                        )
+                        .stream()
+                        .map(bookingMapper::toBookingResponse)
+                        .toList();
+            }
+
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         if (user.getRole() != Role.ADMIN && user.getRole() != Role.MANAGER) {
@@ -183,8 +203,7 @@ public class BookingServiceImpl implements BookingService {
         BookingStatus newStatus = request.getStatus();
 
         if (newStatus == BookingStatus.ACCEPTED) {
-            acceptBooking(booking, user);
-            return bookingMapper.toBookingResponse(bookingRepository.save(booking));
+            throw new AppException(ErrorCode.INVALID_BOOKING_STATUS);
         }
 
         if (newStatus == BookingStatus.CANCELLED) {
@@ -194,6 +213,7 @@ public class BookingServiceImpl implements BookingService {
 
         assertCanUpdateAssignedBooking(booking, user);
         validateStatusTransition(booking.getBookingStatus(), newStatus);
+        validateRequiredBookingMedia(booking, newStatus);
         booking.setBookingStatus(newStatus);
         Booking savedBooking = bookingRepository.save(booking);
         if (newStatus == BookingStatus.READY_FOR_PICKUP) {
@@ -208,14 +228,31 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    public MediaFileResponse uploadBookingMedia(Integer bookingDetailId, MultipartFile file) {
+    public BookingResponse assignGroomer(Integer bookingId, String groomerId) {
+        User coordinator = getCurrentUser();
+        if (coordinator.getRole() != Role.STAFF || coordinator.getStaffTask() != StaffTask.COORDINATOR) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        Booking booking = findBooking(bookingId);
+        User groomer = userRepository.findById(groomerId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        assignBookingToGroomer(booking, groomer);
+        return bookingMapper.toBookingResponse(bookingRepository.save(booking));
+    }
+
+    @Override
+    public MediaFileResponse uploadBookingMedia(Integer bookingDetailId, BookingMediaType bookingMediaType, MultipartFile file) {
         User user = getCurrentUser();
         BookingDetail detail = bookingDetailRepository.findWithBookingByBookingDetailId(bookingDetailId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_DETAIL_NOT_FOUND));
         assertCanUpdateAssignedBooking(detail.getBooking(), user);
+        validateBookingMediaUpload(detail.getBooking(), bookingMediaType);
 
         MediaFile mediaFile = fileService.uploadBookingImage(file);
         mediaFile.setBookingDetail(detail);
+        mediaFile.setBookingMediaType(bookingMediaType);
         return bookingMapper.toMediaFileResponse(mediaFileRepository.save(mediaFile));
     }
 
@@ -246,7 +283,6 @@ public class BookingServiceImpl implements BookingService {
             throw new AppException(ErrorCode.INVALID_PET_SPECIES);
         }
 
-        validatePetNotAlreadyBooked(pet.getPetId(), scheduledAt, catalog.getDurationMinute() != null ? catalog.getDurationMinute() : 0);
         if (catalog.getStatus() != CatalogStatus.AVAILABLE) {
             throw new AppException(ErrorCode.CATALOG_NOT_FOUND);
         }
@@ -264,11 +300,21 @@ public class BookingServiceImpl implements BookingService {
                 to,
                 List.of(BookingStatus.FAILED, BookingStatus.CANCELLED)
         );
-        if (bookedPets + reservedInRequest >= MAX_PETS_PER_SLOT) {
+        int maxPets = timeSlot.getMaxPets() != null ? timeSlot.getMaxPets() : 5;
+        if (bookedPets + reservedInRequest >= maxPets) {
             throw new AppException(ErrorCode.BOOKING_SLOT_UNAVAILABLE);
         }
 
-        BigDecimal unitPrice = catalog.getPrice();
+        // Tính phụ thu theo hạng cân thú cưng
+        WeightRange petWeightRange = resolvePetWeightRange(catalog, pet);
+        BigDecimal surcharge = BigDecimal.ZERO;
+        if (catalog.getSurchargeConfig() != null && !catalog.getSurchargeConfig().isBlank()) {
+            surcharge = parseSurcharge(catalog.getSurchargeConfig(), petWeightRange);
+        }
+        int durationMinute = resolveDurationMinute(catalog, petWeightRange);
+        validatePetNotAlreadyBooked(pet.getPetId(), scheduledAt, durationMinute);
+
+        BigDecimal unitPrice = catalog.getPrice().add(surcharge);
         return BookingDetail.builder()
                 .booking(booking)
                 .pet(pet)
@@ -280,7 +326,7 @@ public class BookingServiceImpl implements BookingService {
                 .petHealthNote(pet.getHealthNote())
                 .catalogName(catalog.getCatalogName())
                 .catalogType(catalog.getCatalogType().name())
-                .durationMinute(catalog.getDurationMinute())
+                .durationMinute(durationMinute)
                 .unitPrice(unitPrice)
                 .quantity(1)
                 .totalPrice(unitPrice)
@@ -288,15 +334,15 @@ public class BookingServiceImpl implements BookingService {
                 .build();
     }
 
-    private void acceptBooking(Booking booking, User staff) {
-        if (staff.getRole() != Role.STAFF) {
+    private void assignBookingToGroomer(Booking booking, User groomer) {
+        if (groomer.getRole() != Role.STAFF || groomer.getStaffTask() != StaffTask.GROOMER) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
         if (booking.getBookingStatus() != BookingStatus.PENDING_ACCEPTANCE) {
             throw new AppException(ErrorCode.INVALID_BOOKING_STATUS);
         }
 
-        StaffSchedule staffSchedule = getScheduleForBookingDate(staff, booking.getScheduledAt().toLocalDate());
+        StaffSchedule staffSchedule = getScheduleForBookingDate(groomer, booking.getScheduledAt().toLocalDate());
         validateStaffNoOverlap(staffSchedule, booking);
 
         int bookingDuration = getBookingDuration(booking);
@@ -329,7 +375,7 @@ public class BookingServiceImpl implements BookingService {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
         if (user.getRole() == Role.STAFF) {
-            if (booking.getBookingStatus() == BookingStatus.PENDING_ACCEPTANCE) {
+            if (user.getStaffTask() == StaffTask.COORDINATOR && booking.getBookingStatus() == BookingStatus.PENDING_ACCEPTANCE) {
                 getCurrentWorkingSchedule(user);
             } else {
                 assertCanUpdateAssignedBooking(booking, user);
@@ -361,6 +407,36 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
+    private void validateBookingMediaUpload(Booking booking, BookingMediaType bookingMediaType) {
+        if (bookingMediaType == BookingMediaType.BEFORE_SERVICE
+                && booking.getBookingStatus() != BookingStatus.ACCEPTED) {
+            throw new AppException(ErrorCode.INVALID_BOOKING_STATUS);
+        }
+        if (bookingMediaType == BookingMediaType.AFTER_SERVICE
+                && booking.getBookingStatus() != BookingStatus.IN_PROGRESS) {
+            throw new AppException(ErrorCode.INVALID_BOOKING_STATUS);
+        }
+    }
+
+    private void validateRequiredBookingMedia(Booking booking, BookingStatus newStatus) {
+        if (newStatus == BookingStatus.IN_PROGRESS
+                && !hasBookingMedia(booking.getBookingId(), BookingMediaType.BEFORE_SERVICE)) {
+            throw new AppException(ErrorCode.BOOKING_BEFORE_SERVICE_MEDIA_REQUIRED);
+        }
+        if (newStatus == BookingStatus.READY_FOR_PICKUP
+                && !hasBookingMedia(booking.getBookingId(), BookingMediaType.AFTER_SERVICE)) {
+            throw new AppException(ErrorCode.BOOKING_AFTER_SERVICE_MEDIA_REQUIRED);
+        }
+    }
+
+    private boolean hasBookingMedia(Integer bookingId, BookingMediaType bookingMediaType) {
+        return mediaFileRepository.existsByBookingDetail_Booking_BookingIdAndBookingMediaTypeAndMediaStatus(
+                bookingId,
+                bookingMediaType,
+                MediaStatus.ACTIVE
+        );
+    }
+
     private void assertCanViewBooking(Booking booking, User user) {
         if (user.getRole() == Role.ADMIN || user.getRole() == Role.MANAGER) {
             return;
@@ -368,8 +444,11 @@ public class BookingServiceImpl implements BookingService {
         if (user.getRole() == Role.CUSTOMER && booking.getUser().getUserId().equals(user.getUserId())) {
             return;
         }
-        if (user.getRole() == Role.STAFF
-                && (booking.getBookingStatus() == BookingStatus.PENDING_ACCEPTANCE || isAssignedToStaff(booking, user))) {
+        if (user.getRole() == Role.STAFF && user.getStaffTask() == StaffTask.COORDINATOR
+                && booking.getBookingStatus() == BookingStatus.PENDING_ACCEPTANCE) {
+            return;
+        }
+        if (user.getRole() == Role.STAFF && user.getStaffTask() == StaffTask.GROOMER && isAssignedToStaff(booking, user)) {
             return;
         }
         throw new AppException(ErrorCode.UNAUTHORIZED);
@@ -379,7 +458,7 @@ public class BookingServiceImpl implements BookingService {
         if (user.getRole() == Role.ADMIN || user.getRole() == Role.MANAGER) {
             return;
         }
-        if (user.getRole() == Role.STAFF && isAssignedToStaff(booking, user)) {
+        if (user.getRole() == Role.STAFF && user.getStaffTask() == StaffTask.GROOMER && isAssignedToStaff(booking, user)) {
             return;
         }
         throw new AppException(ErrorCode.UNAUTHORIZED);
@@ -401,9 +480,9 @@ public class BookingServiceImpl implements BookingService {
                 .findScheduleForDate(
                         staff.getUserId(),
                         bookingDate,
-                        List.of(ScheduleStatus.SCHEDULED, ScheduleStatus.WORKING)
+                        List.of(ScheduleStatus.WORKING)
                 )
-                .orElseThrow(() -> new AppException(ErrorCode.STAFF_WORK_TIME_NOT_ENOUGH));
+                .orElseThrow(() -> new AppException(ErrorCode.STAFF_NOT_CHECKED_IN));
     }
 
     private LocalDateTime resolveScheduledAt(BookingCreationRequest request, LocalDate bookingDate) {
@@ -497,18 +576,13 @@ public class BookingServiceImpl implements BookingService {
                 .sum();
     }
 
-    private List<Booking> mergeAndFilter(
-            List<Booking> poolBookings,
-            List<Booking> myBookings,
+    private List<Booking> filterBookings(
+            List<Booking> bookings,
             BookingStatus status,
             LocalDate fromDate,
             LocalDate toDate
     ) {
-        Map<Integer, Booking> merged = new LinkedHashMap<>();
-        poolBookings.forEach(booking -> merged.put(booking.getBookingId(), booking));
-        myBookings.forEach(booking -> merged.put(booking.getBookingId(), booking));
-
-        return merged.values().stream()
+        return bookings.stream()
                 .filter(booking -> status == null || booking.getBookingStatus() == status)
                 .filter(booking -> fromDate == null || !booking.getScheduledAt().toLocalDate().isBefore(fromDate))
                 .filter(booking -> toDate == null || !booking.getScheduledAt().toLocalDate().isAfter(toDate))
@@ -547,5 +621,47 @@ public class BookingServiceImpl implements BookingService {
                 .createdAt(payment.getCreatedAt())
                 .updatedAt(payment.getUpdatedAt())
                 .build();
+    }
+
+    private BigDecimal parseSurcharge(String surchargeConfig, WeightRange weightRange) {
+        for (String part : surchargeConfig.split(";")) {
+            String[] kv = part.split(":");
+            if (kv.length == 2 && kv[0].trim().equalsIgnoreCase(weightRange.name())) {
+                return new BigDecimal(kv[1].trim());
+            }
+        }
+        return BigDecimal.ZERO;
+    }
+
+    private WeightRange resolvePetWeightRange(Catalog catalog, PetProfile pet) {
+        boolean requiresWeight = catalog.getSurchargeConfig() != null && !catalog.getSurchargeConfig().isBlank()
+                || catalog.getDurationConfig() != null && !catalog.getDurationConfig().isBlank();
+        if (!requiresWeight) {
+            return null;
+        }
+        if (pet.getWeight() == null) {
+            throw new AppException(ErrorCode.PET_WEIGHT_REQUIRED);
+        }
+        return WeightRange.fromWeight(pet.getWeight());
+    }
+
+    private int resolveDurationMinute(Catalog catalog, WeightRange weightRange) {
+        if (catalog.getDurationConfig() != null && !catalog.getDurationConfig().isBlank() && weightRange != null) {
+            Integer configuredDuration = parseDuration(catalog.getDurationConfig(), weightRange);
+            if (configuredDuration != null) {
+                return configuredDuration;
+            }
+        }
+        return catalog.getDurationMinute() != null ? catalog.getDurationMinute() : 0;
+    }
+
+    private Integer parseDuration(String durationConfig, WeightRange weightRange) {
+        for (String part : durationConfig.split(";")) {
+            String[] kv = part.split(":");
+            if (kv.length == 2 && kv[0].trim().equalsIgnoreCase(weightRange.name())) {
+                return Integer.parseInt(kv[1].trim());
+            }
+        }
+        return null;
     }
 }
