@@ -287,6 +287,21 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    public Order getOrderEntityById(Long orderId) {
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+    }
+
+    @Override
+    public boolean hasUserPurchasedProduct(String userId, UUID productId) {
+        return orderRepository.existsByUserUserIdAndOrderDetailsProductProductIdAndStatus(
+                userId,
+                productId,
+                OrderStatus.COMPLETED
+        );
+    }
+
+    @Override
     public List<PickingItemResponse> getPickingList(Long orderId) {
         checkLogin();
         Order order = findOrder(orderId);

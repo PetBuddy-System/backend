@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.model;
 
 import com.petbuddy.petbuddystore.common.enums.ReviewStatus;
+import com.petbuddy.petbuddystore.common.enums.ReviewType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -12,54 +13,61 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
-
 @Entity
-@Table(name = "product_reviews", uniqueConstraints = {@UniqueConstraint(name = "uk_review_user_product", columnNames = {"user_id", "product_id", "deleted_at"})})
+@Table(name = "reviews")
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ProductReview {
+public class Review {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "review_id")
-    UUID reviewId;
+    private UUID reviewId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "product_id", nullable = false)
-    Product product;
+    @JoinColumn(name = "product_id")
+    private Product product;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id")
+    private Order order;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
-    User user;
+    private User user;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ReviewType reviewType;
 
     @Min(value = 1, message = "REVIEW_RATING_INVALID")
     @Max(value = 5, message = "REVIEW_RATING_INVALID")
     @Column(nullable = false)
-    Integer rating;
+    private Integer rating;
 
     @NotBlank(message = "REVIEW_CONTENT_REQUIRED")
     @Column(nullable = false, columnDefinition = "NVARCHAR(1000)")
-    String content;
+    private String content;
 
     @Builder.Default
     @Column(nullable = false)
-    Boolean anonymous = false;
+    private Boolean anonymous = false;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
-    ReviewStatus status = ReviewStatus.ACTIVE;
+    private ReviewStatus status = ReviewStatus.ACTIVE;
 
-    LocalDateTime deletedAt;
+    private LocalDateTime deletedAt;
 
     @CreationTimestamp
     @Column(updatable = false)
-    LocalDateTime createdAt;
+    private LocalDateTime createdAt;
 
     @UpdateTimestamp
-    LocalDateTime updatedAt;
+    private LocalDateTime updatedAt;
 }

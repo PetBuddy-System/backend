@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
@@ -19,5 +20,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     long countByStaffSchedule_StaffScheduleId(String staffScheduleId);
     long countByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
     Page<Order> findByStaffSchedule_Staff_UserId(String userId, Pageable pageable);
+    boolean existsByUserUserIdAndOrderDetailsProductProductIdAndStatus(String userId, UUID productId, OrderStatus status);
 }
 
