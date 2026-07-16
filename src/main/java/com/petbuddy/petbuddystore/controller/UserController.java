@@ -3,11 +3,13 @@ package com.petbuddy.petbuddystore.controller;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.petbuddy.petbuddystore.common.enums.Role;
+import com.petbuddy.petbuddystore.common.enums.StaffTask;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.PetProfileCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.UserCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.UserUpdateRequest;
 import com.petbuddy.petbuddystore.dto.request.UserUpdateStatusRequest;
+import com.petbuddy.petbuddystore.dto.response.BlogResponse;
 import com.petbuddy.petbuddystore.dto.response.UserResponse;
 import com.petbuddy.petbuddystore.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,6 +18,7 @@ import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -38,29 +41,18 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserResponse>> createCustomer(@RequestPart("data") String requestJson,
                                                                     @RequestPart(value = "images", required = false) List<MultipartFile> images) throws IOException {
         UserCreationRequest request = objectMapper.readValue(requestJson, UserCreationRequest.class);
+        request.setRole(Role.CUSTOMER);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Customer created successfully",
-                        userService.createUser(request, Role.CUSTOMER, images)));
+                .body(ApiResponse.success("Customer created successfully", userService.createUser(request, images)));
     }
 
-    @PostMapping("/manager")
-    @Operation(description = "Tạo mới Manager")
-    public ResponseEntity<ApiResponse<UserResponse>> createManager(@RequestPart("data") String requestJson,
+    @PostMapping("/employee")
+    @Operation(description = "Tạo mới Manager hoặc Staff")
+    public ResponseEntity<ApiResponse<UserResponse>> createEmployee(@RequestPart("data") String requestJson,
                                                                    @RequestPart(value = "images", required = false) List<MultipartFile> images) throws IOException {
         UserCreationRequest request = objectMapper.readValue(requestJson, UserCreationRequest.class);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Manager created successfully",
-                        userService.createUser(request, Role.MANAGER, images)));
-    }
-
-    @PostMapping("/staff")
-    @Operation(description = "Tạo mới Staff")
-    public ResponseEntity<ApiResponse<UserResponse>> createStaff(@RequestPart("data") String requestJson,
-                                                                 @RequestPart(value = "images", required = false) List<MultipartFile> images) throws IOException {
-        UserCreationRequest request = objectMapper.readValue(requestJson, UserCreationRequest.class);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Staff created successfully",
-                        userService.createUser(request, Role.STAFF, images)));
+                .body(ApiResponse.success("Employee created successfully", userService.createUser(request, images)));
     }
 
     @GetMapping("/customer")
@@ -82,6 +74,16 @@ public class UserController {
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllStaffs(){
         return ResponseEntity.status(HttpStatus.OK)
                 .body(ApiResponse.success(userService.getAllStaffs()));
+    }
+
+    @GetMapping("/employee")
+    @Operation(description = "Phân trang danh sách nhân viên dành cho admin")
+    public ResponseEntity<ApiResponse<Page<UserResponse>>> getEmployees(@RequestParam(required = false) Role role,
+                                                                    @RequestParam(required = false) StaffTask staffTask,
+                                                                    @RequestParam(defaultValue = "0") int page,
+                                                                    @RequestParam(defaultValue = "10") int size ){
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(ApiResponse.success(userService.getEmployees(role, staffTask, page, size)));
     }
 
     @GetMapping("/{userId}")

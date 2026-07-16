@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.service.impl;
 
 import com.petbuddy.petbuddystore.common.enums.Role;
+import com.petbuddy.petbuddystore.common.enums.StaffTask;
 import com.petbuddy.petbuddystore.common.enums.UserStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
@@ -9,6 +10,7 @@ import com.petbuddy.petbuddystore.dto.request.UserUpdateRequest;
 import com.petbuddy.petbuddystore.dto.request.UserUpdateStatusRequest;
 import com.petbuddy.petbuddystore.dto.response.UserResponse;
 import com.petbuddy.petbuddystore.mapper.UserMapper;
+import com.petbuddy.petbuddystore.model.Blog;
 import com.petbuddy.petbuddystore.model.MediaFile;
 import com.petbuddy.petbuddystore.model.User;
 import com.petbuddy.petbuddystore.repository.UserRepository;
@@ -18,6 +20,10 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -39,15 +45,28 @@ public class UserServiceImpl implements UserService {
     FileService fileService;
 
     @Override
-    public UserResponse createUser(UserCreationRequest request, Role role, List<MultipartFile> images) {
+    public UserResponse createUser(UserCreationRequest request, List<MultipartFile> images) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new AppException(ErrorCode.EMAIL_EXISTED);
+        }
+        Role role = request.getRole();
+        if (role != Role.CUSTOMER && role != Role.MANAGER && role != Role.STAFF) {
+            throw new AppException(ErrorCode.INVALID_ROLE);
+        }
+
+        if (role == Role.STAFF) {
+            if (request.getStaffTask() == null) {
+                throw new AppException(ErrorCode.STAFF_TASK_REQUIRED);
+            }
+        } else {
+            request.setStaffTask(null);
         }
 
         User user =  userMapper.toUser(request);
         user.setStatus(UserStatus.ACTIVE);
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         user.setRole(role);
+        user.setStaffTask(request.getStaffTask());
 
         List<MediaFile> mediaFiles = images.stream()
                 .filter(image -> image != null && !image.isEmpty())
@@ -81,6 +100,13 @@ public class UserServiceImpl implements UserService {
         return userRepository.findAllByRole(Role.STAFF)
                 .stream()
                 .map(userMapper::toUserResponse).toList();
+    }
+
+    @Override
+    public Page<UserResponse> getEmployees(Role role, StaffTask staffTask, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Page<User> employeePage = userRepository.findEmployees(role, staffTask, pageable);
+        return employeePage.map(userMapper::toUserResponse);
     }
 
     @Override

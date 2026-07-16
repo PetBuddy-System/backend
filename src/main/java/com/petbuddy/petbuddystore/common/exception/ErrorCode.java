@@ -32,6 +32,8 @@ public enum ErrorCode {
     TOKEN_EXPIRED(2008, "Token has expired", HttpStatus.UNAUTHORIZED),
     USER_NOT_FOUND(2009, "User not found", HttpStatus.NOT_FOUND),
     ACCESS_DENIED(2010, "You do not have permission to access this resource", HttpStatus.FORBIDDEN),
+    INVALID_ROLE(2011, "Invalid role", HttpStatus.BAD_REQUEST),
+    STAFF_TASK_REQUIRED(2012, "Staff task is required", HttpStatus.BAD_REQUEST),
 
     MESSAGE_EXCEED_LIMIT(2101, "Message must be less than 2000 characters", HttpStatus.BAD_REQUEST),
 
