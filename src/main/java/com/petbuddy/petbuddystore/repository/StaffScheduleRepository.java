@@ -1,6 +1,8 @@
 package com.petbuddy.petbuddystore.repository;
 
 import com.petbuddy.petbuddystore.common.enums.ScheduleStatus;
+import com.petbuddy.petbuddystore.common.enums.StaffTask;
+import com.petbuddy.petbuddystore.common.enums.UserStatus;
 import com.petbuddy.petbuddystore.model.StaffSchedule;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -97,4 +99,22 @@ public interface StaffScheduleRepository extends JpaRepository<StaffSchedule, St
 
     @Query("SELECT s FROM StaffSchedule s WHERE s.staff.userId = :staffId AND s.workSchedule.workDate = :date AND s.scheduleStatus IN :statuses")
     Optional<StaffSchedule> findTodayScheduleByStaffId(String staffId, LocalDate date, List<ScheduleStatus> statuses);
+
+    @Query("""
+        SELECT ss
+        FROM StaffSchedule ss
+        JOIN FETCH ss.workSchedule ws
+        JOIN FETCH ss.staff s
+        WHERE ws.workDate = :date
+          AND ss.scheduleStatus = :status
+          AND s.staffTask = :staffTask
+          AND s.status = :userStatus
+        ORDER BY ws.startTime ASC, s.fullName ASC
+    """)
+    List<StaffSchedule> findWorkingSchedulesByStaffTask(
+            @Param("date") LocalDate date,
+            @Param("status") ScheduleStatus status,
+            @Param("staffTask") StaffTask staffTask,
+            @Param("userStatus") UserStatus userStatus
+    );
 }

@@ -28,7 +28,8 @@ public class SecurityConfig {
             "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/verify-reset-otp","/api/returns/calculate-refund"};
 
     private final String[] PUBLIC_GET_ENDPOINTS = {"/api/categories", "/api/categories/{categoryId}", "/api/products",
-            "/api/products/{productId}", "/api/blogs", "/api/blogs/**", "/api/auth/outbound/authentication","/api/products/{productId}/reviews"
+            "/api/products/{productId}", "/api/catalogs", "/api/catalogs/**", "/api/blogs", "/api/blogs/**",
+            "/api/auth/outbound/authentication","/api/products/{productId}/reviews"
     };
 
     private static final String[] PUBLIC_ENDPOINTS_SWAGGER = {

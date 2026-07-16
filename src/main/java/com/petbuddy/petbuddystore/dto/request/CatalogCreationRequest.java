@@ -23,4 +23,5 @@ public class CatalogCreationRequest {
     Integer bufferTime;
     CatalogStatus status;
     String surchargeConfig;
+    String durationConfig;
 }

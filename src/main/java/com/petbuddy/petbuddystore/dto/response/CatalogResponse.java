@@ -25,6 +25,7 @@ public class CatalogResponse {
     Integer bufferTime;
     CatalogStatus status;
     String surchargeConfig;
+    String durationConfig;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 }

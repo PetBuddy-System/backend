@@ -257,6 +257,9 @@ public enum ErrorCode {
     INVALID_PET_SPECIES(9031, "Pet species does not match the service", HttpStatus.BAD_REQUEST),
     PET_WEIGHT_REQUIRED(9032, "Pet weight is required for this service", HttpStatus.BAD_REQUEST),
     INVALID_PET_WEIGHT_RANGE(9033, "Pet weight range is not supported by this service", HttpStatus.BAD_REQUEST),
+    BOOKING_BEFORE_SERVICE_MEDIA_REQUIRED(9034, "Before-service booking media is required", HttpStatus.BAD_REQUEST),
+    BOOKING_AFTER_SERVICE_MEDIA_REQUIRED(9035, "After-service booking media is required", HttpStatus.BAD_REQUEST),
+    INVALID_TIME_SLOT_CAPACITY(9036, "Time slot capacity must be greater than 0", HttpStatus.BAD_REQUEST),
 
     WORK_SCHEDULE_IN_THE_PAST(9017, "Cannot create a work schedule in the past", HttpStatus.BAD_REQUEST),
     TOO_EARLY_TO_CHECKIN(9018, "It's not time to check in yet", HttpStatus.BAD_REQUEST),

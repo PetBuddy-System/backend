@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.dto.response;
 
 import com.petbuddy.petbuddystore.common.enums.FileType;
+import com.petbuddy.petbuddystore.common.enums.BookingMediaType;
 import com.petbuddy.petbuddystore.common.enums.MediaPurpose;
 import com.petbuddy.petbuddystore.common.enums.MediaStatus;
 import lombok.*;
@@ -19,4 +20,5 @@ public class MediaFileResponse {
     FileType fileType;
     MediaPurpose mediaPurpose;
     MediaStatus mediaStatus;
+    BookingMediaType bookingMediaType;
 }

@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.model;
 
 import com.petbuddy.petbuddystore.common.enums.FileType;
+import com.petbuddy.petbuddystore.common.enums.BookingMediaType;
 import com.petbuddy.petbuddystore.common.enums.MediaPurpose;
 import com.petbuddy.petbuddystore.common.enums.MediaStatus;
 import jakarta.persistence.*;
@@ -45,6 +46,10 @@ public class MediaFile {
     @Enumerated(EnumType.STRING)
     @Column(name = "media_status")
     MediaStatus mediaStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "booking_media_type", length = 50)
+    BookingMediaType bookingMediaType;
 
     @CreationTimestamp
     @Column(updatable = false)

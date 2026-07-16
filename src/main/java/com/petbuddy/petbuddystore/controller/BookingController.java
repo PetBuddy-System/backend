@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.controller;
 
 import com.petbuddy.petbuddystore.common.enums.BookingStatus;
+import com.petbuddy.petbuddystore.common.enums.BookingMediaType;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.BookingCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.BookingUpdateRequest;
@@ -17,6 +18,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -50,6 +52,7 @@ public class BookingController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or (hasRole('STAFF') and (hasAuthority('TASK_GROOMER') or hasAuthority('TASK_COORDINATOR')))")
     public ResponseEntity<ApiResponse<List<BookingResponse>>> getBookings(
             @RequestParam(required = false) BookingStatus status,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
@@ -59,11 +62,13 @@ public class BookingController {
     }
 
     @GetMapping("/{bookingId}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','CUSTOMER') or (hasRole('STAFF') and (hasAuthority('TASK_GROOMER') or hasAuthority('TASK_COORDINATOR')))")
     public ResponseEntity<ApiResponse<BookingResponse>> getBooking(@PathVariable Integer bookingId) {
         return ResponseEntity.ok(ApiResponse.success(bookingService.getBooking(bookingId)));
     }
 
     @PatchMapping("/{bookingId}/status")
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_GROOMER')")
     public ResponseEntity<ApiResponse<BookingResponse>> updateStatus(
             @PathVariable Integer bookingId,
             @Valid @RequestBody BookingUpdateRequest request
@@ -71,12 +76,25 @@ public class BookingController {
         return ResponseEntity.ok(ApiResponse.success("Booking status updated successfully", bookingService.updateStatus(bookingId, request)));
     }
 
+    @PatchMapping("/{bookingId}/assign-groomer")
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_COORDINATOR')")
+    public ResponseEntity<ApiResponse<BookingResponse>> assignGroomer(
+            @PathVariable Integer bookingId,
+            @RequestParam String groomerId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Booking assigned to groomer successfully",
+                bookingService.assignGroomer(bookingId, groomerId)));
+    }
+
     @PostMapping(value = "/details/{bookingDetailId}/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_GROOMER')")
     public ResponseEntity<ApiResponse<MediaFileResponse>> uploadBookingMedia(
             @PathVariable Integer bookingDetailId,
+            @RequestParam BookingMediaType type,
             @RequestPart("file") MultipartFile file
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Booking media uploaded successfully", bookingService.uploadBookingMedia(bookingDetailId, file)));
+                .body(ApiResponse.success("Booking media uploaded successfully",
+                        bookingService.uploadBookingMedia(bookingDetailId, type, file)));
     }
 }
