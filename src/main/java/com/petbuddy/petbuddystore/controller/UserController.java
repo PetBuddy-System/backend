@@ -55,35 +55,14 @@ public class UserController {
                 .body(ApiResponse.success("Employee created successfully", userService.createUser(request, images)));
     }
 
-    @GetMapping("/customer")
-    @Operation(description = "Lấy danh sách toàn bộ customer")
-    public ResponseEntity<ApiResponse<List<UserResponse>>> getAllCustomer(){
-        return ResponseEntity.status(HttpStatus.OK)
-                .body(ApiResponse.success(userService.getAllCustomers()));
-    }
-
-    @GetMapping("/manager")
-    @Operation(description = "Lấy danh sách toàn bộ manager")
-    public ResponseEntity<ApiResponse<List<UserResponse>>> getAllManagers(){
-        return ResponseEntity.status(HttpStatus.OK)
-                .body(ApiResponse.success(userService.getAllManagers()));
-    }
-
-    @GetMapping("/staff")
-    @Operation(description = "Lấy danh sách toàn bộ staff")
-    public ResponseEntity<ApiResponse<List<UserResponse>>> getAllStaffs(){
-        return ResponseEntity.status(HttpStatus.OK)
-                .body(ApiResponse.success(userService.getAllStaffs()));
-    }
-
-    @GetMapping("/employee")
-    @Operation(description = "Phân trang danh sách nhân viên dành cho admin")
-    public ResponseEntity<ApiResponse<Page<UserResponse>>> getEmployees(@RequestParam(required = false) Role role,
+    @GetMapping()
+    @Operation(description = "Phân trang danh sách người dùng dành cho admin")
+    public ResponseEntity<ApiResponse<Page<UserResponse>>> getUsers(@RequestParam(required = false) Role role,
                                                                     @RequestParam(required = false) StaffTask staffTask,
                                                                     @RequestParam(defaultValue = "0") int page,
                                                                     @RequestParam(defaultValue = "10") int size ){
         return ResponseEntity.status(HttpStatus.OK)
-                .body(ApiResponse.success(userService.getEmployees(role, staffTask, page, size)));
+                .body(ApiResponse.success(userService.getUsers(role, staffTask, page, size)));
     }
 
     @GetMapping("/{userId}")

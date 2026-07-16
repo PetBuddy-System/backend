@@ -30,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -68,45 +69,27 @@ public class UserServiceImpl implements UserService {
         user.setRole(role);
         user.setStaffTask(request.getStaffTask());
 
-        List<MediaFile> mediaFiles = images.stream()
-                .filter(image -> image != null && !image.isEmpty())
-                .map(file -> {
-                    MediaFile mediaFile = fileService.uploadUserProfileImage(file);
-                    mediaFile.setUser(user);
-                    return mediaFile;
-                })
-                .collect(Collectors.toList());
+        List<MediaFile> mediaFiles = new ArrayList<>();
 
+        if (images != null && !images.isEmpty()){
+            mediaFiles = images.stream()
+                    .filter(image -> image != null && !image.isEmpty())
+                    .map(file -> {
+                        MediaFile mediaFile = fileService.uploadUserProfileImage(file);
+                        mediaFile.setUser(user);
+                        return mediaFile;
+                    })
+                    .collect(Collectors.toList());
+        }
         user.setMediaFiles(mediaFiles);
         return userMapper.toUserResponse(userRepository.save(user));
     }
 
     @Override
-    public List<UserResponse> getAllCustomers() {
-        return userRepository.findAllByRole(Role.CUSTOMER)
-                .stream()
-                .map(userMapper::toUserResponse).toList();
-    }
-
-    @Override
-    public List<UserResponse> getAllManagers() {
-        return userRepository.findAllByRole(Role.MANAGER)
-                .stream()
-                .map(userMapper::toUserResponse).toList();
-    }
-
-    @Override
-    public List<UserResponse> getAllStaffs() {
-        return userRepository.findAllByRole(Role.STAFF)
-                .stream()
-                .map(userMapper::toUserResponse).toList();
-    }
-
-    @Override
-    public Page<UserResponse> getEmployees(Role role, StaffTask staffTask, int page, int size) {
+    public Page<UserResponse> getUsers(Role role, StaffTask staffTask, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<User> employeePage = userRepository.findEmployees(role, staffTask, pageable);
-        return employeePage.map(userMapper::toUserResponse);
+        Page<User> userPage = userRepository.findUsers(role, staffTask, pageable);
+        return userPage.map(userMapper::toUserResponse);
     }
 
     @Override
@@ -122,19 +105,22 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId).
                 orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
         userMapper.updateUser(user, request);
+        updateRoleAndStaffTask(user, request);
 
-        user.getMediaFiles().clear();
-        List<MediaFile> mediaFiles = images.stream()
-                .filter(image -> image != null && !image.isEmpty())
-                .map(file -> {
-                    MediaFile mediaFile = fileService.uploadUserProfileImage(file);
-                    mediaFile.setUser(user);
-                    return mediaFile;
-                })
-                .toList();
+        if (images != null && !images.isEmpty()){
+            List<MediaFile> mediaFiles = images.stream()
+                    .filter(image -> image != null && !image.isEmpty())
+                    .map(file -> {
+                        MediaFile mediaFile = fileService.uploadUserProfileImage(file);
+                        mediaFile.setUser(user);
+                        return mediaFile;
+                    })
+                    .toList();
 
-        if (!mediaFiles.isEmpty()) {
-            user.getMediaFiles().addAll(mediaFiles);
+            if (!mediaFiles.isEmpty()) {
+                user.getMediaFiles().clear();
+                user.getMediaFiles().addAll(mediaFiles);
+            }
         }
         return userMapper.toUserResponse(userRepository.save(user));
     }
@@ -160,5 +146,33 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
         return userMapper.toUserResponse(user);
+    }
+
+    private Role resolveUpdatedRole(Role currentRole, Role requestedRole) {
+        return requestedRole != null ? requestedRole : currentRole;
+    }
+
+    private void updateRoleAndStaffTask(User user, UserUpdateRequest request) {
+        Role currentRole = user.getRole();
+        Role updatedRole = resolveUpdatedRole(currentRole, request.getRole());
+
+        if (updatedRole == Role.STAFF) {
+            boolean changingToStaff = currentRole != Role.STAFF;
+
+            if (changingToStaff && request.getStaffTask() == null) {
+                throw new AppException(ErrorCode.STAFF_TASK_REQUIRED);
+            }
+
+            if (request.getStaffTask() == null && user.getStaffTask() == null) {
+                throw new AppException(ErrorCode.STAFF_TASK_REQUIRED);
+            }
+
+            if (request.getStaffTask() != null) {
+                user.setStaffTask(request.getStaffTask());
+            }
+        } else {
+            user.setStaffTask(null);
+        }
+        user.setRole(updatedRole);
     }
 }

@@ -28,5 +28,5 @@ public interface UserRepository extends JpaRepository<User, String> {
     WHERE ((:role IS NULL AND u.role IN ('MANAGER', 'STAFF')) OR u.role = :role)
         AND (:staffTask IS NULL OR u.staffTask = :staffTask)
     """)
-    Page<User> findEmployees(@Param("role") Role role, @Param("staffTask") StaffTask staffTask, Pageable pageable);
+    Page<User> findUsers(@Param("role") Role role, @Param("staffTask") StaffTask staffTask, Pageable pageable);
 }

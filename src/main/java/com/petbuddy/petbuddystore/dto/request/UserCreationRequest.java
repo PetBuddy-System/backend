@@ -33,7 +33,6 @@ public class UserCreationRequest {
     String gender;
 
     @NotNull(message = "DATE_OF_BIRTH_REQUIRED")
-    @JsonFormat(pattern = "dd-MM-yyyy")
     LocalDate dateOfBirth;
 
     Role role;

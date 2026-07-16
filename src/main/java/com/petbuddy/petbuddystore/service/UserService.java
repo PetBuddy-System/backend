@@ -15,13 +15,10 @@ import java.util.List;
 
 public interface UserService {
     UserResponse createUser(UserCreationRequest request, List<MultipartFile> images);
-    List<UserResponse> getAllCustomers();
-    List<UserResponse> getAllManagers();
-    List<UserResponse> getAllStaffs();
     UserResponse getUserById(String userId);
     User getUserEntityById(String userId);
     UserResponse updateUser(String userId, UserUpdateRequest request, List<MultipartFile> images);
     UserResponse updateUserStatus(String userId, UserUpdateStatusRequest request);
     UserResponse getCurrentUser();
-    Page<UserResponse> getEmployees(Role role, StaffTask staffTask, int page, int size);
+    Page<UserResponse> getUsers(Role role, StaffTask staffTask, int page, int size);
 }
