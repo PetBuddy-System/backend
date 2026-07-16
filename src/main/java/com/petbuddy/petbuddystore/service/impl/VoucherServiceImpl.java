@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.service.impl;
 
 import com.petbuddy.petbuddystore.common.enums.DiscountType;
+import com.petbuddy.petbuddystore.common.enums.PromotionStatus;
 import com.petbuddy.petbuddystore.common.enums.VoucherStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
@@ -11,9 +12,11 @@ import com.petbuddy.petbuddystore.model.Order;
 import com.petbuddy.petbuddystore.model.User;
 import com.petbuddy.petbuddystore.model.UserVouchers;
 import com.petbuddy.petbuddystore.model.Voucher;
+import com.petbuddy.petbuddystore.repository.PromotionDetailRepository;
 import com.petbuddy.petbuddystore.repository.UserRepository;
 import com.petbuddy.petbuddystore.repository.UserVoucherRepository;
 import com.petbuddy.petbuddystore.repository.VoucherRepository;
+import com.petbuddy.petbuddystore.service.AuditService;
 import com.petbuddy.petbuddystore.service.VoucherService;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
@@ -38,8 +41,10 @@ public class VoucherServiceImpl implements VoucherService {
     VoucherRepository voucherRepository;
     UserRepository userRepository;
     UserVoucherRepository userVoucherRepository;
+    PromotionDetailRepository promotionDetailRepository;
     VoucherMapper voucherMapper;
 
+    AuditService auditService;
 
     public VoucherResponse createVoucher(VoucherRequest request) {
         if (request.getVoucherCode() != null) {
@@ -58,7 +63,10 @@ public class VoucherServiceImpl implements VoucherService {
         voucher.setCreatedAt(LocalDateTime.now());
         voucher.setUpdatedAt(LocalDateTime.now());
 
-        return voucherMapper.toVoucherResponse(voucherRepository.save(voucher));
+        Voucher saved = voucherRepository.save(voucher);
+        auditService.logVoucherCreate(saved, null, null, getCurrentUser());
+
+        return voucherMapper.toVoucherResponse(saved);
     }
 
     public VoucherResponse getVoucherById(UUID id) {
@@ -106,7 +114,7 @@ public class VoucherServiceImpl implements VoucherService {
             order.setVoucher(null);
             return BigDecimal.ZERO;
         }
-
+        validateNoActivePromotionProduct(order);
         Voucher voucher = voucherRepository.findByVoucherCode(voucherCode)
                 .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
 
@@ -122,9 +130,11 @@ public class VoucherServiceImpl implements VoucherService {
                 .voucher(voucher)
                 .usedAt(LocalDateTime.now())
                 .build();
-        userVoucherRepository.save(userVoucher);
+        UserVouchers savedUserVoucher = userVoucherRepository.save(userVoucher);
 
         order.setVoucher(voucher);
+        auditService.logVoucherUsage(savedUserVoucher, user);
+
         return discountAmount;
     }
 
@@ -174,5 +184,17 @@ public class VoucherServiceImpl implements VoucherService {
         String userId = authentication.getName();
         return userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    }
+    private void validateNoActivePromotionProduct(Order order) {
+        if (order.getOrderDetails() == null || order.getOrderDetails().isEmpty()) {
+            return;
+        }
+        boolean hasPromotionProduct = order.getOrderDetails().stream()
+                .anyMatch(detail -> promotionDetailRepository.existsActivePromotionForProduct(
+                        detail.getProduct().getProductId(), PromotionStatus.ACTIVE, null));
+
+        if (hasPromotionProduct) {
+            throw new AppException(ErrorCode.VOUCHER_NOT_APPLICABLE_WITH_PROMOTION);
+        }
     }
 }

@@ -11,7 +11,6 @@ import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.*;
 import com.petbuddy.petbuddystore.repository.PaymentRepository;
 import com.petbuddy.petbuddystore.service.*;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -50,14 +49,11 @@ public class OrderServiceImpl implements OrderService {
     CartService cartService;
     PaymentService paymentService;
     VoucherService voucherService;
-    EmailService emailService;
-    PaymentServiceImpl paymentServiceImpl;
     ShippingRuleService shippingRuleService;
+    AuditService auditService;
     FileService fileService;
     OrderMapper orderMapper;
     PaymentRepository paymentRepository;
-
-    static int MAX_CONSECUTIVE_FAILS = 4;
 
     @Override
     public OrderResponse createOrder(CreateOrderRequest request) {
@@ -140,7 +136,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public OrderResponse updateOrder(Long orderId, UpdateOrderRequest request) {
-        Order order = getOrderOrThrow(orderId);
+        Order order = findOrder(orderId);
         User user = getCurrentUser();
 
         if (order.getStatus() != OrderStatus.PENDING) {
@@ -219,16 +215,16 @@ public class OrderServiceImpl implements OrderService {
                 if (!order.getStaffSchedule().getStaff().getUserId().equals(currentUser.getUserId())){
                     throw new AppException(ErrorCode.NOT_THE_ASSIGNED_SHIPPER);
                 }
-            }
-            case DELIVERED -> {
-                if (newStatus != OrderStatus.COMPLETED)
-                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
                 if (order.getPayment().getStatus() != PaymentStatus.PAID) {
                     Payment payment = order.getPayment();
                     payment.setStatus(PaymentStatus.PAID);
                     payment.setPaidAt(LocalDateTime.now());
                     paymentRepository.save(payment);
                 }
+            }
+            case DELIVERED -> {
+                if (newStatus != OrderStatus.COMPLETED)
+                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
             }
             case COMPLETED, CANCELLED -> throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
         }
@@ -250,7 +246,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public OrderResponse requestCancelOrder(Long orderId, String cancelReason) {
-        Order order = getOrderOrThrow(orderId);
+        Order order = findOrder(orderId);
 
         if (order.getStatus() != OrderStatus.CONFIRMED && order.getStatus() != OrderStatus.PENDING) {
             throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
@@ -275,7 +271,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public OrderResponse confirmCancelOrder(Long orderId) {
-        Order order = getOrderOrThrow(orderId);
+        Order order = findOrder(orderId);
 
         if (order.getStatus() != OrderStatus.CANCEL_REQUESTED) {
             throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
@@ -286,8 +282,23 @@ public class OrderServiceImpl implements OrderService {
         order.setStatus(OrderStatus.CANCELLED);
         order.setUpdatedAt(LocalDateTime.now());
         Order saved = orderRepository.save(order);
-
+        auditService.logPaymentRefund(order.getPayment(), order.getPayment().getAmount(), order.getCancelReason(), getCurrentUser());
         return orderMapper.toOrderResponse(saved);
+    }
+
+    @Override
+    public Order getOrderEntityById(Long orderId) {
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+    }
+
+    @Override
+    public boolean hasUserPurchasedProduct(String userId, UUID productId) {
+        return orderRepository.existsByUserUserIdAndOrderDetailsProductProductIdAndStatus(
+                userId,
+                productId,
+                OrderStatus.COMPLETED
+        );
     }
 
     @Override
@@ -310,7 +321,13 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public Page<OrderResponse> getAllOrder(Pageable pageable) {
         checkLogin();
-        Page<Order> orders = orderRepository.findAll(pageable);
+        User user = getCurrentUser();
+        Page<Order> orders;
+        if (user.getRole() == Role.STAFF && user.getStaffTask() == StaffTask.SHIPPER) {
+            orders = orderRepository.findByStaffSchedule_Staff_UserId(user.getUserId(), pageable);
+        } else {
+            orders = orderRepository.findAll(pageable);
+        }
         return orders.map(orderMapper::toOrderResponse);
     }
 
@@ -320,72 +337,6 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
         return orderMapper.toOrderResponse(order);
-    }
-
-    @Override
-    @Scheduled(fixedRate = 60 * 1000)
-    public void expirePendingOrders() {
-        List<Order> expired = orderRepository
-                .findByStatusAndPaymentExpiredAtBeforeAndPayment_PaymentMethod(OrderStatus.PENDING, LocalDateTime.now(), PaymentMethod.CARD);
-
-        for (Order order : expired) {
-            try {
-                expireSingleOrder(order);
-            } catch (Exception ex) {
-                log.error("Lỗi khi expire order {}: {}", order.getOrderCode(), ex.getMessage());
-            }
-        }
-    }
-
-    private void expireSingleOrder(Order order) {
-        Payment payment = order.getPayment();
-
-        if (payment == null || payment.getPaymentMethod() != PaymentMethod.CARD) {
-            return;
-        }
-        if (payment.getStatus() == PaymentStatus.PAID) {
-            log.info("Order {} đã PAID trước khi job expire chạy tới, bỏ qua", order.getOrderCode());
-            return;
-        }
-
-        if (payment.getStripePaymentIntentId() != null) {
-            try {
-                paymentServiceImpl.cancelStripeIntent(payment.getStripePaymentIntentId());
-            } catch (AppException ex) {
-                if (ex.getErrorCode() == ErrorCode.PAYMENT_ALREADY_PAID) {
-                    log.warn("Order {} đã thanh toán trước khi expire, bỏ qua", order.getOrderCode());
-                    return;
-                }
-                log.error("Cancel Stripe intent thất bại cho order {}, vẫn expire local, cần đối soát: {}",
-                        order.getOrderCode(), ex.getMessage());
-            }
-        }
-
-        payment.setStatus(PaymentStatus.FAILED);
-        paymentRepository.save(payment);
-        paymentService.releaseOrderStock(order);
-        handlePaymentFailStreak(order.getUser(), order.getOrderCode());
-
-        order.setStatus(OrderStatus.EXPIRED);
-        order.setUpdatedAt(LocalDateTime.now());
-        orderRepository.save(order);
-    }
-
-    public void handlePaymentFailStreak(User user, String orderCode) {
-        int streak = user.getPaymentFailStreak() + 1;
-        user.setPaymentFailStreak(streak);
-
-        if (streak >= MAX_CONSECUTIVE_FAILS) {
-            if (user.getStatus() != UserStatus.SUSPENDED) {
-                user.setStatus(UserStatus.SUSPENDED);
-                log.warn("User {} bị SUSPENDED do {} lần liên tiếp không thanh toán", user.getUserId(), streak);
-                emailService.sendAccountSuspendedEmail(user.getEmail(), streak);
-            }
-        } else {
-            emailService.sendPaymentFailWarningEmail(user.getEmail(), orderCode, streak, MAX_CONSECUTIVE_FAILS);
-        }
-
-        userRepository.save(user);
     }
 
     private List<PickingItemResponse> buildPickingList(Order order) {
@@ -443,11 +394,6 @@ public class OrderServiceImpl implements OrderService {
                 || authentication.getName().equals("anonymousUser")) {
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
-    }
-
-    private Order getOrderOrThrow(Long orderId) {
-        return orderRepository.findById(orderId)
-                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
     }
 
     private Order findOrder(Long orderId) {

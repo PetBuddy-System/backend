@@ -15,15 +15,19 @@ import com.petbuddy.petbuddystore.repository.OrderBatchLocationRepository;
 import com.petbuddy.petbuddystore.repository.ProductBatchRepository;
 import com.petbuddy.petbuddystore.repository.ReturnReservedStockRepository;
 import com.petbuddy.petbuddystore.repository.ReturnRequestRepository;
+import com.petbuddy.petbuddystore.repository.UserRepository;
 import com.petbuddy.petbuddystore.service.ReturnStockService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -36,6 +40,7 @@ public class ReturnStockServiceImpl implements ReturnStockService {
     private final ReturnReservedStockRepository returnReservedStockRepository;
     private final ReturnRequestRepository returnRequestRepository;
     private final OrderBatchLocationRepository orderBatchLocationRepository;
+    private final UserRepository userRepository;
 
     // ============ EXCHANGE (Đổi hàng) ============
 
@@ -98,6 +103,7 @@ public class ReturnStockServiceImpl implements ReturnStockService {
                         .quantity(reserve)
                         .reservedAt(LocalDateTime.now())
                         .expiredAt(LocalDateTime.now().plusHours(24))
+                        .restockedQuantity(0)
                         .build();
                 reservedList.add(reserved);
 
@@ -200,9 +206,23 @@ public class ReturnStockServiceImpl implements ReturnStockService {
         ReturnRequest returnRequest = returnRequestRepository.findByIdWithItems(returnRequestId)
                 .orElseThrow(() -> new AppException(ErrorCode.RETURN_REQUEST_NOT_FOUND));
 
-        if (returnRequest.getType() != com.petbuddy.petbuddystore.common.enums.ReturnType.RETURN) {
+        if (returnRequest.getType() != ReturnType.RETURN) {
             throw new AppException(ErrorCode.INVALID_REQUEST);
         }
+
+        // ✅ Lấy tất cả reserved stock của return request này
+        List<ReturnReservedStock> allReserved = returnReservedStockRepository
+                .findByReturnItem_ReturnRequest(returnRequest);
+
+        // ✅ Tạo map lưu cả object ReturnReservedStock để lấy thêm restockedAt và restockedBy
+        Map<String, ReturnReservedStock> reservedMap = allReserved.stream()
+                .filter(rs -> rs.getRestockedQuantity() != null && rs.getRestockedQuantity() > 0)
+                .collect(Collectors.toMap(
+                        rs -> rs.getBatch().getBatchId().toString()
+                                + "_" + rs.getReturnItem().getOrderDetail().getOrderDetailId().toString(),
+                        rs -> rs,
+                        (existing, replacement) -> existing
+                ));
 
         List<RestockItemResponse> items = returnRequest.getReturnItems().stream()
                 .map(returnItem -> {
@@ -212,13 +232,29 @@ public class ReturnStockServiceImpl implements ReturnStockService {
                             .findByOrderDetail(orderDetail);
 
                     List<RestockBatchResponse> batchResponses = deductedBatches.stream()
-                            .map(obl -> RestockBatchResponse.builder()
-                                    .batchId(obl.getBatch().getBatchId())
-                                    .batchCode(obl.getBatch().getBatchCode())
-                                    .deductedQuantity(obl.getQuantity())
-                                    .availableToRestock(obl.getQuantity())
-                                    .restockQuantity(0)
-                                    .build())
+                            .map(obl -> {
+                                String key = obl.getBatch().getBatchId().toString()
+                                        + "_" + orderDetail.getOrderDetailId().toString();
+
+                                ReturnReservedStock reserved = reservedMap.get(key);
+                                Integer restocked = reserved != null ? reserved.getRestockedQuantity() : 0;
+                                Integer available = obl.getQuantity() - restocked;
+
+                                RestockBatchResponse.RestockBatchResponseBuilder builder = RestockBatchResponse.builder()
+                                        .batchId(obl.getBatch().getBatchId())
+                                        .batchCode(obl.getBatch().getBatchCode())
+                                        .deductedQuantity(obl.getQuantity())
+                                        .availableToRestock(available > 0 ? available : 0)
+                                        .restockQuantity(restocked);
+
+                                // ✅ Set restockedAt và restockedBy nếu đã nhập
+                                if (reserved != null && reserved.getRestockedQuantity() != null && reserved.getRestockedQuantity() > 0) {
+                                    builder.restockedAt(reserved.getRestockedAt());
+                                    builder.restockedBy(reserved.getRestockedBy());
+                                }
+
+                                return builder.build();
+                            })
                             .collect(Collectors.toList());
 
                     return RestockItemResponse.builder()
@@ -256,6 +292,8 @@ public class ReturnStockServiceImpl implements ReturnStockService {
             throw new AppException(ErrorCode.ALREADY_RESTOCKED);
         }
 
+        User currentUser = getCurrentUser();
+
         // Nhập kho
         for (var itemReq : request.getItems()) {
             ReturnItem returnItem = returnRequest.getReturnItems().stream()
@@ -280,11 +318,36 @@ public class ReturnStockServiceImpl implements ReturnStockService {
                     ProductBatch batch = productBatchRepository.findById(batchReq.getBatchId())
                             .orElseThrow(() -> new AppException(ErrorCode.BATCH_NOT_FOUND));
 
+                    // 1. Cập nhật stock
                     batch.setStockQuantity(batch.getStockQuantity() + batchReq.getRestockQuantity());
                     productBatchRepository.save(batch);
 
-                    log.info("Đã nhập {} sản phẩm vào batch {} cho return request {}",
-                            batchReq.getRestockQuantity(), batch.getBatchCode(), returnRequestId);
+                    // 2. Lưu thông tin nhập kho vào ReturnReservedStock
+                    ReturnReservedStock reserved = returnReservedStockRepository
+                            .findByReturnItemAndBatch(returnItem, batch)
+                            .orElseGet(() -> {
+                                // Nếu chưa có thì tạo mới
+                                ReturnReservedStock newReserved = ReturnReservedStock.builder()
+                                        .returnItem(returnItem)
+                                        .batch(batch)
+                                        .quantity(batchReq.getRestockQuantity())
+                                        .reservedAt(LocalDateTime.now())
+                                        .expiredAt(LocalDateTime.now().plusHours(24))
+                                        .restockedQuantity(0)
+                                        .build();
+                                return returnReservedStockRepository.save(newReserved);
+                            });
+
+                    // Cập nhật số lượng đã nhập (cộng dồn)
+                    int currentRestocked = reserved.getRestockedQuantity() != null ? reserved.getRestockedQuantity() : 0;
+                    reserved.setRestockedQuantity(currentRestocked + batchReq.getRestockQuantity());
+                    reserved.setRestockedAt(LocalDateTime.now());
+                    reserved.setRestockedBy(currentUser.getFullName());
+                    returnReservedStockRepository.save(reserved);
+
+                    log.info("Đã nhập {} sản phẩm vào batch {} cho return request {} (tổng đã nhập: {})",
+                            batchReq.getRestockQuantity(), batch.getBatchCode(),
+                            returnRequestId, currentRestocked + batchReq.getRestockQuantity());
                 }
             }
         }
@@ -296,6 +359,17 @@ public class ReturnStockServiceImpl implements ReturnStockService {
                 returnRequestId, returnRequest.getStatus());
     }
 
+    // ============ Helper Methods ============
+
+    private User getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+        String userId = authentication.getName();
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    }
 
     private String generateBatchCode() {
         return "BATCH_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();

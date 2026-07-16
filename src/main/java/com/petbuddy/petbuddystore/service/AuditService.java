@@ -7,6 +7,7 @@ import com.petbuddy.petbuddystore.model.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -25,4 +26,12 @@ public interface AuditService {
     Page<AuditLogResponse> filterAuditLogs(AuditEntityType entityType, String entityCode, String action, LocalDateTime fromDate, LocalDateTime toDate, String performedBy, Pageable pageable);
 
     AuditLogResponse getAuditLogById(UUID id);
+
+    void logPaymentPaid(Payment payment, User performedBy);
+
+    void logPaymentRefund(Payment payment, BigDecimal refundAmount, String reason, User performedBy);
+
+    void logVoucherCreate(Voucher voucher, String reason, String note, User performedBy);
+
+    void logVoucherUsage(UserVouchers userVoucher, User performedBy);
 }

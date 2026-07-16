@@ -33,6 +33,9 @@ public class ProductReviewManagerResponse {
     String productCode;
     String productName;
 
+    Long orderId;
+    String orderCode;
+
     // User info
     String userId;
     String userEmail;

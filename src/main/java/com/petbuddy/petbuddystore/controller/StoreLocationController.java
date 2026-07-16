@@ -10,6 +10,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,30 +23,34 @@ import java.util.List;
 public class StoreLocationController {
     StoreLocationService storeLocationService;
 
+    @PreAuthorize("hasRole('MANAGER')")
     @PostMapping
     public ResponseEntity<ApiResponse<StoreLocationResponse>> create(@Valid @RequestBody StoreLocationRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Store location created successfully",
                 storeLocationService.createLocation(request)));
     }
 
+    @PreAuthorize("hasRole('MANAGER') or hasRole('STAFF')")
     @GetMapping("/current")
     public ResponseEntity<ApiResponse<StoreLocationResponse>> getCurrent() {
         return ResponseEntity.ok(ApiResponse.success("Current store location retrieved successfully",
                 storeLocationService.getCurrentLocation()));
     }
-
+    @PreAuthorize("hasRole('MANAGER')")
     @GetMapping
     public ResponseEntity<ApiResponse<List<StoreLocationResponse>>> getAll() {
         return ResponseEntity.ok(ApiResponse.success("All store locations retrieved successfully",
                 storeLocationService.getAllLocations()));
     }
 
+    @PreAuthorize("hasRole('MANAGER')")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<StoreLocationResponse>> getById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success("Store location retrieved successfully",
                 storeLocationService.getLocationById(id)));
     }
 
+    @PreAuthorize("hasRole('MANAGER')")
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<StoreLocationResponse>> update(@PathVariable Long id,
                                                      @Valid @RequestBody StoreLocationRequest request) {

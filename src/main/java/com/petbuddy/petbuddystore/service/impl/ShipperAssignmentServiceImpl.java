@@ -59,6 +59,10 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
         List<ShipperSuggestionResponse> suggestions = new ArrayList<>();
 
         for (StaffSchedule schedule : onDuty) {
+            if (schedule.getStaff().getRole() != Role.STAFF
+                    || schedule.getStaff().getStaffTask() != StaffTask.SHIPPER) {
+                continue;
+            }
             int currentLoad = schedule.getOrders().size();
             if (currentLoad >= schedule.getMaxOrderCapacity()) continue;
 
@@ -76,6 +80,8 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
             suggestions.add(ShipperSuggestionResponse.builder()
                     .staffId(schedule.getStaff().getUserId())
                     .staffName(schedule.getStaff().getFullName())
+                    .staffEmail(schedule.getStaff().getEmail())
+                    .staffTask(schedule.getStaff().getStaffTask())
                     .currentLoad(currentLoad)
                     .maxCapacity(schedule.getMaxOrderCapacity())
                     .distanceToClusterKm(distance)
@@ -142,8 +148,6 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
         double distance = resolveDistanceKm(order.getLatitude(), order.getLongitude(), avgLat, avgLng);
 
         if (distance > MAX_CLUSTER_DISTANCE_KM) {
-            log.info("Từ chối gán đơn {} cho shipper {}: khoảng cách {}km vượt ngưỡng {}km",
-                    order.getOrderId(), schedule.getStaff().getUserId(), distance, MAX_CLUSTER_DISTANCE_KM);
             throw new AppException(ErrorCode.SHIPPER_TOO_FAR_FROM_CLUSTER);
         }
     }

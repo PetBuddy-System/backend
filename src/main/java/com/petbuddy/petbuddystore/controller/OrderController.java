@@ -56,7 +56,7 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Order retrieved successfully", orderService.getOrder(id)));
     }
 
-    @PreAuthorize("hasRole('STAFF') or hasRole('CUSTOMER')")
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_SHIPPER') or hasAuthority('TASK_COORDINATOR') or hasRole('CUSTOMER')")
     @PatchMapping(value = "/{orderId}/status", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<Void>> updateStatus(@PathVariable Long orderId,
             @RequestParam OrderStatus status,
@@ -67,7 +67,7 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Order status updated successfully", null));
     }
 
-    @PreAuthorize("hasRole('STAFF')")
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_COORDINATOR')")
     @GetMapping("/{id}/picking-list")
     public ResponseEntity<ApiResponse<List<PickingItemResponse>>> getPickingList(@PathVariable Long id){
         return ResponseEntity.ok(ApiResponse.success("Picking list retrieved successfully", orderService.getPickingList(id)));
@@ -85,6 +85,7 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Order updated successfully",
                 orderService.updateOrder(orderId, request)));
     }
+    @PreAuthorize("hasRole('CUSTOMER')")
     @PostMapping("/{orderId}/cancel-request")
     public ResponseEntity<ApiResponse<OrderResponse>> requestCancel(
             @PathVariable Long orderId,
@@ -92,7 +93,7 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Create request cancel successfully",orderService.requestCancelOrder(orderId, request.getCancelReason())));
     }
 
-    @PreAuthorize("hasRole('STAFF')")
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_COORDINATOR')")
     @PostMapping("/{orderId}/cancel-confirm")
     public ResponseEntity<ApiResponse<OrderResponse>> confirmCancel(@PathVariable Long orderId) {
         return ResponseEntity.ok(ApiResponse.success("Cancel order successfully",orderService.confirmCancelOrder(orderId)));
