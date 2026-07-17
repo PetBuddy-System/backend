@@ -1,10 +1,10 @@
 package com.petbuddy.petbuddystore.controller;
 
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
+import com.petbuddy.petbuddystore.dto.request.MomoIpnRequest;
 import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
 import com.petbuddy.petbuddystore.service.PaymentService;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -14,8 +14,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 
 @RestController
 @Slf4j
@@ -35,15 +33,22 @@ public class PaymentController {
 
     @PostMapping("/webhook")
     public ResponseEntity<ApiResponse<Void>> handleStripeWebhook(
-            HttpServletRequest request,
-            @RequestHeader("Stripe-Signature") String sigHeader) throws IOException {
-
-        byte[] payloadBytes = request.getInputStream().readAllBytes();
-        String payload = new String(payloadBytes, StandardCharsets.UTF_8);
-
+            @RequestBody String payload,
+            @RequestHeader("Stripe-Signature") String sigHeader) {
         paymentService.handleWebhook(payload, sigHeader);
-        return ResponseEntity.ok(ApiResponse.success("Webhook xử lý thành công"));
+        return ResponseEntity.ok(ApiResponse.success("Webhook processed successfully"));
     }
+
+    @PostMapping("/ipn")
+    public ResponseEntity<ApiResponse<Void>> handleMomoIpn(@RequestBody MomoIpnRequest ipn) {
+        try {
+            paymentService.handleMomoIpn(ipn);
+        } catch (Exception e) {
+            log.error("Lỗi xử lý IPN MoMo cho orderId={}", ipn.getOrderId(), e);
+        }
+        return ResponseEntity.ok(ApiResponse.success("IPN xử lý thành công"));
+    }
+
     @GetMapping("/all")
     public ResponseEntity<ApiResponse<Page<PaymentResponse>>> getAllPayments(Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(paymentService.getAllPayments(pageable)));
@@ -53,5 +58,10 @@ public class PaymentController {
     public ResponseEntity<ApiResponse<PaymentResponse>> updatePaymentMethod(@PathVariable Long orderId, @RequestParam String paymentMethod) {
         return ResponseEntity.ok(ApiResponse.success("Payment method updated successfully",
                 paymentService.changePaymentMethod(orderId,paymentMethod)));
+    }
+
+    @PostMapping("/{orderId}/momo/retry")
+    public ResponseEntity<ApiResponse<PaymentResponse>> retryMomoPayment(@PathVariable Long orderId) {
+        return ResponseEntity.ok(ApiResponse.success(paymentService.retryMomoPayment(orderId)));
     }
 }

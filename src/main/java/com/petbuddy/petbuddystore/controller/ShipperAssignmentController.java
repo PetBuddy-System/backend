@@ -4,6 +4,7 @@ import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.response.DeliveryStopResponse;
 import com.petbuddy.petbuddystore.dto.response.ShipperSuggestionResponse;
 import com.petbuddy.petbuddystore.service.ShipperAssignmentService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -17,6 +18,7 @@ import java.util.List;
 @RequestMapping("/api/shipper-assignment")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@Tag(name = "Shipper Assignment", description = "Endpoints for shipper assignment and delivery route suggestions")
 public class ShipperAssignmentController {
 
     ShipperAssignmentService shipperAssignmentService;

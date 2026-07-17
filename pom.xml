@@ -160,6 +160,10 @@
             <artifactId>jts-core</artifactId>
             <version>1.19.0</version>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

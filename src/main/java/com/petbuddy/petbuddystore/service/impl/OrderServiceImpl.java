@@ -86,7 +86,7 @@ public class OrderServiceImpl implements OrderService {
                 .shippingFee(shippingFee)
                 .shippingDiscountAmount(BigDecimal.ZERO)
                 .status(OrderStatus.PENDING)
-                .paymentExpiredAt(LocalDateTime.now().plusMinutes(1))
+                .paymentExpiredAt(LocalDateTime.now().plusMinutes(15))
                 .createdAt(LocalDateTime.now())
                 .build();
 

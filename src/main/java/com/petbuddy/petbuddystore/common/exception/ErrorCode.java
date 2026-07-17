@@ -187,6 +187,7 @@ public enum ErrorCode {
     REFUND_METHOD_NOT_SUPPORTED(5517,"Phương thức hoàn tiền không được hỗ trợ", HttpStatus.BAD_REQUEST),
     NO_REMAINING_AMOUNT_TO_REFUND(5518,"Không còn số tiền nào để hoàn trả", HttpStatus.BAD_REQUEST),
     REFUND_AMOUNT_EXCEEDS_REMAINING(5519,"Số tiền hoàn trả vượt quá số tiền còn lại", HttpStatus.BAD_REQUEST),
+    PAYMENT_MOMO_ERROR(5520,"Lỗi thanh toán MoMo", HttpStatus.BAD_REQUEST),
 
 
 

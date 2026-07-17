@@ -3,22 +3,18 @@ package com.petbuddy.petbuddystore.service.impl;
 import com.petbuddy.petbuddystore.common.enums.*;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
+import com.petbuddy.petbuddystore.dto.request.MomoIpnRequest;
+import com.petbuddy.petbuddystore.dto.response.MomoCreatePaymentResponse;
 import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
 import com.petbuddy.petbuddystore.mapper.PaymentMapper;
 import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.*;
-import com.petbuddy.petbuddystore.service.AuditService;
-import com.petbuddy.petbuddystore.service.CartService;
-import com.petbuddy.petbuddystore.service.PaymentService;
-import com.stripe.exception.SignatureVerificationException;
+import com.petbuddy.petbuddystore.service.*;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.Refund;
 import com.stripe.model.StripeObject;
-import com.stripe.net.Webhook;
-import com.stripe.param.PaymentIntentCreateParams;
-import com.stripe.param.RefundCreateParams;
 import lombok.experimental.NonFinal;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -50,6 +46,8 @@ public class PaymentServiceImpl implements PaymentService {
     OrderBatchLocationRepository orderBatchLocationRepository;
     CartService cartService;
     AuditService auditService;
+    StripeService stripeService;
+    MomoService momoService;
     PaymentMapper paymentMapper;
 
     @NonFinal
@@ -57,7 +55,7 @@ public class PaymentServiceImpl implements PaymentService {
     protected String webhookSecret;
 
     @Override
-    public void createPayment(Order order, PaymentMethod method) {
+    public Payment createPayment(Order order, PaymentMethod method) {
         if (paymentRepository.existsByOrder_OrderId(order.getOrderId())) {
             throw new AppException(ErrorCode.PAYMENT_ALREADY_EXISTS);
         }
@@ -75,8 +73,11 @@ public class PaymentServiceImpl implements PaymentService {
         if (method == PaymentMethod.CARD) {
             holdOrderStock(order);
             createStripePayment(payment);
+        } else if (method == PaymentMethod.MOMO) {
+            holdOrderStock(order);
+            createMomoPayment(payment);
         }
-        paymentRepository.save(payment);
+        return paymentRepository.save(payment);
     }
 
     @Override
@@ -95,19 +96,13 @@ public class PaymentServiceImpl implements PaymentService {
         if (method == PaymentMethod.CARD) {
             createStripeBookingDepositPayment(payment);
         }
-
         return paymentRepository.save(payment);
     }
 
     @Transactional
     @Override
     public void handleWebhook(String payload, String sigHeader) {
-        Event event;
-        try {
-            event = Webhook.constructEvent(payload, sigHeader, webhookSecret);
-        } catch (SignatureVerificationException ex) {
-            throw new AppException(ErrorCode.PAYMENT_WEBHOOK_INVALID);
-        }
+        Event event = stripeService.constructEvent(payload, sigHeader);
 
         try {
             switch (event.getType()) {
@@ -123,6 +118,42 @@ public class PaymentServiceImpl implements PaymentService {
             log.error("Lỗi không xác định khi xử lý webhook event {} (type={}): {}",
                     event.getId(), event.getType(), ex.getMessage(), ex);
             throw new AppException(ErrorCode.PAYMENT_WEBHOOK_INVALID);
+        }
+    }
+
+    @Transactional
+    @Override
+    public void handleMomoIpn(MomoIpnRequest ipn) {
+        if (!momoService.verifyIpnSignature(ipn)) {
+            log.warn("Chữ ký IPN MoMo không hợp lệ cho orderId={}", ipn.getOrderId());
+            throw new AppException(ErrorCode.PAYMENT_WEBHOOK_INVALID);
+        }
+
+        Long orderId = Long.valueOf(ipn.getOrderId());
+        Payment payment = paymentRepository.findByOrder_OrderId(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
+
+        if (ipn.getResultCode() == 0) {
+            if (payment.getStatus() == PaymentStatus.PAID) {
+                log.info("Payment order={} đã PAID trước đó, bỏ qua IPN trùng lặp", orderId);
+                return;
+            }
+            Order order = payment.getOrder();
+            User user = order.getUser();
+
+            markPaymentSucceeded(order);
+            payment.setStatus(PaymentStatus.PAID);
+            payment.setPaidAt(LocalDateTime.now());
+            payment.setMomoTransId(String.valueOf(ipn.getTransId()));
+            cartService.clearCart(user);
+            paymentRepository.save(payment);
+            user.setPaymentFailStreak(0);
+            auditService.logPaymentPaid(payment, user);
+        } else {
+            payment.setStatus(PaymentStatus.FAILED);
+            paymentRepository.save(payment);
+            releaseOrderStock(payment.getOrder());
+            log.warn("Thanh toán MoMo thất bại cho orderId={}: {}", orderId, ipn.getMessage());
         }
     }
 
@@ -186,10 +217,13 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (payment.getPaymentMethod() == PaymentMethod.CARD) {
             if (payment.getStripePaymentIntentId() != null) {
-                cancelStripeIntent(payment.getStripePaymentIntentId());
+                stripeService.cancelIntent(payment.getStripePaymentIntentId());
                 payment.setStripePaymentIntentId(null);
                 payment.setStripeClientSecret(null);
             }
+            releaseOrderStock(order);
+        } else if (payment.getPaymentMethod() == PaymentMethod.MOMO) {
+            payment.setMomoTransId(null);
             releaseOrderStock(order);
         }
 
@@ -199,6 +233,9 @@ public class PaymentServiceImpl implements PaymentService {
         if (newMethod == PaymentMethod.CARD) {
             holdOrderStock(order);
             createStripePayment(payment);
+        } else if (newMethod == PaymentMethod.MOMO) {
+            holdOrderStock(order);
+            createMomoPayment(payment);
         }
         paymentRepository.save(payment);
         return paymentMapper.toPaymentResponse(payment);
@@ -230,18 +267,23 @@ public class PaymentServiceImpl implements PaymentService {
         Payment payment = order.getPayment();
 
         if (payment.getPaymentMethod() == PaymentMethod.CARD && payment.getStatus() == PaymentStatus.PAID) {
-            createStripeRefund(payment);
+            Refund refund = stripeService.createRefund(payment);
+            payment.setStripeRefundId(refund.getId());
             payment.setStatus(PaymentStatus.REFUNDED);
             payment.setRefundedAt(LocalDateTime.now());
+        } else if (payment.getPaymentMethod() == PaymentMethod.MOMO && payment.getStatus() == PaymentStatus.PAID) {
+            payment.setStatus(PaymentStatus.REFUNDED);
+            payment.setRefundedAt(LocalDateTime.now());
+            log.warn("MoMo refund cho order {} cần xử lý thủ công (chưa tích hợp API refund MoMo)",
+                    order.getOrderId());
         } else if (payment.getPaymentMethod() == PaymentMethod.CASH) {
             if (order.getStatus() == OrderStatus.CONFIRMED || order.getStatus() == OrderStatus.PICKING) {
                 releaseOrderStock(order);
             }
             payment.setStatus(PaymentStatus.CANCELLED);
-
         } else {
             if (payment.getStripePaymentIntentId() != null && payment.getStatus() != PaymentStatus.CANCELLED) {
-                cancelStripeIntent(payment.getStripePaymentIntentId());
+                stripeService.cancelIntent(payment.getStripePaymentIntentId());
             }
             releaseOrderStock(order);
             payment.setStatus(PaymentStatus.CANCELLED);
@@ -256,8 +298,8 @@ public class PaymentServiceImpl implements PaymentService {
         Payment payment = returnRequest.getOrder().getPayment();
         RefundMethod refundMethod = returnRequest.getRefundMethod();
 
-        // ✅ NẾU LÀ BANK_TRANSFER hoặc CASH → KHÔNG GỌI STRIPE
         if (payment.getPaymentMethod() == PaymentMethod.CASH
+                || payment.getPaymentMethod() == PaymentMethod.MOMO
                 || refundMethod == RefundMethod.BANK_TRANSFER) {
             payment.setStatus(PaymentStatus.REFUNDED);
             payment.setRefundedAt(LocalDateTime.now());
@@ -267,12 +309,10 @@ public class PaymentServiceImpl implements PaymentService {
             return;
         }
 
-        // ✅ CHỈ GỌI STRIPE KHI CARD + STRIPE_PAYMENT
         if (payment.getPaymentMethod() != PaymentMethod.CARD) {
             throw new AppException(ErrorCode.REFUND_NOT_SUPPORTED);
         }
 
-        // Tính số tiền còn lại có thể refund
         BigDecimal refundedAmount = payment.getRefundedAmount() != null ? payment.getRefundedAmount() : BigDecimal.ZERO;
         BigDecimal remainingAmount = payment.getAmount().subtract(refundedAmount);
 
@@ -281,19 +321,16 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         BigDecimal refundAmount = returnRequest.getRefundAmount();
-
         if (refundAmount.compareTo(remainingAmount) > 0) {
             throw new AppException(ErrorCode.REFUND_AMOUNT_EXCEEDS_REMAINING);
         }
 
-        // Gọi Stripe refund
-        createStripeRefundForReturn(payment, refundAmount, returnRequest);
+        Refund refund = stripeService.createRefundForReturn(payment, refundAmount, returnRequest);
+        payment.setStripeRefundId(refund.getId());
 
-        // Cập nhật số tiền đã refund
         payment.setRefundedAmount(refundedAmount.add(refundAmount));
         payment.setRefundedAt(LocalDateTime.now());
 
-        // Cập nhật status dựa trên số tiền còn lại
         if (payment.getRefundedAmount().compareTo(payment.getAmount()) >= 0) {
             payment.setStatus(PaymentStatus.REFUNDED);
         } else {
@@ -304,45 +341,55 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Đã hoàn tiền {} cho return request {}", refundAmount, returnRequest.getReturnCode());
     }
 
-    private void createStripeRefundForReturn(Payment payment, BigDecimal amount, ReturnRequest returnRequest) {
-        try {
-            long amountInVnd = amount.longValue();
+    @Override
+    @Transactional
+    public PaymentResponse retryMomoPayment(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
-            RefundCreateParams params = RefundCreateParams.builder()
-                    .setPaymentIntent(payment.getStripePaymentIntentId())
-                    .setAmount(amountInVnd)  // ← 394.000 (không nhân 100)
-                    .putMetadata("order_id", String.valueOf(payment.getOrder().getOrderId()))
-                    .putMetadata("order_code", payment.getOrder().getOrderCode())
-                    .putMetadata("return_code", returnRequest.getReturnCode())
-                    .putMetadata("refund_amount", amount.toString())
-                    .build();
+        Payment payment = order.getPayment();
 
-            Refund refund = Refund.create(params);
-            payment.setStripeRefundId(refund.getId());
-
-        } catch (StripeException ex) {
-            log.error("Lỗi khi tạo refund Stripe cho return request {}: {}",
-                    returnRequest.getReturnCode(), ex.getMessage());
-            throw new AppException(ErrorCode.STRIPE_REFUND_FAILED);
+        if (payment.getPaymentMethod() != PaymentMethod.MOMO) {
+            throw new AppException(ErrorCode.PAYMENT_INVALID_METHOD);
         }
+        if (payment.getStatus() == PaymentStatus.PAID) {
+            throw new AppException(ErrorCode.PAYMENT_ALREADY_PAID);
+        }
+        if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.EXPIRED) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        createMomoPayment(payment);
+        paymentRepository.save(payment);
+
+        return paymentMapper.toPaymentResponse(payment);
     }
 
-    private void createStripeRefund(Payment payment) {
-        try {
-            RefundCreateParams params = RefundCreateParams.builder()
-                    .setPaymentIntent(payment.getStripePaymentIntentId())
-                    .putMetadata("order_id", String.valueOf(payment.getOrder().getOrderId()))
-                    .putMetadata("order_code", payment.getOrder().getOrderCode())
-                    .build();
+    private void createStripePayment(Payment payment) {
+        PaymentIntent intent = stripeService.createPaymentIntent(payment);
+        payment.setStripePaymentIntentId(intent.getId());
+        payment.setStripeClientSecret(intent.getClientSecret());
+        payment.setStatus(PaymentStatus.PROCESSING);
+    }
 
-            Refund refund = Refund.create(params);
-            payment.setStripeRefundId(refund.getId());
+    private void createStripeBookingDepositPayment(Payment payment) {
+        PaymentIntent intent = stripeService.createBookingDepositIntent(payment);
+        payment.setStripePaymentIntentId(intent.getId());
+        payment.setStripeClientSecret(intent.getClientSecret());
+        payment.setStatus(PaymentStatus.PROCESSING);
+    }
 
-        } catch (StripeException ex) {
-            log.error("Lỗi khi tạo refund Stripe cho order {}: {}",
-                    payment.getOrder().getOrderId(), ex.getMessage());
-            throw new AppException(ErrorCode.PAYMENT_STRIPE_ERROR);
-        }
+    private void createMomoPayment(Payment payment) {
+        Order order = payment.getOrder();
+        String orderId =  order.getOrderCode() + "-" + System.currentTimeMillis();
+        String orderInfo = "Thanh toan don hang " + order.getOrderCode();
+        Long amount = payment.getAmount().longValue();
+
+        MomoCreatePaymentResponse response = momoService.createQrPayment(amount, orderId, orderInfo);
+
+        payment.setMomoRequestId(response.getRequestId());
+        payment.setMomoPayUrl(response.getPayUrl());
+        payment.setStatus(PaymentStatus.PROCESSING);
     }
 
     private record AllocatedBatch(ProductBatch batch, int quantity) {}
@@ -398,49 +445,6 @@ public class PaymentServiceImpl implements PaymentService {
                         throw new AppException(errorCodeOnFailure);
                     }
                 });
-    }
-
-    private String extractPaymentIntentId(Event event) {
-        return extractStripeObject(event, PaymentIntent.class, ErrorCode.PAYMENT_INTENT_NOT_FOUND).getId();
-    }
-
-    private void createStripePayment(Payment payment) {
-        try {
-            PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
-                    .setAmount(payment.getAmount().longValue())
-                    .setCurrency("vnd")
-                    .putMetadata("order_id",   String.valueOf(payment.getOrder().getOrderId()))
-                    .putMetadata("order_code", payment.getOrder().getOrderCode())
-                    .build();
-
-            PaymentIntent intent = PaymentIntent.create(params);
-
-            payment.setStripePaymentIntentId(intent.getId());
-            payment.setStripeClientSecret(intent.getClientSecret());
-            payment.setStatus(PaymentStatus.PROCESSING);
-        } catch (StripeException ex) {
-            throw new AppException(ErrorCode.PAYMENT_STRIPE_ERROR);
-        }
-    }
-
-    private void createStripeBookingDepositPayment(Payment payment) {
-        try {
-            Booking booking = payment.getBooking();
-            PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
-                    .setAmount(payment.getAmount().longValue())
-                    .setCurrency("vnd")
-                    .putMetadata("booking_id", String.valueOf(booking.getBookingId()))
-                    .putMetadata("booking_code", booking.getBookingCode())
-                    .build();
-
-            PaymentIntent intent = PaymentIntent.create(params);
-
-            payment.setStripePaymentIntentId(intent.getId());
-            payment.setStripeClientSecret(intent.getClientSecret());
-            payment.setStatus(PaymentStatus.PROCESSING);
-        } catch (StripeException ex) {
-            throw new AppException(ErrorCode.PAYMENT_STRIPE_ERROR);
-        }
     }
 
     private void handlePaymentSucceeded(Event event) {
@@ -517,7 +521,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private void handleRefundUpdated(Event event) {
-        Refund refund = extractStripeObject(event, Refund.class, ErrorCode.REFUND_WEBHOOK_PARSE_FAILED);
+        Refund refund = stripeService.extractStripeObject(event, Refund.class, ErrorCode.REFUND_WEBHOOK_PARSE_FAILED);
 
         Payment payment = paymentRepository.findByStripeRefundId(refund.getId())
                 .orElseThrow(() -> new AppException(ErrorCode.REFUND_PAYMENT_NOT_FOUND));
@@ -534,12 +538,14 @@ public class PaymentServiceImpl implements PaymentService {
                     "Refund {} đang ở trạng thái '{}', chưa cập nhật status payment liên quan",
                     refund.getId(), refund.getStatus());
             default -> log.warn(
-                    "Nhận trạng thái refund mới/không xác định '{}' cho refund {} - có thể Stripe " +
-                            "vừa thêm status mới, cần rà soát lại logic xử lý",
+                    "Nhận trạng thái refund mới/không xác định '{}' cho refund {}",
                     refund.getStatus(), refund.getId());
         }
-
         paymentRepository.save(payment);
+    }
+
+    private String extractPaymentIntentId(Event event) {
+        return stripeService.extractStripeObject(event, PaymentIntent.class, ErrorCode.PAYMENT_INTENT_NOT_FOUND).getId();
     }
 
     private Payment findByStripeIntentId(String intentId) {
