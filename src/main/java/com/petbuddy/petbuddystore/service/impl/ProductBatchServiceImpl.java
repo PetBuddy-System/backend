@@ -46,8 +46,8 @@ import java.util.*;
 public class ProductBatchServiceImpl implements ProductBatchService {
 
     static final int MAX_BATCH_CREATE_LIMIT = 10;
-    static final int IMAGE_COL_START = 11;
-    static final int IMAGE_COL_END = 14;
+    static final int IMAGE_COL_START = 12;
+    static final int IMAGE_COL_END = 15;
 
     ProductBatchRepository productBatchRepository;
     ProductService productService;
@@ -158,6 +158,8 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                 String usageInstructions = getCellString(row, 8);
                 BigDecimal basePrice = getCellBigDecimal(row, 9);
                 String unitStr = getCellString(row, 10);
+                Integer weight = getCellInteger(row, 11);
+
                 if (name == null || name.isBlank()) {
                     errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_NAME_REQUIRED"));
                 } else if (name.length() > 255) {
@@ -180,6 +182,11 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                 }
                 if (unitStr == null || unitStr.isBlank()) {
                     errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_UNIT_REQUIRED"));
+                }
+                if (weight == null || weight < 1) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_WEIGHT_REQUIRED"));
+                } else if (weight > 100000) {
+                    errors.add(new ProductImportResponse.Error(rowNum, "PRODUCT_WEIGHT_INVALID"));
                 }
 
                 if (brandName != null && brandName.length() > 100) {
@@ -226,7 +233,7 @@ public class ProductBatchServiceImpl implements ProductBatchService {
 
                 List<byte[]> rowImages = rowImagesMap.getOrDefault(i, Collections.emptyList());
                 validRows.add(new ImportRowRequest(rowNum, name, description, salePrice, brandName, category,
-                        stockQuantity, expiryDate, ingredients, usageInstructions, basePrice, unit, rowImages));
+                        stockQuantity, expiryDate, ingredients, usageInstructions, weight, basePrice, unit, rowImages));
             }
 
             if (!errors.isEmpty()) {
@@ -250,7 +257,7 @@ public class ProductBatchServiceImpl implements ProductBatchService {
                     product = productService.createProductFromImport(
                             rowData.getName(), rowData.getDescription(), rowData.getSalePrice(), rowData.getBrandName(),
                             rowData.getCategory(), rowData.getIngredients(), rowData.getUsageInstructions(),
-                            rowData.getUnit(),
+                            rowData.getUnit(), rowData.getWeight(),
                             mediaFiles);
                     createdProducts++;
                 }
@@ -395,7 +402,7 @@ public class ProductBatchServiceImpl implements ProductBatchService {
     }
 
     private boolean isEmpty(Row row) {
-        for (int i = 0; i <= 10; i++) {
+        for (int i = 0; i <= 11; i++) {
             if (getCellString(row, i) != null) return false;
         }
         return true;
@@ -403,7 +410,7 @@ public class ProductBatchServiceImpl implements ProductBatchService {
 
     private void validateHeader(Row header) {
         if (header == null) throw new AppException(ErrorCode.INVALID_EXCEL_TEMPLATE);
-        String[] expected = {"Name","Description","SalePrice","BrandName","CategoryName","StockQuantity","ExpiryDate","Ingredients","UsageInstructions","BasePrice","Unit","Image1","Image2","Image3","Image4"};
+        String[] expected = {"Name","Description","SalePrice","BrandName","CategoryName","StockQuantity","ExpiryDate","Ingredients","UsageInstructions","BasePrice","Unit","Weight","Image1","Image2","Image3","Image4"};
         for (int i = 0; i < expected.length; i++) {
             if (!expected[i].equalsIgnoreCase(getCellString(header, i)))
                 throw new AppException(ErrorCode.INVALID_EXCEL_TEMPLATE);

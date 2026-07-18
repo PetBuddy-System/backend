@@ -110,6 +110,9 @@ public enum ErrorCode {
     INVALID_REQUEST(4257, "Yêu cầu không hợp lệ", HttpStatus.BAD_REQUEST),
     RESTOCK_ONLY_AFTER_COMPLETED(4260, "Chỉ có thể nhập kho sau khi đơn đã hoàn tiền (COMPLETED)", HttpStatus.BAD_REQUEST),
     ALREADY_RESTOCKED(4261, "Đơn hàng đã được nhập kho trước đó", HttpStatus.BAD_REQUEST),
+    PRODUCT_WEIGHT_INVALID(4262, "khối lượng phải nằm trong khoảng 1 tới 100 000", HttpStatus.BAD_REQUEST),
+    PRODUCT_WEIGHT_REQUIRED(4263,"Khối lượng là bắt buộc",HttpStatus.BAD_REQUEST),
+
 
     REVIEW_NOT_FOUND(4300, "Review not found", HttpStatus.NOT_FOUND),
     REVIEW_ALREADY_EXISTS(4301, "You have already reviewed this product", HttpStatus.CONFLICT),

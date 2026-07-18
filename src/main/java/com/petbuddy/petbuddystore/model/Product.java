@@ -47,6 +47,9 @@ public class Product {
     @Column(nullable = false)
     BigDecimal salePrice;
 
+    @Column(nullable = false)
+    private Integer weight;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default

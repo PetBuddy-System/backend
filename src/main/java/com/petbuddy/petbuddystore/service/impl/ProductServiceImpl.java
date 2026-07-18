@@ -105,18 +105,20 @@ public class ProductServiceImpl implements ProductService {
         auditService.logProductUpdate(oldProduct, updatedProduct, request.getReason(), request.getNote(), getCurrentUser());
         return productMapper.toManagementResponse(updatedProduct);
     }
-    @Override
+
     @Transactional
-    public Product createProductFromImport(String name, String description, BigDecimal sale_price, String brandName, Category category, String ingredients, String usageInstructions, ProductUnit unit, List<MediaFile> mediaFiles) {
+    @Override
+    public Product createProductFromImport(String name, String description, BigDecimal salePrice, String brandName, Category category, String ingredients, String usageInstructions, ProductUnit unit, Integer weight, List<MediaFile> mediaFiles) {
         Product product = Product.builder()
                 .name(name.trim())
                 .description(description)
-                .salePrice(sale_price)
+                .salePrice(salePrice)
                 .brandName(brandName)
                 .category(category)
                 .ingredients(ingredients)
                 .usageInstructions(usageInstructions)
                 .unit(unit)
+                .weight(weight)
                 .productCode(generateProductCode())
                 .status(ProductStatus.ACTIVE)
                 .mediaFiles(mediaFiles != null ? mediaFiles : new ArrayList<>())
@@ -131,7 +133,6 @@ public class ProductServiceImpl implements ProductService {
         auditService.logProductCreate(savedProduct, "CREATE_PRODUCT_IMPORT", null, currentUser);
         return savedProduct;
     }
-
     @Override
     @Transactional
     public void updateLastBatchSequence(Product product, long lastBatchSequence) {
