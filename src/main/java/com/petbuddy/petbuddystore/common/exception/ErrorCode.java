@@ -146,6 +146,7 @@ public enum ErrorCode {
     SHIPPER_TOO_FAR_FROM_CLUSTER(5214,"The distance between orders are too far",HttpStatus.FORBIDDEN),
     ROUTE_CALCULATION_FAILED(5215,"Failed to calculate route",HttpStatus.INTERNAL_SERVER_ERROR),
     SHIPPER_CAPACITY_FULL(5216, "Shipper capacity is full", HttpStatus.BAD_REQUEST),
+    SHIPPER_ZONE_NOT_COMPUTED(5217, "Shipper zone is not computed", HttpStatus.BAD_REQUEST),
 
     VOUCHER_NOT_FOUND(5301, "Voucher not found", HttpStatus.NOT_FOUND),
     VOUCHER_CODE_EXISTED(5302, "Voucher code already exists", HttpStatus.BAD_REQUEST),

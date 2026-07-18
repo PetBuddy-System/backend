@@ -6,12 +6,16 @@ import com.petbuddy.petbuddystore.common.enums.ScheduleStatus;
 import com.petbuddy.petbuddystore.common.enums.StaffTask;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
+import com.petbuddy.petbuddystore.common.util.CapacitatedKMeans;
 import com.petbuddy.petbuddystore.common.util.GeoUtils;
+import com.petbuddy.petbuddystore.configuration.DeliveryCapacityProperties;
 import com.petbuddy.petbuddystore.dto.response.DeliveryStopResponse;
+import com.petbuddy.petbuddystore.dto.response.RestockEligibilityResponse;
 import com.petbuddy.petbuddystore.dto.response.ShipperSuggestionResponse;
 import com.petbuddy.petbuddystore.model.Order;
 import com.petbuddy.petbuddystore.model.StaffSchedule;
 import com.petbuddy.petbuddystore.model.StoreLocation;
+import com.petbuddy.petbuddystore.model.WorkSchedule;
 import com.petbuddy.petbuddystore.repository.OrderRepository;
 import com.petbuddy.petbuddystore.repository.StaffScheduleRepository;
 import com.petbuddy.petbuddystore.repository.StoreLocationRepository;
@@ -24,11 +28,11 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -40,11 +44,128 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
     OrderRepository orderRepository;
     StoreLocationRepository storeLocationRepository;
     OrsRoutingService orsRoutingService;
+    DeliveryCapacityProperties capacityProperties;
 
     static double MAX_DISTANCE_FOR_ORS_CALL_KM = 7.0;
     static double MAX_CLUSTER_DISTANCE_KM = 7.0;
+    static List<OrderStatus> ACTIVE_ORDER_STATUSES = List.of(OrderStatus.PICKED, OrderStatus.SHIPPING);
 
     @Override
+    @Transactional
+    public void recomputeDailyZones() {
+        List<StaffSchedule> onDuty = staffScheduleRepository.findOnDutySchedules(
+                LocalDate.now(), List.of(ScheduleStatus.SCHEDULED, ScheduleStatus.WORKING));
+
+        List<StaffSchedule> shipperSchedules = onDuty.stream()
+                .filter(s -> s.getStaff().getRole() == Role.STAFF
+                        && s.getStaff().getStaffTask() == StaffTask.SHIPPER)
+                .toList();
+
+        if (shipperSchedules.isEmpty()) {
+            log.info("Không có shipper nào đang trực, bỏ qua recomputeDailyZones");
+            return;
+        }
+
+        StoreLocation store = storeLocationRepository.findByActiveTrue()
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_LOCATION_NOT_FOUND));
+
+        List<Order> pendingOrders = orderRepository
+                .findByStatusAndLatitudeIsNotNullAndLongitudeIsNotNull(OrderStatus.PICKED);
+
+        if (pendingOrders.isEmpty()) {
+            log.info("Không có đơn PICKED nào có tọa độ, bỏ qua recomputeDailyZones");
+            return;
+        }
+
+        List<Order> inRangeOrders = new ArrayList<>();
+        List<Order> outOfRangeOrders = new ArrayList<>();
+        for (Order o : pendingOrders) {
+            double distFromStore = GeoUtils.distanceKm(
+                    store.getLatitude(), store.getLongitude(), o.getLatitude(), o.getLongitude());
+            if (distFromStore > capacityProperties.getMaxOperationalRadiusKm()) {
+                outOfRangeOrders.add(o);
+            } else {
+                inRangeOrders.add(o);
+            }
+        }
+        if (!outOfRangeOrders.isEmpty()) {
+            log.warn("{} đơn vượt bán kính vận hành {}km, cần xử lý thủ công. orderIds={}",
+                    outOfRangeOrders.size(), capacityProperties.getMaxOperationalRadiusKm(),
+                    outOfRangeOrders.stream().map(Order::getOrderId).toList());
+        }
+        if (inRangeOrders.isEmpty()) {
+            log.info("Không còn đơn nào trong bán kính vận hành, bỏ qua recomputeDailyZones");
+            return;
+        }
+
+        int n = shipperSchedules.size();
+        List<Double> initLat = new ArrayList<>();
+        List<Double> initLng = new ArrayList<>();
+
+        for (int i = 0; i < n; i++) {
+            StaffSchedule s = shipperSchedules.get(i);
+            if (s.getZoneCenterLat() != null && s.getZoneCenterLng() != null) {
+                initLat.add(s.getZoneCenterLat());
+                initLng.add(s.getZoneCenterLng());
+            } else {
+                double angle = 2 * Math.PI * i / n;
+                initLat.add(store.getLatitude() + 0.02 * Math.cos(angle));
+                initLng.add(store.getLongitude() + 0.02 * Math.sin(angle));
+            }
+        }
+
+        List<CapacitatedKMeans.WeightedPoint> points = inRangeOrders.stream()
+                .map(o -> new CapacitatedKMeans.WeightedPoint(
+                        o.getOrderId(), o.getLatitude(), o.getLongitude(), 1.0))
+                .toList();
+
+        double roughCapacityEach = Math.ceil((double) inRangeOrders.size() / n);
+        List<Double> roughCapacities = new ArrayList<>(Collections.nCopies(n, roughCapacityEach));
+
+        List<CapacitatedKMeans.Cluster> roughClusters = CapacitatedKMeans.cluster(
+                points, initLat, initLng, roughCapacities, capacityProperties.getKMeansMaxIterations());
+
+        Map<Long, Order> orderById = inRangeOrders.stream()
+                .collect(Collectors.toMap(Order::getOrderId, o -> o));
+
+        List<Double> realCapacities = new ArrayList<>();
+        List<Integer> realCapacityInts = new ArrayList<>();
+
+        for (int i = 0; i < roughClusters.size(); i++) {
+            CapacitatedKMeans.Cluster cluster = roughClusters.get(i);
+            List<Order> clusterOrders = cluster.assignedPointIds().stream()
+                    .map(orderById::get)
+                    .toList();
+
+            int realCapacity = estimateMaxOrdersForRoute(store, clusterOrders, shipperSchedules.get(i));
+            realCapacityInts.add(realCapacity);
+            realCapacities.add((double) realCapacity);
+        }
+
+        List<Double> pass1CenterLat = roughClusters.stream().map(CapacitatedKMeans.Cluster::centerLat).toList();
+        List<Double> pass1CenterLng = roughClusters.stream().map(CapacitatedKMeans.Cluster::centerLng).toList();
+
+        List<CapacitatedKMeans.Cluster> finalClusters = CapacitatedKMeans.cluster(
+                points, pass1CenterLat, pass1CenterLng, realCapacities, capacityProperties.getKMeansMaxIterations());
+
+        for (int i = 0; i < n; i++) {
+            StaffSchedule schedule = shipperSchedules.get(i);
+            CapacitatedKMeans.Cluster cluster = finalClusters.get(i);
+
+            schedule.setZoneCenterLat(cluster.centerLat());
+            schedule.setZoneCenterLng(cluster.centerLng());
+            schedule.setMaxOrderCapacity(realCapacityInts.get(i));
+
+            staffScheduleRepository.save(schedule);
+
+            log.info("Shipper {} - zone=({}, {}) - maxOrderCapacity = {}",
+                    schedule.getStaff().getUserId(), cluster.centerLat(), cluster.centerLng(),
+                    realCapacityInts.get(i));
+        }
+    }
+
+    @Override
+    @Transactional
     public List<ShipperSuggestionResponse> getShipperSuggestions(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
@@ -63,19 +184,18 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
                     || schedule.getStaff().getStaffTask() != StaffTask.SHIPPER) {
                 continue;
             }
-            int currentLoad = schedule.getOrders().size();
-            if (currentLoad >= schedule.getMaxOrderCapacity()) continue;
 
-            List<Order> ordersWithLocation = schedule.getOrders().stream()
-                    .filter(o -> o.getLatitude() != null && o.getLongitude() != null)
-                    .toList();
-
-            Double distance = null;
-            if (!ordersWithLocation.isEmpty()) {
-                double avgLat = ordersWithLocation.stream().mapToDouble(Order::getLatitude).average().orElse(0);
-                double avgLng = ordersWithLocation.stream().mapToDouble(Order::getLongitude).average().orElse(0);
-                distance = resolveDistanceKm(order.getLatitude(), order.getLongitude(), avgLat, avgLng);
+            Integer maxCapacity = schedule.getMaxOrderCapacity();
+            if (maxCapacity == null) {
+                log.warn("StaffSchedule {} chưa có maxOrderCapacity, cần chạy recomputeDailyZones trước",
+                        schedule.getStaffScheduleId());
+                continue;
             }
+
+            int currentLoad = countActiveOrders(schedule);
+            if (currentLoad >= maxCapacity) continue;
+
+            Double distance = distanceToShipperZone(order, schedule);
 
             suggestions.add(ShipperSuggestionResponse.builder()
                     .staffId(schedule.getStaff().getUserId())
@@ -83,7 +203,7 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
                     .staffEmail(schedule.getStaff().getEmail())
                     .staffTask(schedule.getStaff().getStaffTask())
                     .currentLoad(currentLoad)
-                    .maxCapacity(schedule.getMaxOrderCapacity())
+                    .maxCapacity(maxCapacity)
                     .distanceToClusterKm(distance)
                     .build());
         }
@@ -115,8 +235,14 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
             throw new AppException(ErrorCode.NOT_SHIPPER);
         }
 
-        long currentLoad = orderRepository.countByStaffSchedule_StaffScheduleId(schedule.getStaffScheduleId());
-        if (currentLoad >= schedule.getMaxOrderCapacity()) {
+        Integer maxCapacity = schedule.getMaxOrderCapacity();
+        if (maxCapacity == null) {
+            throw new AppException(ErrorCode.SHIPPER_ZONE_NOT_COMPUTED);
+        }
+
+        long currentLoad = orderRepository.countByStaffSchedule_StaffScheduleIdAndStatusIn(
+                schedule.getStaffScheduleId(), ACTIVE_ORDER_STATUSES);
+        if (currentLoad >= maxCapacity) {
             throw new AppException(ErrorCode.SHIPPER_CAPACITY_FULL);
         }
 
@@ -130,29 +256,113 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
     }
 
     private void validateClusterDistance(Order order, StaffSchedule schedule) {
+        Double distance = distanceToShipperZone(order, schedule);
+        if (distance != null && distance > MAX_CLUSTER_DISTANCE_KM) {
+            throw new AppException(ErrorCode.SHIPPER_TOO_FAR_FROM_CLUSTER);
+        }
+    }
+
+    private Double distanceToShipperZone(Order order, StaffSchedule schedule) {
         if (order.getLatitude() == null || order.getLongitude() == null) {
-            return;
+            return null;
+        }
+
+        if (schedule.getZoneCenterLat() != null && schedule.getZoneCenterLng() != null) {
+            return resolveDistanceKm(order.getLatitude(), order.getLongitude(),
+                    schedule.getZoneCenterLat(), schedule.getZoneCenterLng());
         }
 
         List<Order> ordersWithLocation = schedule.getOrders().stream()
                 .filter(o -> o.getLatitude() != null && o.getLongitude() != null)
                 .toList();
-
-        if (ordersWithLocation.isEmpty()) {
-            return;
-        }
+        if (ordersWithLocation.isEmpty()) return null;
 
         double avgLat = ordersWithLocation.stream().mapToDouble(Order::getLatitude).average().orElse(0);
         double avgLng = ordersWithLocation.stream().mapToDouble(Order::getLongitude).average().orElse(0);
+        return resolveDistanceKm(order.getLatitude(), order.getLongitude(), avgLat, avgLng);
+    }
 
-        double distance = resolveDistanceKm(order.getLatitude(), order.getLongitude(), avgLat, avgLng);
-
-        if (distance > MAX_CLUSTER_DISTANCE_KM) {
-            throw new AppException(ErrorCode.SHIPPER_TOO_FAR_FROM_CLUSTER);
-        }
+    private int countActiveOrders(StaffSchedule schedule) {
+        return (int) schedule.getOrders().stream()
+                .filter(o -> ACTIVE_ORDER_STATUSES.contains(o.getStatus()))
+                .count();
     }
 
     @Override
+    @Transactional
+    public List<RestockEligibilityResponse> getShippersEligibleForRestock() {
+        List<StaffSchedule> onDuty = staffScheduleRepository.findOnDutySchedules(
+                LocalDate.now(), List.of(ScheduleStatus.WORKING));
+
+        StoreLocation store = storeLocationRepository.findByActiveTrue()
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_LOCATION_NOT_FOUND));
+
+        List<RestockEligibilityResponse> result = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+
+        for (StaffSchedule schedule : onDuty) {
+            if (schedule.getStaff().getRole() != Role.STAFF
+                    || schedule.getStaff().getStaffTask() != StaffTask.SHIPPER) {
+                continue;
+            }
+            if (schedule.getCheckInAt() == null || schedule.getCheckOutAt() != null) {
+                continue;
+            }
+
+            List<Order> pendingOrders = schedule.getOrders().stream()
+                    .filter(o -> o.getStatus() == OrderStatus.SHIPPING)
+                    .toList();
+
+            if (pendingOrders.size() > capacityProperties.getRestockThresholdOrders()) {
+                continue;
+            }
+
+            LocalDateTime shiftEndDateTime = LocalDateTime.of(
+                    schedule.getWorkSchedule().getWorkDate(),
+                    schedule.getWorkSchedule().getEndTime());
+
+            double remainingShiftMinutes = Duration.between(now, shiftEndDateTime).toMinutes();
+            if (remainingShiftMinutes <= 0) {
+                continue;
+            }
+
+            double fromLat, fromLng;
+            if (!pendingOrders.isEmpty()) {
+                Order lastKnown = pendingOrders.get(pendingOrders.size() - 1);
+                fromLat = lastKnown.getLatitude();
+                fromLng = lastKnown.getLongitude();
+            } else if (schedule.getZoneCenterLat() != null) {
+                fromLat = schedule.getZoneCenterLat();
+                fromLng = schedule.getZoneCenterLng();
+            } else {
+                continue;
+            }
+
+            double distanceToStore = resolveDistanceKm(fromLat, fromLng, store.getLatitude(), store.getLongitude());
+            double returnMinutes = (distanceToStore / capacityProperties.getAvgSpeedKmh()) * 60;
+
+            double minRoundTripMinutes = 2 * returnMinutes + capacityProperties.getHandlingTimeMinutes();
+
+            boolean eligible = remainingShiftMinutes > minRoundTripMinutes;
+
+            result.add(RestockEligibilityResponse.builder()
+                    .staffId(schedule.getStaff().getUserId())
+                    .staffName(schedule.getStaff().getFullName())
+                    .currentPendingOrders(pendingOrders.size())
+                    .remainingShiftMinutes(remainingShiftMinutes)
+                    .distanceToStoreKm(distanceToStore)
+                    .eligibleForRestock(eligible)
+                    .estimatedExtraOrders(eligible
+                            ? estimateExtraOrdersInRemainingTime(remainingShiftMinutes, returnMinutes)
+                            : 0)
+                    .build());
+        }
+
+        return result;
+    }
+
+    @Override
+    @Transactional
     public List<DeliveryStopResponse> suggestDeliveryRoute(String staffId) {
         StaffSchedule schedule = staffScheduleRepository
                 .findTodayScheduleByStaffId(staffId, LocalDate.now(),
@@ -188,7 +398,8 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
 
             for (Order candidate : remaining) {
                 double d = GeoUtils.estimateRoadDistanceKm(
-                        GeoUtils.distanceKm(currentLat, currentLon, candidate.getLatitude(), candidate.getLongitude()));                if (d < nearestDistance) {
+                        GeoUtils.distanceKm(currentLat, currentLon, candidate.getLatitude(), candidate.getLongitude()));
+                if (d < nearestDistance) {
                     nearestDistance = d;
                     nearest = candidate;
                 }
@@ -229,5 +440,58 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
                     storeLat, storeLon, destLat, destLon, e);
             return GeoUtils.estimateRoadDistanceKm(haversine);
         }
+    }
+
+    private int estimateMaxOrdersForRoute(StoreLocation store, List<Order> clusterOrders, StaffSchedule schedule) {
+        if (clusterOrders.isEmpty()) return 0;
+
+        WorkSchedule workSchedule = schedule.getWorkSchedule();
+        double shiftMinutes = Duration.between(
+                workSchedule.getStartTime(), workSchedule.getEndTime()).toMinutes();
+        double availableMinutes = shiftMinutes * (1 - capacityProperties.getSafetyBufferPercent() / 100.0);
+
+        List<Order> remaining = new ArrayList<>(clusterOrders);
+        double currentLat = store.getLatitude();
+        double currentLon = store.getLongitude();
+        double elapsedMinutes = 0;
+        int capacity = 0;
+
+        while (!remaining.isEmpty()) {
+            Order nearest = null;
+            double nearestDistance = Double.MAX_VALUE;
+
+            for (Order candidate : remaining) {
+                double d = GeoUtils.estimateRoadDistanceKm(
+                        GeoUtils.distanceKm(currentLat, currentLon, candidate.getLatitude(), candidate.getLongitude()));
+                if (d < nearestDistance) {
+                    nearestDistance = d;
+                    nearest = candidate;
+                }
+            }
+
+            double legMinutes = (nearestDistance / capacityProperties.getAvgSpeedKmh()) * 60;
+            double handlingMinutes = capacityProperties.getHandlingTimeMinutes();
+            double projectedTotal = elapsedMinutes + legMinutes + handlingMinutes;
+
+            if (projectedTotal > availableMinutes) {
+                break;
+            }
+
+            elapsedMinutes += legMinutes + handlingMinutes;
+            currentLat = nearest.getLatitude();
+            currentLon = nearest.getLongitude();
+            remaining.remove(nearest);
+            capacity++;
+        }
+
+        return capacity;
+    }
+
+    private int estimateExtraOrdersInRemainingTime(double remainingMinutes, double returnTripMinutes) {
+        double usableMinutes = remainingMinutes - returnTripMinutes;
+        if (usableMinutes <= 0) return 0;
+        double perOrderMinutes = capacityProperties.getHandlingTimeMinutes()
+                + (capacityProperties.getMaxOperationalRadiusKm() / 3.0 / capacityProperties.getAvgSpeedKmh()) * 60;
+        return (int) Math.floor(usableMinutes / perOrderMinutes);
     }
 }

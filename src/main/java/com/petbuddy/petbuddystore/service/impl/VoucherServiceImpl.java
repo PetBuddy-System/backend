@@ -140,7 +140,7 @@ public class VoucherServiceImpl implements VoucherService {
 
             order.setVoucher(voucher);
             order.setShippingDiscountAmount(shippingDiscount);
-            auditService.logVoucherUsage(savedUserVoucher, user);
+            auditService.logVoucherUsage(savedUserVoucher,"VOUCHER_USED" ,user);
 
             return BigDecimal.ZERO;
         }
@@ -159,7 +159,7 @@ public class VoucherServiceImpl implements VoucherService {
 
         order.setVoucher(voucher);
         order.setShippingDiscountAmount(BigDecimal.ZERO);
-        auditService.logVoucherUsage(savedUserVoucher, user);
+        auditService.logVoucherUsage(savedUserVoucher, "VOUCHER_USED" ,user);
 
         return discountAmount;
     }

@@ -130,7 +130,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         Long orderId = Long.valueOf(ipn.getOrderId());
-        Payment payment = paymentRepository.findByOrder_OrderId(orderId)
+        Payment payment = paymentRepository.findByMomoOrderId(ipn.getOrderId())
                 .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
         if (ipn.getResultCode() == 0) {
@@ -148,7 +148,7 @@ public class PaymentServiceImpl implements PaymentService {
             cartService.clearCart(user);
             paymentRepository.save(payment);
             user.setPaymentFailStreak(0);
-            auditService.logPaymentPaid(payment, user);
+            auditService.logPaymentPaid(payment,"PAYMENT_BY_MOMO" ,user);
         } else {
             payment.setStatus(PaymentStatus.FAILED);
             paymentRepository.save(payment);
@@ -381,12 +381,13 @@ public class PaymentServiceImpl implements PaymentService {
 
     private void createMomoPayment(Payment payment) {
         Order order = payment.getOrder();
-        String orderId =  order.getOrderCode() + "-" + System.currentTimeMillis();
+        String orderId = order.getOrderCode() + "-" + System.currentTimeMillis();
         String orderInfo = "Thanh toan don hang " + order.getOrderCode();
         Long amount = payment.getAmount().longValue();
 
         MomoCreatePaymentResponse response = momoService.createQrPayment(amount, orderId, orderInfo);
 
+        payment.setMomoOrderId(orderId);
         payment.setMomoRequestId(response.getRequestId());
         payment.setMomoPayUrl(response.getPayUrl());
         payment.setStatus(PaymentStatus.PROCESSING);
@@ -466,7 +467,7 @@ public class PaymentServiceImpl implements PaymentService {
             paymentRepository.save(payment);
             user.setPaymentFailStreak(0);
 
-            auditService.logPaymentPaid(payment, user);
+            auditService.logPaymentPaid(payment, "PAYMENT_BY_CARD",user);
             return;
         }
 
@@ -577,5 +578,36 @@ public class PaymentServiceImpl implements PaymentService {
         } catch (StripeException ex) {
             throw new AppException(ErrorCode.PAYMENT_STRIPE_ERROR);
         }
+    }
+
+    @Override
+    @Transactional
+    public boolean confirmMomoStatus(Order order) {
+        Payment payment = order.getPayment();
+
+        if (payment.getStatus() == PaymentStatus.PAID) {
+            return true;
+        }
+        if (payment.getMomoOrderId() == null || payment.getMomoRequestId() == null) {
+            return false;
+        }
+
+        MomoCreatePaymentResponse response = momoService.queryTransactionStatus(
+                payment.getMomoOrderId(), payment.getMomoRequestId());
+
+        if (response != null && response.getResultCode() != null && response.getResultCode() == 0) {
+            User user = order.getUser();
+            markPaymentSucceeded(order);
+            payment.setStatus(PaymentStatus.PAID);
+            payment.setPaidAt(LocalDateTime.now());
+            payment.setMomoTransId(String.valueOf(response.getTransId()));
+            cartService.clearCart(user);
+            paymentRepository.save(payment);
+            user.setPaymentFailStreak(0);
+            auditService.logPaymentPaid(payment,"PAYMENT_SUCCESS" ,user);
+            log.warn("Order {} đã được thanh toán MoMo thành công nhưng suýt bị expire — đã đồng bộ lại trạng thái", order.getOrderCode());
+            return true;
+        }
+        return false;
     }
 }

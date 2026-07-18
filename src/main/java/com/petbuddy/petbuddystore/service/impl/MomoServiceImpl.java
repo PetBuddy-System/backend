@@ -6,6 +6,7 @@ import com.petbuddy.petbuddystore.common.util.MomoSignatureUtil;
 import com.petbuddy.petbuddystore.configuration.MomoConfig;
 import com.petbuddy.petbuddystore.dto.request.MomoCreatePaymentRequest;
 import com.petbuddy.petbuddystore.dto.request.MomoIpnRequest;
+import com.petbuddy.petbuddystore.dto.request.MomoQueryStatusRequest;
 import com.petbuddy.petbuddystore.dto.response.MomoCreatePaymentResponse;
 import com.petbuddy.petbuddystore.service.MomoService;
 import lombok.AccessLevel;
@@ -105,5 +106,34 @@ public class MomoServiceImpl implements MomoService {
 
         String expected = MomoSignatureUtil.hmacSHA256(rawSignature, momoConfig.getSecretKey());
         return expected.equals(ipn.getSignature());
+    }
+
+    @Override
+    public MomoCreatePaymentResponse queryTransactionStatus(String orderId, String requestId) {
+        String rawSignature = "accessKey=" + momoConfig.getAccessKey()
+                + "&orderId=" + orderId
+                + "&partnerCode=" + momoConfig.getPartnerCode()
+                + "&requestId=" + requestId;
+
+        String signature = MomoSignatureUtil.hmacSHA256(rawSignature, momoConfig.getSecretKey());
+
+        MomoQueryStatusRequest request = MomoQueryStatusRequest.builder()
+                .partnerCode(momoConfig.getPartnerCode())
+                .requestId(requestId)
+                .orderId(orderId)
+                .lang("vi")
+                .signature(signature)
+                .build();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<MomoQueryStatusRequest> entity = new HttpEntity<>(request, headers);
+
+        try {
+            return restTemplate.postForObject(momoConfig.getQueryUrl(), entity, MomoCreatePaymentResponse.class);
+        } catch (Exception ex) {
+            log.error("Lỗi khi query trạng thái giao dịch MoMo orderId={}", orderId, ex);
+            return null;
+        }
     }
 }

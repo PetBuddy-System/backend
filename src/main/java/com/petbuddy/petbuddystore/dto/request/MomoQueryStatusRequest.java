@@ -8,18 +8,10 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class MomoIpnRequest {
+public class MomoQueryStatusRequest {
     String partnerCode;
-    String orderId;
     String requestId;
-    Long amount;
-    String orderInfo;
-    String orderType;
-    Long transId;
-    Integer resultCode;
-    String message;
-    String payType;
-    String responseTime;
-    String extraData;
+    String orderId;
+    String lang;
     String signature;
 }

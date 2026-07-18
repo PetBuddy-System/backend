@@ -2,6 +2,7 @@ package com.petbuddy.petbuddystore.controller;
 
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.response.DeliveryStopResponse;
+import com.petbuddy.petbuddystore.dto.response.RestockEligibilityResponse;
 import com.petbuddy.petbuddystore.dto.response.ShipperSuggestionResponse;
 import com.petbuddy.petbuddystore.service.ShipperAssignmentService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,7 +39,12 @@ public class ShipperAssignmentController {
 
     @GetMapping("/{staffId}/delivery-route")
     @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_SHIPPER')")
-    public ResponseEntity<ApiResponse<List<DeliveryStopResponse>>> suggestDeliveryRoute(@RequestParam String staffId) {
+    public ResponseEntity<ApiResponse<List<DeliveryStopResponse>>> suggestDeliveryRoute(@PathVariable String staffId) {
         return ResponseEntity.ok(ApiResponse.success("Suggest delivery route successful", shipperAssignmentService.suggestDeliveryRoute(staffId)));
+    }
+    @GetMapping("/restock-eligibility")
+    public ResponseEntity<ApiResponse<List<RestockEligibilityResponse>>> getShippersEligibleForRestock() {
+        List<RestockEligibilityResponse> data = shipperAssignmentService.getShippersEligibleForRestock();
+        return ResponseEntity.ok(ApiResponse.success("Get shippers eligible for restock successful", data));
     }
 }

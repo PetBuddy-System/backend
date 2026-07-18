@@ -21,5 +21,5 @@ public interface PaymentService {
     void cancelStripeIntent(String paymentIntentId);
     void handleMomoIpn(MomoIpnRequest ipn);
     PaymentResponse retryMomoPayment(Long orderId);
-
+    boolean confirmMomoStatus(Order order);
 }

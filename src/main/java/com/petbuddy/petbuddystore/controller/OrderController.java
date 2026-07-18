@@ -50,7 +50,7 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Orders retrieved successfully", orderService.getOrder(pageable)));
     }
 
-    @PreAuthorize("hasRole('CUSTOMER') or hasRole('STAFF')")
+    @PreAuthorize("hasRole('CUSTOMER') or hasRole('STAFF') or hasRole('ADMIN')")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(@PathVariable long id) {
         return ResponseEntity.ok(ApiResponse.success("Order retrieved successfully", orderService.getOrder(id)));
@@ -73,7 +73,7 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Picking list retrieved successfully", orderService.getPickingList(id)));
     }
 
-    @PreAuthorize("hasRole('STAFF')or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('STAFF') or hasRole('ADMIN')")
     @GetMapping("/all")
     public ResponseEntity<ApiResponse<Page<OrderResponse>>> getAllOrders(Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success("Orders retrieved successfully", orderService.getAllOrder(pageable)));

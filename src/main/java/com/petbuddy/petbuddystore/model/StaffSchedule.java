@@ -33,6 +33,9 @@ public class StaffSchedule {
 
     Integer maxOrderCapacity;
 
+    Double zoneCenterLat;
+    Double zoneCenterLng;
+
     LocalDateTime checkInAt;
     LocalDateTime checkOutAt;
     LocalDateTime assignedAt;

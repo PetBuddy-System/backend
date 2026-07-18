@@ -50,6 +50,9 @@ public class Payment {
     @Column(name = "momo_trans_id", unique = true)
     String momoTransId;
 
+    @Column(name = "momo_order_id", unique = true)
+    String momoOrderId;
+
     @Column(name = "momo_request_id", unique = true)
     String momoRequestId;
 

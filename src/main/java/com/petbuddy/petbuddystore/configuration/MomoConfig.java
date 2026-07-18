@@ -18,4 +18,5 @@ public class MomoConfig {
     String secretKey;
     String redirectUrl;
     String ipnUrl;
+    String queryUrl;
 }

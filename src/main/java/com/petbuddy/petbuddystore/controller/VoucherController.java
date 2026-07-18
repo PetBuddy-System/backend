@@ -29,7 +29,7 @@ public class VoucherController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<ApiResponse<VoucherResponse>> create(@RequestBody VoucherRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Tạo voucher thành công",
@@ -37,7 +37,7 @@ public class VoucherController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<VoucherResponse>> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Lấy voucher thành công",
@@ -57,7 +57,7 @@ public class VoucherController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Page<VoucherResponse>>> getAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -70,7 +70,7 @@ public class VoucherController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<ApiResponse<VoucherResponse>> update(@PathVariable UUID id, @RequestBody VoucherRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Cập nhật voucher thành công",

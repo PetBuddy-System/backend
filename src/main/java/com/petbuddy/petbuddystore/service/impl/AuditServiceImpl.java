@@ -589,7 +589,7 @@ public class AuditServiceImpl implements AuditService {
 
     @Override
     @Transactional
-    public void logPaymentPaid(Payment payment, User performedBy) {
+    public void logPaymentPaid(Payment payment,String reason ,User performedBy) {
         List<AuditChange> changes = new ArrayList<>();
         changes.add(AuditChange.builder().field("orderCode")
                 .oldValue(null)
@@ -615,7 +615,7 @@ public class AuditServiceImpl implements AuditService {
                         : ("PAY-" + payment.getPaymentId()))
                 .action(AuditAction.PAY)
                 .changes(changes)
-                .reason("PAYMENT_SUCCEEDED")
+                .reason(reason != null ? reason : "PAYMENT_SUCCESS")
                 .performedBy(performedBy)
                 .performedAt(LocalDateTime.now())
                 .build();
@@ -703,7 +703,7 @@ public class AuditServiceImpl implements AuditService {
 
     @Override
     @Transactional
-    public void logVoucherUsage(UserVouchers userVoucher, User performedBy) {
+    public void logVoucherUsage(UserVouchers userVoucher,String reason,  User performedBy) {
         List<AuditChange> changes = new ArrayList<>();
         changes.add(AuditChange.builder().field("voucherCode")
                 .oldValue(null)
@@ -724,7 +724,7 @@ public class AuditServiceImpl implements AuditService {
                 .entityCode(userVoucher.getVoucher() != null ? userVoucher.getVoucher().getVoucherCode() : null)
                 .action(AuditAction.USE)
                 .changes(changes)
-                .reason("VOUCHER_APPLIED")
+                .reason(reason != null ? reason : "VOUCHER_USED")
                 .performedBy(performedBy)
                 .performedAt(LocalDateTime.now())
                 .build();
