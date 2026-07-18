@@ -28,6 +28,11 @@ public class ProductUpdateRequest {
 
     String usageInstructions;
 
+    @NotNull(message = "PRODUCT_WEIGHT_REQUIRED")
+    @Min(value = 1, message = "PRODUCT_WEIGHT_INVALID")
+    @Max(value = 100000, message = "PRODUCT_WEIGHT_INVALID")
+    Integer weight; // gram (g)
+
     @DecimalMin(value = "0.01", message = "PRODUCT_PRICE_INVALID")
     BigDecimal salePrice;
 
