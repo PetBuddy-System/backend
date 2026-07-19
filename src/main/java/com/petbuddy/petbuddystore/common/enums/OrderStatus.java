@@ -7,6 +7,8 @@ public enum OrderStatus {
     PICKED,
     SHIPPING,
     DELIVERED,
+    BOMBED,
+    RETURNED_TO_WAREHOUSE,
     COMPLETED,
     CANCEL_REQUESTED,
     CANCELLED,

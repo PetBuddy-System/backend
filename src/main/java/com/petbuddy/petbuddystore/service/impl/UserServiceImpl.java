@@ -175,4 +175,11 @@ public class UserServiceImpl implements UserService {
         }
         user.setRole(updatedRole);
     }
+
+    @Override
+    public List<UserResponse> getAllStaffs() {
+        return userRepository.findAllByRole(Role.STAFF)
+                .stream()
+                .map(userMapper::toUserResponse).toList();
+    }
 }

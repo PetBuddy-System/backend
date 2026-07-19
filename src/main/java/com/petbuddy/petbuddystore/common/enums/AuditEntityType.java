@@ -6,5 +6,6 @@ public enum AuditEntityType {
     BATCH,
     PAYMENT,
     VOUCHER,
-    VOUCHER_USAGE
+    VOUCHER_USAGE,
+    ORDER
 }

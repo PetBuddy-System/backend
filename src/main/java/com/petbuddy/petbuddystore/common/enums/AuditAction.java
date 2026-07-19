@@ -6,5 +6,7 @@ public enum AuditAction {
     DELETE,
     PAY,
     REFUND,
-    USE
+    USE,
+    BOMBED,
+    RETURNED_TO_WAREHOUSE
 }

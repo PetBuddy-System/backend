@@ -34,4 +34,6 @@ public interface AuditService {
     void logVoucherCreate(Voucher voucher, String reason, String note, User performedBy);
 
     void logVoucherUsage(UserVouchers userVoucher,String reason, User performedBy);
+    void logOrderBombed(Order order, String reason, User performedBy);
+    void logOrderReturnedToWarehouse(Order order, String reason, User performedBy);
 }
