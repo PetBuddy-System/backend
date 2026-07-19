@@ -127,14 +127,26 @@ public class ReturnRequestController {
                                 "Return request retrieved successfully",
                                 returnRequestService.getReturnRequestById(id)));
         }
-
-        @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
+        
+        // Endpoint cho Coordinator
+        @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_COORDINATOR')")
         @PatchMapping("/api/management/returns/{id}/status")
-        public ResponseEntity<ApiResponse<ReturnRequestResponse>> updateReturnStatus(
-                        @PathVariable Long id,
-                        @RequestBody @Valid UpdateReturnStatusRequest request) {
+        public ResponseEntity<ApiResponse<ReturnRequestResponse>> updateReturnStatusByManagement(
+                @PathVariable Long id,
+                @RequestBody @Valid UpdateReturnStatusRequest request) {
                 return ResponseEntity.ok(ApiResponse.success(
-                                "Return request status updated successfully",
-                                returnRequestService.updateReturnStatus(id, request)));
+                        "Return request status updated successfully",
+                        returnRequestService.updateReturnStatusByManagement(id, request)));
+        }
+
+        // Shipper - có authority TASK_SHIPPER
+        @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_SHIPPER')")
+        @PatchMapping("/api/shipper/returns/{id}/status")
+        public ResponseEntity<ApiResponse<ReturnRequestResponse>> updateReturnStatusByShipper(
+                @PathVariable Long id,
+                @RequestBody @Valid UpdateReturnStatusRequest request) {
+                return ResponseEntity.ok(ApiResponse.success(
+                        "Return request status updated successfully",
+                        returnRequestService.updateReturnStatusByShipper(id, request)));
         }
 }

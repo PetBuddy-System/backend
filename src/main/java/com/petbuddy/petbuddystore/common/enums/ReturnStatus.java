@@ -1,17 +1,24 @@
 package com.petbuddy.petbuddystore.common.enums;
 
 public enum ReturnStatus {
+
     PENDING,
 
     APPROVED,
 
+    PICKING_UP,
+
     PICKED_UP,
 
-    REJECTED,
+    RETURNED_TO_STORE,
+
+    READY_TO_DELIVER,
+
+    DELIVERING,
 
     COMPLETED,
 
-    CANCELLED,
+    REJECTED,
 
-    DELIVERY_FAILED
+    CANCELLED
 }

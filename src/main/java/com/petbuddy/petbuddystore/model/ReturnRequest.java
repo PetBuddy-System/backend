@@ -40,10 +40,15 @@ public class ReturnRequest {
         @JoinColumn(name = "requested_by", nullable = false)
         private User requestedBy;
 
-        // Staff xử lý
+        // Coordinator xử lý yêu cầu
         @ManyToOne(fetch = FetchType.LAZY)
-        @JoinColumn(name = "processed_by")
-        private User processedBy;
+        @JoinColumn(name = "coordinator_id")
+        private User coordinator;
+
+        // Shipper được phân công
+        @ManyToOne(fetch = FetchType.LAZY)
+        @JoinColumn(name = "shipper_id")
+        private User shipper;
 
         @Enumerated(EnumType.STRING)
         private ReturnType type;
@@ -79,7 +84,11 @@ public class ReturnRequest {
         @Column(updatable = false)
         private LocalDateTime createdAt;
 
-        private LocalDateTime processedAt;
+        private LocalDateTime approvedAt;
+
+        private LocalDateTime pickedUpAt;
+
+        private LocalDateTime returnedToStoreAt;
 
         private LocalDateTime completedAt;
 

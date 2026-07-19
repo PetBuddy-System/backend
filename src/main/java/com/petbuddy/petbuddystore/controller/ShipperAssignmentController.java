@@ -1,11 +1,14 @@
 package com.petbuddy.petbuddystore.controller;
 
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
+import com.petbuddy.petbuddystore.dto.request.AssignReturnShipperRequest;
 import com.petbuddy.petbuddystore.dto.response.DeliveryStopResponse;
 import com.petbuddy.petbuddystore.dto.response.RestockEligibilityResponse;
+import com.petbuddy.petbuddystore.dto.response.ReturnShipperResponse;
 import com.petbuddy.petbuddystore.dto.response.ShipperSuggestionResponse;
 import com.petbuddy.petbuddystore.service.ShipperAssignmentService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -46,5 +49,26 @@ public class ShipperAssignmentController {
     public ResponseEntity<ApiResponse<List<RestockEligibilityResponse>>> getShippersEligibleForRestock() {
         List<RestockEligibilityResponse> data = shipperAssignmentService.getShippersEligibleForRestock();
         return ResponseEntity.ok(ApiResponse.success("Get shippers eligible for restock successful", data));
+    }
+
+    @GetMapping("/available-shippers")
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_COORDINATOR')")
+    public ResponseEntity<ApiResponse<List<ReturnShipperResponse>>> getAvailableShippers() {
+        return ResponseEntity.ok(
+                ApiResponse.success("Get available shippers successfully", shipperAssignmentService.getAvailableShippers())
+        );
+    }
+
+    @PatchMapping("/{returnRequestId}/assign-shipper")
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_COORDINATOR')")
+    public ResponseEntity<ApiResponse<Void>> assignReturnShipper(
+            @PathVariable Long returnRequestId,
+            @Valid @RequestBody AssignReturnShipperRequest request) {
+
+        shipperAssignmentService.assignReturnShipper(returnRequestId, request);
+
+        return ResponseEntity.ok(
+                ApiResponse.success("Assign return shipper successfully")
+        );
     }
 }

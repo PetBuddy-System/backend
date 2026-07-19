@@ -1,24 +1,15 @@
 package com.petbuddy.petbuddystore.service.impl;
 
-import com.petbuddy.petbuddystore.common.enums.OrderStatus;
-import com.petbuddy.petbuddystore.common.enums.Role;
-import com.petbuddy.petbuddystore.common.enums.ScheduleStatus;
-import com.petbuddy.petbuddystore.common.enums.StaffTask;
+import com.petbuddy.petbuddystore.common.enums.*;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.common.util.CapacitatedKMeans;
 import com.petbuddy.petbuddystore.common.util.GeoUtils;
 import com.petbuddy.petbuddystore.configuration.DeliveryCapacityProperties;
-import com.petbuddy.petbuddystore.dto.response.DeliveryStopResponse;
-import com.petbuddy.petbuddystore.dto.response.RestockEligibilityResponse;
-import com.petbuddy.petbuddystore.dto.response.ShipperSuggestionResponse;
-import com.petbuddy.petbuddystore.model.Order;
-import com.petbuddy.petbuddystore.model.StaffSchedule;
-import com.petbuddy.petbuddystore.model.StoreLocation;
-import com.petbuddy.petbuddystore.model.WorkSchedule;
-import com.petbuddy.petbuddystore.repository.OrderRepository;
-import com.petbuddy.petbuddystore.repository.StaffScheduleRepository;
-import com.petbuddy.petbuddystore.repository.StoreLocationRepository;
+import com.petbuddy.petbuddystore.dto.request.AssignReturnShipperRequest;
+import com.petbuddy.petbuddystore.dto.response.*;
+import com.petbuddy.petbuddystore.model.*;
+import com.petbuddy.petbuddystore.repository.*;
 import com.petbuddy.petbuddystore.service.OrsRoutingService;
 import com.petbuddy.petbuddystore.service.ShipperAssignmentService;
 import jakarta.transaction.Transactional;
@@ -42,9 +33,11 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
 
     StaffScheduleRepository staffScheduleRepository;
     OrderRepository orderRepository;
+    ReturnRequestRepository returnRequestRepository;
     StoreLocationRepository storeLocationRepository;
     OrsRoutingService orsRoutingService;
     DeliveryCapacityProperties capacityProperties;
+    UserRepository userRepository;
 
     static double MAX_DISTANCE_FOR_ORS_CALL_KM = 7.0;
     static double MAX_CLUSTER_DISTANCE_KM = 7.0;
@@ -361,6 +354,87 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
         return result;
     }
 
+    @Override
+    @Transactional
+    public List<ReturnShipperResponse> getAvailableShippers() {
+
+        List<StaffSchedule> schedules = staffScheduleRepository.findOnDutySchedules(
+                LocalDate.now(),
+                List.of(
+                        ScheduleStatus.SCHEDULED,
+                        ScheduleStatus.WORKING
+                )
+        );
+
+        List<ReturnStatus> activeStatuses = List.of(
+                ReturnStatus.APPROVED,
+                ReturnStatus.PICKING_UP,
+                ReturnStatus.PICKED_UP,
+                ReturnStatus.RETURNED_TO_STORE,
+                ReturnStatus.READY_TO_DELIVER,
+                ReturnStatus.DELIVERING
+        );
+
+        return schedules.stream()
+                .filter(schedule ->
+                        schedule.getStaff().getRole() == Role.STAFF
+                                && schedule.getStaff().getStaffTask() == StaffTask.SHIPPER
+                )
+                .map(schedule -> {
+
+                    User staff = schedule.getStaff();
+
+                    long activeReturnCount =
+                            returnRequestRepository.countByShipper_UserIdAndStatusIn(
+                                    staff.getUserId(),
+                                    activeStatuses
+                            );
+
+                    return ReturnShipperResponse.builder()
+                            .staffId(staff.getUserId())
+                            .staffName(staff.getFullName())
+                            .staffEmail(staff.getEmail())
+                            .activeReturnCount((int) activeReturnCount)
+                            .build();
+                })
+                .sorted(Comparator.comparing(ReturnShipperResponse::getActiveReturnCount))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void assignReturnShipper(Long returnRequestId,
+                                    AssignReturnShipperRequest request) {
+
+        ReturnRequest returnRequest = returnRequestRepository.findById(returnRequestId)
+                .orElseThrow(() -> new AppException(ErrorCode.RETURN_REQUEST_NOT_FOUND));
+
+        if (returnRequest.getStatus() != ReturnStatus.APPROVED) {
+            throw new AppException(ErrorCode.INVALID_RETURN_STATUS);
+        }
+
+        User shipper = userRepository.findById(request.getShipperId())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        if (shipper.getRole() != Role.STAFF
+                || shipper.getStaffTask() != StaffTask.SHIPPER) {
+            throw new AppException(ErrorCode.INVALID_SHIPPER);
+        }
+
+        boolean onDuty = staffScheduleRepository.findOnDutySchedules(
+                        LocalDate.now(),
+                        List.of(ScheduleStatus.SCHEDULED, ScheduleStatus.WORKING)
+                ).stream()
+                .anyMatch(schedule ->
+                        schedule.getStaff().getUserId().equals(shipper.getUserId()));
+
+        if (!onDuty) {
+            throw new AppException(ErrorCode.SHIPPER_NOT_ON_DUTY);
+        }
+
+        returnRequest.setShipper(shipper);
+        returnRequestRepository.save(returnRequest);
+    }
     @Override
     @Transactional
     public List<DeliveryStopResponse> suggestDeliveryRoute(String staffId) {

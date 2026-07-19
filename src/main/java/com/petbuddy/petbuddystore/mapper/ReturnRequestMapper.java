@@ -12,11 +12,11 @@ public interface ReturnRequestMapper {
 
     @Mapping(target = "orderId", source = "order.orderId")
     @Mapping(target = "orderCode", source = "order.orderCode")
-    @Mapping(target = "requestedBy", source = "requestedBy")
-    @Mapping(target = "processedBy", source = "processedBy")
-    @Mapping(target = "returnItems", source = "returnItems")
-    @Mapping(target = "mediaFiles", source = "mediaFiles")
-    @Mapping(target = "restockedAt", source = "restockedAt")
+    @Mapping(target = "recipientName", source = "order.recipientName")
+    @Mapping(target = "phoneNumber", source = "order.phoneNumber")
+    @Mapping(target = "address", source = "order.address")
+    @Mapping(target = "latitude", source = "order.latitude")
+    @Mapping(target = "longitude", source = "order.longitude")
     ReturnRequestResponse toReturnRequestResponse(ReturnRequest returnRequest);
 
     @Mapping(target = "orderDetailId", source = "orderDetail.orderDetailId")
