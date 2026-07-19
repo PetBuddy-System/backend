@@ -20,6 +20,8 @@ public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, Lo
 
     boolean existsByOrder_OrderIdAndStatusIn(Long orderId, Collection<ReturnStatus> statuses);
 
+    long countByShipper_UserIdAndStatusIn(String shipperId, Collection<ReturnStatus> statuses);
+
     boolean existsByReturnCode(String returnCode);
 
     @Query("SELECT rr FROM ReturnRequest rr " +

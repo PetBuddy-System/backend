@@ -181,7 +181,8 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                 refundMethodEnum = RefundMethod.STRIPE_PAYMENT;
             } else {
                 refundMethodEnum = RefundMethod.valueOf(request.getRefundMethod());
-            }        } catch (IllegalArgumentException e) {
+            }
+        } catch (IllegalArgumentException e) {
             throw new AppException(ErrorCode.INVALID_KEY);
         }
 
@@ -228,10 +229,8 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                 .refundStatus(typeEnum == ReturnType.RETURN ? RefundStatus.PENDING : RefundStatus.NOT_REQUIRED)
                 .staffNote(null)
                 .bankName(refundMethodEnum == RefundMethod.BANK_TRANSFER ? request.getBankName() : null)
-                .bankAccountNumber(
-                        refundMethodEnum == RefundMethod.BANK_TRANSFER ? request.getBankAccountNumber() : null)
-                .bankAccountHolder(
-                        refundMethodEnum == RefundMethod.BANK_TRANSFER ? request.getBankAccountHolder() : null)
+                .bankAccountNumber(refundMethodEnum == RefundMethod.BANK_TRANSFER ? request.getBankAccountNumber() : null)
+                .bankAccountHolder(refundMethodEnum == RefundMethod.BANK_TRANSFER ? request.getBankAccountHolder() : null)
                 .build();
 
         BigDecimal policyFactor = getRefundPolicyFactor(reasonEnum, days);
@@ -293,10 +292,6 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
         returnRequest.setReturnItems(returnItems);
 
         ReturnRequest saved = returnRequestRepository.save(returnRequest);
-
-        if (typeEnum == ReturnType.EXCHANGE) {
-            returnStockService.reserveStockForExchange(saved);
-        }
 
         return returnRequestMapper.toReturnRequestResponse(saved);
     }
@@ -368,13 +363,8 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
-        // CHỈ CHO HỦY KHI PENDING
         if (returnRequest.getStatus() != ReturnStatus.PENDING) {
             throw new AppException(ErrorCode.CANCELLED_NOT_ALLOWED);
-        }
-
-        if (returnRequest.getType() == ReturnType.EXCHANGE) {
-            returnStockService.releaseReservedStock(returnRequest);
         }
 
         returnRequest.setStatus(ReturnStatus.CANCELLED);
@@ -387,15 +377,327 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
     }
 
     @Override
-    public Page<ReturnRequestResponse> getAllReturnRequests(ReturnFilterRequest filter, String sortBy, Pageable pageable) {
-        checkLogin();
+    public Page<ReturnRequestResponse> getAllReturnRequests(
+            ReturnFilterRequest filter,
+            String sortBy,
+            Pageable pageable) {
+
+        User currentUser = getCurrentUser();
+
         Pageable resolvedPageable = buildPageable(pageable, sortBy);
+
         Specification<ReturnRequest> spec = buildReturnSpec(filter);
+
+        if (currentUser.getRole() == Role.STAFF
+                && currentUser.getStaffTask() == StaffTask.SHIPPER) {
+
+            spec = spec.and((root, query, cb) ->
+                    cb.equal(root.get("shipper").get("userId"),
+                            currentUser.getUserId()));
+        }
+
         return returnRequestRepository.findAll(spec, resolvedPageable)
                 .map(returnRequestMapper::toReturnRequestResponse);
     }
 
-    // ── Private helpers ────────────────────────────────────────────────────────
+    // ============================================================
+    // STAFF METHODS - COORDINATOR
+    // ============================================================
+
+    @Override
+    @Transactional
+    public ReturnRequestResponse updateReturnStatusByManagement(Long id, UpdateReturnStatusRequest request) {
+        checkLogin();
+        User currentUser = getCurrentUser();
+
+        ReturnRequest returnRequest = returnRequestRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.RETURN_REQUEST_NOT_FOUND));
+
+        ReturnStatus newStatus = parseStatus(request.getStatus());
+        ReturnStatus currentStatus = returnRequest.getStatus();
+
+        // Validate
+        validateManagementStatusTransition(returnRequest.getType(), currentStatus, newStatus);
+
+        // Xử lý business logic
+        processManagementStatusChange(returnRequest, newStatus, currentUser);
+
+        // Cập nhật common fields
+        updateCommonFields(returnRequest, request, newStatus);
+
+        ReturnRequest saved = returnRequestRepository.save(returnRequest);
+        return returnRequestMapper.toReturnRequestResponse(saved);
+    }
+
+    // ============================================================
+    // STAFF METHODS - SHIPPER
+    // ============================================================
+
+    @Override
+    @Transactional
+    public ReturnRequestResponse updateReturnStatusByShipper(Long id, UpdateReturnStatusRequest request) {
+        checkLogin();
+        User currentUser = getCurrentUser();
+
+        ReturnRequest returnRequest = returnRequestRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.RETURN_REQUEST_NOT_FOUND));
+
+        ReturnStatus newStatus = parseStatus(request.getStatus());
+        ReturnStatus currentStatus = returnRequest.getStatus();
+
+        // Validate
+        validateShipperStatusTransition(returnRequest.getType(), currentStatus, newStatus);
+
+        // Xử lý business logic
+        processShipperStatusChange(returnRequest, newStatus, currentUser);
+
+        // Cập nhật common fields
+        updateCommonFields(returnRequest, request, newStatus);
+
+        ReturnRequest saved = returnRequestRepository.save(returnRequest);
+        return returnRequestMapper.toReturnRequestResponse(saved);
+    }
+
+    // ============================================================
+    // PRIVATE VALIDATION METHODS
+    // ============================================================
+
+    private void validateManagementStatusTransition(ReturnType type, ReturnStatus current, ReturnStatus next) {
+        // Trạng thái cuối không thể chuyển tiếp
+        if (isFinalStatus(current)) {
+            throw new AppException(ErrorCode.RETURN_REQUEST_ALREADY_PROCESSED);
+        }
+
+        // PENDING -> APPROVED, REJECTED
+        if (current == ReturnStatus.PENDING) {
+            if (next != ReturnStatus.APPROVED && next != ReturnStatus.REJECTED) {
+                throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+            }
+            return;
+        }
+
+        // RETURNED_TO_STORE -> COMPLETED, REJECTED
+        if (current == ReturnStatus.RETURNED_TO_STORE) {
+            if (next != ReturnStatus.COMPLETED && next != ReturnStatus.REJECTED) {
+                throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+            }
+            return;
+        }
+
+        throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+    }
+
+    private void validateShipperStatusTransition(ReturnType type, ReturnStatus current, ReturnStatus next) {
+        // Trạng thái cuối không thể chuyển tiếp
+        if (isFinalStatus(current)) {
+            throw new AppException(ErrorCode.RETURN_REQUEST_ALREADY_PROCESSED);
+        }
+
+        if (type == ReturnType.RETURN) {
+            // RETURN: APPROVED -> PICKING_UP/PICKED_UP -> RETURNED_TO_STORE
+            switch (current) {
+                case APPROVED:
+                    if (next != ReturnStatus.PICKING_UP) {
+                        throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                    }
+                    break;
+
+                case PICKING_UP:
+                    if (next != ReturnStatus.PICKED_UP) {
+                        throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                    }
+                    break;
+
+                case PICKED_UP:
+                    if (next != ReturnStatus.RETURNED_TO_STORE) {
+                        throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                    }
+                    break;
+
+                default:
+                    throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+            }
+        } else if (type == ReturnType.EXCHANGE) {
+            // EXCHANGE: READY_TO_DELIVER -> DELIVERING -> COMPLETED
+            switch (current) {
+                case READY_TO_DELIVER:
+                    if (next != ReturnStatus.DELIVERING) {
+                        throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                    }
+                    break;
+
+                case DELIVERING:
+                    if (next != ReturnStatus.COMPLETED) {
+                        throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                    }
+                    break;
+
+                default:
+                    throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+            }
+        }
+    }
+
+    // ============================================================
+    // PRIVATE BUSINESS LOGIC METHODS
+    // ============================================================
+
+    private void processManagementStatusChange(ReturnRequest returnRequest,
+                                               ReturnStatus newStatus,
+                                               User currentUser) {
+        String userName = currentUser.getFullName() != null ?
+                currentUser.getFullName() :
+                currentUser.getEmail();
+
+        // Xử lý cho EXCHANGE
+        if (returnRequest.getType() == ReturnType.EXCHANGE) {
+            switch (newStatus) {
+                case APPROVED:
+                    returnRequest.setApprovedAt(LocalDateTime.now());
+                    returnRequest.setCoordinator(currentUser);
+                    returnStockService.reserveStockForExchange(returnRequest);
+                    log.info("Coordinator {} approved exchange request {}",
+                            userName, returnRequest.getReturnCode());
+                    break;
+
+                case COMPLETED:
+                    returnStockService.confirmStockForExchange(returnRequest);
+                    returnRequest.setCompletedAt(LocalDateTime.now());
+                    log.info("Exchange completed for request {}", returnRequest.getReturnCode());
+                    break;
+
+                case REJECTED:
+                    returnStockService.releaseReservedStock(returnRequest);
+                    returnRequest.setRefundStatus(RefundStatus.FAILED);
+                    returnRequest.setCoordinator(currentUser);
+                    log.info("Coordinator {} rejected exchange request {}",
+                            userName, returnRequest.getReturnCode());
+                    break;
+
+                default:
+                    break;
+            }
+        }
+
+        // Xử lý cho RETURN
+        if (returnRequest.getType() == ReturnType.RETURN) {
+            switch (newStatus) {
+                case APPROVED:
+                    returnRequest.setApprovedAt(LocalDateTime.now());
+                    returnRequest.setCoordinator(currentUser);
+                    log.info("Coordinator {} approved return request {}",
+                            userName, returnRequest.getReturnCode());
+                    break;
+
+                case COMPLETED:
+                    paymentService.refundForReturn(returnRequest);
+                    returnRequest.setRefundStatus(RefundStatus.SUCCESS);
+                    returnRequest.setCompletedAt(LocalDateTime.now());
+                    log.info("Return completed and refunded for request {}", returnRequest.getReturnCode());
+                    break;
+
+                case REJECTED:
+                    returnRequest.setRefundStatus(RefundStatus.FAILED);
+                    returnRequest.setCoordinator(currentUser);
+                    log.info("Coordinator {} rejected return request {}",
+                            userName, returnRequest.getReturnCode());
+                    break;
+
+                default:
+                    break;
+            }
+        }
+    }
+
+    private void processShipperStatusChange(ReturnRequest returnRequest,
+                                            ReturnStatus newStatus,
+                                            User currentUser) {
+        String userName = currentUser.getFullName() != null ?
+                currentUser.getFullName() :
+                currentUser.getEmail();
+
+        // Shipper xử lý cho RETURN
+        if (returnRequest.getType() == ReturnType.RETURN) {
+            switch (newStatus) {
+                case PICKING_UP:
+                    returnRequest.setPickedUpAt(LocalDateTime.now());
+                    returnRequest.setShipper(currentUser);
+                    log.info("Shipper {} is picking up return request {}",
+                            userName, returnRequest.getReturnCode());
+                    break;
+
+                case PICKED_UP:
+                    returnRequest.setPickedUpAt(LocalDateTime.now());
+                    returnRequest.setShipper(currentUser);
+                    log.info("Shipper {} picked up return request {}",
+                            userName, returnRequest.getReturnCode());
+                    break;
+
+                case RETURNED_TO_STORE:
+                    returnRequest.setReturnedToStoreAt(LocalDateTime.now());
+                    log.info("Shipper {} returned to store for request {}",
+                            userName, returnRequest.getReturnCode());
+                    break;
+
+                default:
+                    break;
+            }
+        }
+
+        // Shipper xử lý cho EXCHANGE
+        if (returnRequest.getType() == ReturnType.EXCHANGE) {
+            switch (newStatus) {
+                case DELIVERING:
+                    returnRequest.setShipper(currentUser);
+                    log.info("Shipper {} is delivering exchange request {}",
+                            userName, returnRequest.getReturnCode());
+                    break;
+
+                case COMPLETED:
+                    returnStockService.confirmStockForExchange(returnRequest);
+                    returnRequest.setCompletedAt(LocalDateTime.now());
+                    log.info("Shipper {} delivered exchange request successfully {}",
+                            userName, returnRequest.getReturnCode());
+                    break;
+
+                default:
+                    break;
+            }
+        }
+    }
+
+    // ============================================================
+    // PRIVATE UPDATE COMMON FIELDS
+    // ============================================================
+
+    private void updateCommonFields(ReturnRequest returnRequest,
+                                    UpdateReturnStatusRequest request,
+                                    ReturnStatus newStatus) {
+        returnRequest.setStatus(newStatus);
+        returnRequest.setUpdatedAt(LocalDateTime.now());
+
+        if (request.getStaffNote() != null) {
+            returnRequest.setStaffNote(request.getStaffNote());
+        }
+    }
+
+    // ============================================================
+    // PRIVATE HELPER METHODS
+    // ============================================================
+
+    private ReturnStatus parseStatus(String status) {
+        try {
+            return ReturnStatus.valueOf(status);
+        } catch (IllegalArgumentException e) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
+    }
+
+    private boolean isFinalStatus(ReturnStatus status) {
+        return status == ReturnStatus.REJECTED
+                || status == ReturnStatus.COMPLETED
+                || status == ReturnStatus.CANCELLED;
+    }
 
     private Specification<ReturnRequest> buildReturnSpec(ReturnFilterRequest filter) {
         return (root, query, cb) -> {
@@ -466,141 +768,6 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by(direction, field));
     }
 
-    @Override
-    @Transactional
-    public ReturnRequestResponse updateReturnStatus(Long id, UpdateReturnStatusRequest request) {
-        checkLogin();
-        User currentUser = getCurrentUser();
-
-        ReturnRequest returnRequest = returnRequestRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.RETURN_REQUEST_NOT_FOUND));
-        ReturnStatus newStatus;
-        try {
-            newStatus = ReturnStatus.valueOf(request.getStatus());
-        } catch (IllegalArgumentException e) {
-            throw new AppException(ErrorCode.INVALID_KEY);
-        }
-
-        ReturnStatus currentStatus = returnRequest.getStatus();
-
-        validateStatusTransition(returnRequest.getType(), currentStatus, newStatus);
-
-        // ============ XỬ LÝ EXCHANGE ============
-        if (returnRequest.getType() == ReturnType.EXCHANGE) {
-            switch (newStatus) {
-                case APPROVED:
-                    // Đã reserve stock khi tạo request, không cần confirm ở đây
-                    break;
-
-                case COMPLETED:
-                    // Đổi hàng thành công -> xác nhận sử dụng stock đã reserve
-                    returnStockService.confirmStockForExchange(returnRequest);
-                    log.info("Đổi hàng thành công cho yêu cầu {}", returnRequest.getReturnCode());
-                    break;
-
-                case DELIVERY_FAILED:
-                    // Giao hàng thất bại -> trả lại đúng stock đã reserve
-                    returnStockService.releaseReservedStock(returnRequest);
-                    break;
-
-                case REJECTED:
-                    // Từ chối -> trả lại đúng stock đã reserve
-                    returnStockService.releaseReservedStock(returnRequest);
-                    break;
-            }
-        }
-
-        if (returnRequest.getType() == ReturnType.RETURN) {
-            switch (newStatus) {
-                case APPROVED:
-                    // Chấp nhận yêu cầu trả hàng
-                    break;
-
-                case PICKED_UP:
-                    // Shipper đã lấy hàng từ khách
-                    log.info("Shipper đã lấy hàng cho yêu cầu trả hàng {}", returnRequest.getReturnCode());
-                    break;
-
-                case COMPLETED:
-                    // Đã nhận hàng thành công -> hoàn tiền
-                    paymentService.refundForReturn(returnRequest);
-                    returnRequest.setRefundStatus(RefundStatus.SUCCESS);
-                    break;
-
-                case DELIVERY_FAILED:
-                    // Không lấy được hàng
-                    returnRequest.setRefundStatus(RefundStatus.FAILED);
-                    break;
-
-                case REJECTED:
-                    returnRequest.setRefundStatus(RefundStatus.FAILED);
-                    break;
-            }
-        }
-
-        returnRequest.setStatus(newStatus);
-
-        if (request.getStaffNote() != null) {
-            returnRequest.setStaffNote(request.getStaffNote());
-        }
-
-        returnRequest.setProcessedBy(currentUser);
-        returnRequest.setProcessedAt(LocalDateTime.now());
-
-        if (newStatus == ReturnStatus.COMPLETED) {
-            returnRequest.setCompletedAt(LocalDateTime.now());
-        }
-
-        ReturnRequest saved = returnRequestRepository.save(returnRequest);
-        return returnRequestMapper.toReturnRequestResponse(saved);
-    }
-
-    private void validateStatusTransition(ReturnType type, ReturnStatus current, ReturnStatus next) {
-        // Trạng thái cuối không thể chuyển tiếp
-        if (current == ReturnStatus.REJECTED
-                || current == ReturnStatus.COMPLETED
-                || current == ReturnStatus.CANCELLED
-                || current == ReturnStatus.DELIVERY_FAILED) {
-            throw new AppException(ErrorCode.RETURN_REQUEST_ALREADY_PROCESSED);
-        }
-
-        // PENDING -> APPROVED, REJECTED
-        if (current == ReturnStatus.PENDING) {
-            if (next != ReturnStatus.APPROVED
-                    && next != ReturnStatus.REJECTED) {
-                throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
-            }
-            return;
-        }
-
-        // APPROVED
-        if (current == ReturnStatus.APPROVED) {
-
-            if (type == ReturnType.RETURN) {
-                // RETURN:
-                // APPROVED -> PICKED_UP hoặc DELIVERY_FAILED
-                if (next != ReturnStatus.PICKED_UP
-                        && next != ReturnStatus.DELIVERY_FAILED) {
-                    throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
-                }
-            } else {
-                // EXCHANGE:
-                // APPROVED -> COMPLETED hoặc DELIVERY_FAILED
-                if (next != ReturnStatus.COMPLETED
-                        && next != ReturnStatus.DELIVERY_FAILED) {
-                    throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
-                }
-            }
-            return;
-        }
-
-        // Chỉ RETURN mới có PICKED_UP
-        if (current == ReturnStatus.PICKED_UP) {
-            // PICKED_UP -> COMPLETED
-            if (next != ReturnStatus.COMPLETED) {
-                throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
-            }
-        }
-    }
     private BigDecimal getRefundPolicyFactor(ReturnReason reason, long days) {
         if (isStoreFault(reason)) {
             return BigDecimal.valueOf(1.0);
