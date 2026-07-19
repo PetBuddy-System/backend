@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -35,6 +36,7 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
     OrderRepository orderRepository;
     ReturnRequestRepository returnRequestRepository;
     StoreLocationRepository storeLocationRepository;
+    WorkScheduleRepository workScheduleRepository;
     OrsRoutingService orsRoutingService;
     DeliveryCapacityProperties capacityProperties;
     UserRepository userRepository;
@@ -42,6 +44,8 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
     static double MAX_DISTANCE_FOR_ORS_CALL_KM = 7.0;
     static double MAX_CLUSTER_DISTANCE_KM = 7.0;
     static List<OrderStatus> ACTIVE_ORDER_STATUSES = List.of(OrderStatus.PICKED, OrderStatus.SHIPPING);
+    static int SAFETY_LIMIT_DAYS = 30;
+    static int MAX_LOOKAHEAD_DAYS = 60;
 
     @Override
     @Transactional
@@ -475,6 +479,79 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
         orderRepository.save(order);
     }
 
+    private LocalDateTime estimateForUnassignedOrder(Order order) {
+        StoreLocation store = storeLocationRepository.findByActiveTrue()
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_LOCATION_NOT_FOUND));
+
+        double distanceKm = resolveDistanceKm(store.getLatitude(), store.getLongitude(),
+                order.getLatitude(), order.getLongitude());
+
+        double travelMinutes = (distanceKm / capacityProperties.getAvgSpeedKmh()) * 60;
+        double totalMinutes = capacityProperties.getPendingAssignmentBufferMinutes()
+                + travelMinutes
+                + capacityProperties.getHandlingTimeMinutes();
+
+        LocalDateTime afterPickup = addWarehousePickupDays(
+                LocalDateTime.now(),
+                capacityProperties.getWarehousePickupDays()
+        );
+        LocalDateTime rawEstimatedAt = afterPickup.plusMinutes(Math.round(totalMinutes));
+        return clampToActualWorkingHours(rawEstimatedAt);
+    }
+
+    private LocalDateTime addWarehousePickupDays(LocalDateTime from, int pickupDays) {
+        LocalDate date = from.toLocalDate();
+        int added = 0;
+
+        while (added < pickupDays) {
+            date = findNextWorkingDate(date.plusDays(1));
+            added++;
+        }
+
+        LocalTime earliestStart = getEarliestStartOrThrow(date);
+        return LocalDateTime.of(date, earliestStart);
+    }
+
+    private LocalDateTime clampToActualWorkingHours(LocalDateTime estimatedAt) {
+        LocalDate date = findNextWorkingDate(estimatedAt.toLocalDate());
+
+        LocalTime earliestStart = getEarliestStartOrThrow(date);
+        LocalTime latestEnd = workScheduleRepository.findLatestEndTimeWithActiveStaff(date)
+                .orElseThrow(() -> new AppException(ErrorCode.WORK_SCHEDULE_NOT_EXISTED));
+
+        LocalDateTime dayStart = LocalDateTime.of(date, earliestStart);
+        LocalDateTime dayEnd = LocalDateTime.of(date, latestEnd);
+
+        if (!estimatedAt.toLocalDate().equals(date) || estimatedAt.isBefore(dayStart)) {
+            return dayStart;
+        }
+
+        if (estimatedAt.isAfter(dayEnd)) {
+            LocalDate nextDate = findNextWorkingDate(date.plusDays(1));
+            return LocalDateTime.of(nextDate, getEarliestStartOrThrow(nextDate));
+        }
+
+        return estimatedAt;
+    }
+
+    private LocalDate findNextWorkingDate(LocalDate fromDate) {
+        LocalDate date = fromDate;
+
+        for (int i = 0; i <= MAX_LOOKAHEAD_DAYS; i++) {
+            if (workScheduleRepository.existsByWorkDateWithActiveStaff(date)) {
+                return date;
+            }
+            date = date.plusDays(1);
+        }
+
+        throw new AppException(ErrorCode.WORK_SCHEDULE_NOT_EXISTED);
+    }
+
+    private LocalTime getEarliestStartOrThrow(LocalDate date) {
+        return workScheduleRepository.findEarliestStartTimeWithActiveStaff(date)
+                .orElseThrow(() -> new AppException(ErrorCode.WORK_SCHEDULE_NOT_EXISTED));
+    }
+
     private List<DeliveryStopResponse> buildNearestNeighborRoute(double startLat, double startLon, List<Order> orders) {
         List<Order> remaining = new ArrayList<>(orders);
         List<DeliveryStopResponse> route = new ArrayList<>();
@@ -609,19 +686,5 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
                     return (double) weight * quantity;
                 })
                 .sum();
-    }
-    private LocalDateTime estimateForUnassignedOrder(Order order) {
-        StoreLocation store = storeLocationRepository.findByActiveTrue()
-                .orElseThrow(() -> new AppException(ErrorCode.STORE_LOCATION_NOT_FOUND));
-
-        double distanceKm = resolveDistanceKm(store.getLatitude(), store.getLongitude(),
-                order.getLatitude(), order.getLongitude());
-
-        double travelMinutes = (distanceKm / capacityProperties.getAvgSpeedKmh()) * 60;
-        double totalMinutes = capacityProperties.getPendingAssignmentBufferMinutes()
-                + travelMinutes
-                + capacityProperties.getHandlingTimeMinutes();
-
-        return LocalDateTime.now().plusMinutes(Math.round(totalMinutes));
     }
 }
