@@ -44,16 +44,20 @@ public class OrderServiceImpl implements OrderService {
     ProductBatchRepository productBatchRepository;
     UserRepository userRepository;
     OrderDetailRepository orderDetailRepository;
+    OrderBatchLocationRepository orderBatchLocationRepository; // ⭐ THÊM: để cộng lại kho đúng batch khi RETURNED_TO_WAREHOUSE
     StaffScheduleRepository staffScheduleRepository;
     ProductService productService;
     CartService cartService;
     PaymentService paymentService;
     VoucherService voucherService;
     ShippingRuleService shippingRuleService;
+    EmailService emailService;
     AuditService auditService;
     FileService fileService;
     OrderMapper orderMapper;
     PaymentRepository paymentRepository;
+
+    private static final int MAX_DELIVERY_FAIL_COUNT = 3;
 
     @Override
     public OrderResponse createOrder(CreateOrderRequest request) {
@@ -197,6 +201,7 @@ public class OrderServiceImpl implements OrderService {
                     } else if (order.getPayment().getStatus() != PaymentStatus.PAID) {
                         throw new AppException(ErrorCode.PAYMENT_NOT_COMPLETED);
                     }
+                    emailService.sendOrderPaymentSuccessEmail(order.getUser().getEmail(), order);
                 }
             }
             case CONFIRMED -> {
@@ -207,8 +212,8 @@ public class OrderServiceImpl implements OrderService {
                 if (newStatus != OrderStatus.PICKED && newStatus != OrderStatus.CANCELLED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
             }
-
             case PICKED -> {
+                // Lưu ý: PICKED -> SHIPPING KHÔNG đi qua đây, mà qua ShipperAssignmentService.assignShipper()
                 if (newStatus != OrderStatus.CANCELLED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
             }
@@ -233,7 +238,9 @@ public class OrderServiceImpl implements OrderService {
                 if (newStatus != OrderStatus.COMPLETED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
             }
-            case COMPLETED, CANCELLED -> throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+            // BOMBED chỉ được set qua reportDeliveryFailed(); RETURNED_TO_WAREHOUSE chỉ qua confirmReturnedToWarehouse()
+            case COMPLETED, CANCELLED, BOMBED, RETURNED_TO_WAREHOUSE ->
+                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
         }
 
         if (newStatus == OrderStatus.CANCELLED) {
@@ -344,6 +351,76 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
         return orderMapper.toOrderResponse(order);
+    }
+
+    @Override
+    public OrderResponse reportDeliveryFailed(Long orderId, String reason) {
+        checkLogin();
+        User currentUser = getCurrentUser();
+        Order order = findOrder(orderId);
+
+        if (order.getStatus() != OrderStatus.SHIPPING) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        validateShipperOnDuty(currentUser);
+        if (!order.getStaffSchedule().getStaff().getUserId().equals(currentUser.getUserId())) {
+            throw new AppException(ErrorCode.NOT_THE_ASSIGNED_SHIPPER);
+        }
+
+        int failCount = (order.getDeliveryFailCount() != null ? order.getDeliveryFailCount() : 0) + 1;
+        order.setDeliveryFailCount(failCount);
+        order.setCancelReason(reason);
+        order.setStaffSchedule(null);
+
+        if (failCount >= MAX_DELIVERY_FAIL_COUNT) {
+            order.setStatus(OrderStatus.BOMBED);
+
+            if (order.getPayment().getStatus() == PaymentStatus.PAID) {
+                paymentService.cancelPaymentForOrder(order);
+                auditService.logPaymentRefund(order.getPayment(), order.getPayment().getAmount(),
+                        "Hoàn tiền do khách bom hàng sau " + failCount + " lần giao", currentUser);
+            }
+            auditService.logOrderBombed(order,
+                    "Không liên lạc được khách sau " + failCount + " lần giao: " + reason, currentUser);
+            emailService.sendOrderBombedEmail(order.getUser().getEmail(), order);
+        } else {
+            order.setStatus(OrderStatus.PICKED);
+        }
+
+        order.setUpdatedAt(LocalDateTime.now());
+        Order saved = orderRepository.save(order);
+        return orderMapper.toOrderResponse(saved);
+    }
+
+    @Override
+    public OrderResponse confirmReturnedToWarehouse(Long orderId) {
+        checkLogin();
+        User currentUser = getCurrentUser();
+        Order order = findOrder(orderId);
+
+        if (order.getStatus() != OrderStatus.BOMBED) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        List<OrderBatchLocation> locations = orderBatchLocationRepository.findByOrderDetail_Order_OrderId(orderId);
+
+        for (OrderBatchLocation location : locations) {
+            ProductBatch batch = location.getBatch();
+            batch.setStockQuantity(batch.getStockQuantity() + location.getQuantity());
+            if (batch.getStatus() != ProductStatus.ACTIVE) {
+                batch.setStatus(ProductStatus.ACTIVE); // mở lại batch nếu trước đó bị đóng do hết hàng
+            }
+            productBatchRepository.save(batch);
+        }
+
+        order.setStatus(OrderStatus.RETURNED_TO_WAREHOUSE);
+        order.setUpdatedAt(LocalDateTime.now());
+        Order saved = orderRepository.save(order);
+
+        auditService.logOrderReturnedToWarehouse(order, "Xác nhận đã trả hàng về kho, cộng lại tồn kho", currentUser);
+
+        return orderMapper.toOrderResponse(saved);
     }
 
     private List<PickingItemResponse> buildPickingList(Order order) {

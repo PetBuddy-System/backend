@@ -4,6 +4,7 @@ import com.petbuddy.petbuddystore.common.enums.OrderStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.CancelOrderRequest;
 import com.petbuddy.petbuddystore.dto.request.CreateOrderRequest;
+import com.petbuddy.petbuddystore.dto.request.DeliveryFailedRequest;
 import com.petbuddy.petbuddystore.dto.request.UpdateOrderRequest;
 import com.petbuddy.petbuddystore.dto.response.OrderResponse;
 import com.petbuddy.petbuddystore.dto.response.PickingItemResponse;
@@ -97,5 +98,19 @@ public class OrderController {
     @PostMapping("/{orderId}/cancel-confirm")
     public ResponseEntity<ApiResponse<OrderResponse>> confirmCancel(@PathVariable Long orderId) {
         return ResponseEntity.ok(ApiResponse.success("Cancel order successfully",orderService.confirmCancelOrder(orderId)));
+    }
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_SHIPPER')")
+    @PostMapping("/{orderId}/delivery-failed")
+    public ResponseEntity<ApiResponse<OrderResponse>> reportDeliveryFailed(
+            @PathVariable Long orderId,
+            @RequestBody @Valid DeliveryFailedRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Đã ghi nhận không liên lạc được khách hàng",
+                orderService.reportDeliveryFailed(orderId, request.getReason())));
+    }
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_COORDINATOR')")
+    @PostMapping("/{orderId}/returned-to-warehouse")
+    public ResponseEntity<ApiResponse<OrderResponse>> confirmReturnedToWarehouse(@PathVariable Long orderId) {
+        return ResponseEntity.ok(ApiResponse.success("Xác nhận đã trả hàng về kho thành công",
+                orderService.confirmReturnedToWarehouse(orderId)));
     }
 }

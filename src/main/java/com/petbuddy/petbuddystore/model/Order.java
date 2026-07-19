@@ -63,6 +63,9 @@ public class Order {
     @Column(columnDefinition = "NVARCHAR(500)")
     String note;
 
+    @Column(nullable = false)
+    Integer deliveryFailCount = 0;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     List<OrderDetail> orderDetails = new ArrayList<>();
 

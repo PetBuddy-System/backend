@@ -1,5 +1,7 @@
 package com.petbuddy.petbuddystore.service;
 
+import com.petbuddy.petbuddystore.model.Order;
+
 import java.time.LocalDateTime;
 
 public interface EmailService {
@@ -8,4 +10,6 @@ public interface EmailService {
     void sendPaymentFailWarningEmail(String email, String orderCode, int failCount, int maxFails);
     void sendAccountSuspendedEmail(String email, int failCount, LocalDateTime suspendedAt, LocalDateTime suspendedUntil);
     void sendBookingNotification(String to, String customerName, String serviceName, String date, String time, String totalAmount);
+    void sendOrderPaymentSuccessEmail(String toEmail, Order order);
+    void sendOrderBombedEmail(String toEmail, Order order);
 }

@@ -2,6 +2,7 @@ package com.petbuddy.petbuddystore.service.impl;
 
 import com.petbuddy.petbuddystore.common.enums.AuditAction;
 import com.petbuddy.petbuddystore.common.enums.AuditEntityType;
+import com.petbuddy.petbuddystore.common.enums.OrderStatus;
 import com.petbuddy.petbuddystore.common.enums.PaymentStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
@@ -589,7 +590,7 @@ public class AuditServiceImpl implements AuditService {
 
     @Override
     @Transactional
-    public void logPaymentPaid(Payment payment,String reason ,User performedBy) {
+    public void logPaymentPaid(Payment payment, String reason, User performedBy) {
         List<AuditChange> changes = new ArrayList<>();
         changes.add(AuditChange.builder().field("orderCode")
                 .oldValue(null)
@@ -610,7 +611,7 @@ public class AuditServiceImpl implements AuditService {
 
         AuditLog auditLog = AuditLog.builder()
                 .entityType(AuditEntityType.PAYMENT)
-                .entityId(longToUuid(payment.getPaymentId()))
+                .entityId(longToUuid("PAYMENT", payment.getPaymentId()))   // ⭐ sửa
                 .entityCode(payment.getOrder() != null ? payment.getOrder().getOrderCode()
                         : ("PAY-" + payment.getPaymentId()))
                 .action(AuditAction.PAY)
@@ -646,7 +647,7 @@ public class AuditServiceImpl implements AuditService {
 
         AuditLog auditLog = AuditLog.builder()
                 .entityType(AuditEntityType.PAYMENT)
-                .entityId(longToUuid(payment.getPaymentId()))
+                .entityId(longToUuid("PAYMENT", payment.getPaymentId()))   // ⭐ sửa
                 .entityCode(payment.getOrder() != null ? payment.getOrder().getOrderCode()
                         : ("PAY-" + payment.getPaymentId()))
                 .action(AuditAction.REFUND)
@@ -732,7 +733,74 @@ public class AuditServiceImpl implements AuditService {
         auditLogRepository.save(auditLog);
     }
 
-    private UUID longToUuid(Long id) {
-        return UUID.nameUUIDFromBytes(("PAYMENT:" + id).toString().getBytes());
+    private UUID longToUuid(String prefix,Long id) {
+        return UUID.nameUUIDFromBytes((prefix + ":" + id).getBytes());
+    }
+
+    @Override
+    @Transactional
+    public void logOrderBombed(Order order, String reason, User performedBy) {
+        List<AuditChange> changes = new ArrayList<>();
+        changes.add(AuditChange.builder().field("orderCode")
+                .oldValue(null)
+                .newValue(order.getOrderCode())
+                .build());
+        changes.add(AuditChange.builder().field("deliveryFailCount")
+                .oldValue(null)
+                .newValue(String.valueOf(order.getDeliveryFailCount()))
+                .build());
+        changes.add(AuditChange.builder().field("status")
+                .oldValue(null)
+                .newValue(OrderStatus.BOMBED.name())
+                .build());
+        changes.add(AuditChange.builder().field("finalAmount")
+                .oldValue(null)
+                .newValue(order.getFinalAmount() != null ? order.getFinalAmount().toString() : null)
+                .build());
+        if (order.getPayment() != null) {
+            changes.add(AuditChange.builder().field("paymentMethod")
+                    .oldValue(null)
+                    .newValue(order.getPayment().getPaymentMethod() != null
+                            ? order.getPayment().getPaymentMethod().name() : null)
+                    .build());
+        }
+        AuditLog auditLog = AuditLog.builder()
+                .entityType(AuditEntityType.ORDER)
+                .entityId(longToUuid("ORDER", order.getOrderId()))
+                .entityCode(order.getOrderCode())
+                .action(AuditAction.BOMBED)
+                .changes(changes)
+                .reason(reason)
+                .performedBy(performedBy)
+                .performedAt(LocalDateTime.now())
+                .build();
+
+        auditLogRepository.save(auditLog);
+        log.info("Audit log created for Order BOMBED: {}", order.getOrderCode());
+    }
+    @Override
+    @Transactional
+    public void logOrderReturnedToWarehouse(Order order, String reason, User performedBy) {
+        List<AuditChange> changes = new ArrayList<>();
+        changes.add(AuditChange.builder().field("orderCode")
+                .oldValue(null).newValue(order.getOrderCode()).build());
+        changes.add(AuditChange.builder().field("status")
+                .oldValue(null).newValue(OrderStatus.RETURNED_TO_WAREHOUSE.name()).build());
+        changes.add(AuditChange.builder().field("deliveryFailCount")
+                .oldValue(null).newValue(String.valueOf(order.getDeliveryFailCount())).build());
+
+        AuditLog auditLog = AuditLog.builder()
+                .entityType(AuditEntityType.ORDER)
+                .entityId(longToUuid("ORDER", order.getOrderId()))
+                .entityCode(order.getOrderCode())
+                .action(AuditAction.RETURNED_TO_WAREHOUSE)
+                .changes(changes)
+                .reason(reason)
+                .performedBy(performedBy)
+                .performedAt(LocalDateTime.now())
+                .build();
+
+        auditLogRepository.save(auditLog);
+        log.info("Audit log created for Order RETURNED_TO_WAREHOUSE: {}", order.getOrderCode());
     }
 }

@@ -15,7 +15,7 @@ public class MomoIpnRequest {
     Long amount;
     String orderInfo;
     String orderType;
-    Long transId;
+    String transId;
     Integer resultCode;
     String message;
     String payType;
