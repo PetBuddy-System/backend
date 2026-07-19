@@ -12,4 +12,5 @@ public interface ShipperAssignmentService {
     List<DeliveryStopResponse> suggestDeliveryRoute(String staffId);
     void recomputeDailyZones();
     List<RestockEligibilityResponse> getShippersEligibleForRestock();
+    void updateEstimatedDeliveryTime(Long orderId);
 }

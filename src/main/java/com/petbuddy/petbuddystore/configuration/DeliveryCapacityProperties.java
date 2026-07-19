@@ -30,4 +30,6 @@ public class DeliveryCapacityProperties {
     /** Số vòng lặp tối đa cho K-Means */
     int kMeansMaxIterations = 20;
     int restockThresholdOrders = 2;
+    double maxLoadWeightKg = 30.0;
+    double pendingAssignmentBufferMinutes = 20.0;
 }

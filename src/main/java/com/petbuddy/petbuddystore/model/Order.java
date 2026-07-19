@@ -63,7 +63,7 @@ public class Order {
     @Column(columnDefinition = "NVARCHAR(500)")
     String note;
 
-    @Column(nullable = false)
+//    @Column(nullable = false)
     Integer deliveryFailCount = 0;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -99,4 +99,7 @@ public class Order {
 
     @Column(name = "shipped_at")
     LocalDateTime shippedAt;
+
+    @Column(name = "estimated_delivery_at")
+    LocalDateTime estimatedDeliveryAt;
 }

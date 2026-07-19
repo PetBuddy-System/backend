@@ -28,6 +28,7 @@ public class OrderResponse {
     LocalDateTime updatedAt;
     LocalDateTime shippedAt;
     LocalDateTime cancelledAt;
+    LocalDateTime estimatedDeliveryAt;
     String cancelReason;
     LocalDateTime paymentExpiredAt;
     List<OrderDetailResponse> orderDetails;

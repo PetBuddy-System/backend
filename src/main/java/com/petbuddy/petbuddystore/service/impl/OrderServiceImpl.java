@@ -53,6 +53,7 @@ public class OrderServiceImpl implements OrderService {
     ShippingRuleService shippingRuleService;
     EmailService emailService;
     AuditService auditService;
+    ShipperAssignmentService shipperAssignmentService;
     FileService fileService;
     OrderMapper orderMapper;
     PaymentRepository paymentRepository;
@@ -201,7 +202,8 @@ public class OrderServiceImpl implements OrderService {
                     } else if (order.getPayment().getStatus() != PaymentStatus.PAID) {
                         throw new AppException(ErrorCode.PAYMENT_NOT_COMPLETED);
                     }
-                    emailService.sendOrderPaymentSuccessEmail(order.getUser().getEmail(), order);
+//                    emailService.sendOrderPaymentSuccessEmail(order.getUser().getEmail(), order);
+                    shipperAssignmentService.updateEstimatedDeliveryTime(orderId);
                 }
             }
             case CONFIRMED -> {
@@ -213,7 +215,6 @@ public class OrderServiceImpl implements OrderService {
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
             }
             case PICKED -> {
-                // Lưu ý: PICKED -> SHIPPING KHÔNG đi qua đây, mà qua ShipperAssignmentService.assignShipper()
                 if (newStatus != OrderStatus.CANCELLED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
             }
@@ -409,7 +410,7 @@ public class OrderServiceImpl implements OrderService {
             ProductBatch batch = location.getBatch();
             batch.setStockQuantity(batch.getStockQuantity() + location.getQuantity());
             if (batch.getStatus() != ProductStatus.ACTIVE) {
-                batch.setStatus(ProductStatus.ACTIVE); // mở lại batch nếu trước đó bị đóng do hết hàng
+                batch.setStatus(ProductStatus.ACTIVE);
             }
             productBatchRepository.save(batch);
         }
