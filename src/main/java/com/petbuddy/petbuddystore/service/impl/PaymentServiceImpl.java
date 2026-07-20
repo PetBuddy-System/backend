@@ -48,6 +48,7 @@ public class PaymentServiceImpl implements PaymentService {
     AuditService auditService;
     StripeService stripeService;
     MomoService momoService;
+    BookingAssignmentService bookingAssignmentService;
     PaymentMapper paymentMapper;
 
     @NonFinal
@@ -480,7 +481,7 @@ public class PaymentServiceImpl implements PaymentService {
             }
             payment.setStatus(PaymentStatus.PAID);
             payment.setPaidAt(LocalDateTime.now());
-            booking.setBookingStatus(BookingStatus.PENDING_ACCEPTANCE);
+            bookingAssignmentService.assignAfterPaymentSucceeded(booking);
             paymentRepository.save(payment);
             bookingRepository.save(booking);
         }

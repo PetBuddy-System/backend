@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.dto.response;
 
 import com.petbuddy.petbuddystore.common.enums.BookingStatus;
+import com.petbuddy.petbuddystore.common.enums.StaffAssignmentMode;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -29,6 +30,8 @@ public class BookingResponse {
     String note;
     String cancelReason;
     LocalDateTime paymentDeadlineAt;
+    StaffAssignmentMode assignmentMode;
+    String requestedStaffId;
     String staffScheduleId;
     String staffId;
     String staffName;

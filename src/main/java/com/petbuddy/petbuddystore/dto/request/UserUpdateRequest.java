@@ -19,4 +19,7 @@ public class UserUpdateRequest {
     LocalDate dateOfBirth;
     Role role;
     StaffTask staffTask;
+    String specialization;
+    String introduction;
+    Integer yearsOfExperience;
 }

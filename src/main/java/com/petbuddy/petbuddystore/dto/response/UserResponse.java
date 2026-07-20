@@ -21,6 +21,9 @@ public class UserResponse {
     LocalDate dateOfBirth;
     String role;
     StaffTask staffTask;
+    String specialization;
+    String introduction;
+    Integer yearsOfExperience;
     UserStatus status;
     int paymentFailStreak;
     LocalDateTime createdAt;

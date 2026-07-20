@@ -25,10 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -210,11 +207,9 @@ public class ReturnStockServiceImpl implements ReturnStockService {
             throw new AppException(ErrorCode.INVALID_REQUEST);
         }
 
-        // ✅ Lấy tất cả reserved stock của return request này
         List<ReturnReservedStock> allReserved = returnReservedStockRepository
                 .findByReturnItem_ReturnRequest(returnRequest);
 
-        // ✅ Tạo map lưu cả object ReturnReservedStock để lấy thêm restockedAt và restockedBy
         Map<String, ReturnReservedStock> reservedMap = allReserved.stream()
                 .filter(rs -> rs.getRestockedQuantity() != null && rs.getRestockedQuantity() > 0)
                 .collect(Collectors.toMap(
@@ -228,34 +223,64 @@ public class ReturnStockServiceImpl implements ReturnStockService {
                 .map(returnItem -> {
                     OrderDetail orderDetail = returnItem.getOrderDetail();
 
-                    List<OrderBatchLocation> deductedBatches = orderBatchLocationRepository
-                            .findByOrderDetail(orderDetail);
+                    List<OrderBatchLocation> deductedBatches =
+                            orderBatchLocationRepository.findByOrderDetail(orderDetail);
 
-                    List<RestockBatchResponse> batchResponses = deductedBatches.stream()
+                    // Tổng số lượng đã nhập của ReturnItem này
+                    int totalRestockedForItem = allReserved.stream()
+                            .filter(rs -> rs.getReturnItem().getReturnItemId().equals(returnItem.getReturnItemId()))
+                            .mapToInt(rs -> rs.getRestockedQuantity() != null ? rs.getRestockedQuantity() : 0)
+                            .sum();
+
+                    int remainingCanRestock = Math.max(
+                            returnItem.getQuantity() - totalRestockedForItem,
+                            0
+                    );
+
+                    Set<String> seenBatchIds = new HashSet<>();
+                    List<OrderBatchLocation> uniqueBatches = deductedBatches.stream()
+                            .filter(obl -> seenBatchIds.add(obl.getBatch().getBatchId().toString()))
+                            .toList();
+
+                    List<RestockBatchResponse> batchResponses = uniqueBatches.stream()
                             .map(obl -> {
+
                                 String key = obl.getBatch().getBatchId().toString()
-                                        + "_" + orderDetail.getOrderDetailId().toString();
+                                        + "_" + orderDetail.getOrderDetailId();
 
                                 ReturnReservedStock reserved = reservedMap.get(key);
-                                Integer restocked = reserved != null ? reserved.getRestockedQuantity() : 0;
-                                Integer available = obl.getQuantity() - restocked;
 
-                                RestockBatchResponse.RestockBatchResponseBuilder builder = RestockBatchResponse.builder()
-                                        .batchId(obl.getBatch().getBatchId())
-                                        .batchCode(obl.getBatch().getBatchCode())
-                                        .deductedQuantity(obl.getQuantity())
-                                        .availableToRestock(available > 0 ? available : 0)
-                                        .restockQuantity(restocked);
+                                int deductedQuantity = deductedBatches.stream()
+                                        .filter(b -> b.getBatch().getBatchId().equals(obl.getBatch().getBatchId()))
+                                        .mapToInt(OrderBatchLocation::getQuantity)
+                                        .sum();
 
-                                // ✅ Set restockedAt và restockedBy nếu đã nhập
-                                if (reserved != null && reserved.getRestockedQuantity() != null && reserved.getRestockedQuantity() > 0) {
+                                int restockedInBatch =
+                                        reserved != null && reserved.getRestockedQuantity() != null
+                                                ? reserved.getRestockedQuantity()
+                                                : 0;
+
+                                int availableToRestock = Math.min(
+                                        deductedQuantity - restockedInBatch,
+                                        remainingCanRestock
+                                );
+
+                                RestockBatchResponse.RestockBatchResponseBuilder builder =
+                                        RestockBatchResponse.builder()
+                                                .batchId(obl.getBatch().getBatchId())
+                                                .batchCode(obl.getBatch().getBatchCode())
+                                                .deductedQuantity(deductedQuantity)
+                                                .availableToRestock(Math.max(availableToRestock, 0))
+                                                .restockQuantity(restockedInBatch);
+
+                                if (reserved != null && restockedInBatch > 0) {
                                     builder.restockedAt(reserved.getRestockedAt());
                                     builder.restockedBy(reserved.getRestockedBy());
                                 }
 
                                 return builder.build();
                             })
-                            .collect(Collectors.toList());
+                            .toList();
 
                     return RestockItemResponse.builder()
                             .orderDetailId(orderDetail.getOrderDetailId())
@@ -273,7 +298,6 @@ public class ReturnStockServiceImpl implements ReturnStockService {
                 .items(items)
                 .build();
     }
-
     @Override
     @Transactional
     public void processRestock(Long returnRequestId, RestockReturnRequest request) {

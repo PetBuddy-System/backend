@@ -38,6 +38,7 @@ public class PetServiceImpl implements PetService {
     public PetProfileResponse createPet(PetProfileCreationRequest request, List<MultipartFile> images) {
         String userId = SecurityContextHolder.getContext().getAuthentication().getName();
         User user = userService.getUserEntityById(userId);
+        validatePetWeight(request.getWeight());
 
         PetProfile petProfile = petMapper.toPetProfile(request);
         petProfile.setUser(user);
@@ -81,6 +82,7 @@ public class PetServiceImpl implements PetService {
     public PetProfileResponse updatePet(String petId, PetProfileUpdateRequest request, List<MultipartFile> images) {
         PetProfile petProfile = petRepository.findById(petId)
                 .orElseThrow(() -> new AppException(ErrorCode.PET_NOT_EXISTED));
+        validatePetWeight(request.getWeight());
         petMapper.updatePet(request, petProfile);
 
         if (images != null && !images.isEmpty()){
@@ -99,5 +101,11 @@ public class PetServiceImpl implements PetService {
             }
         }
         return petMapper.toPetProfileResponse(petRepository.save(petProfile));
+    }
+
+    private void validatePetWeight(Double weight) {
+        if (weight != null && (weight <= 0 || weight > 100)) {
+            throw new AppException(ErrorCode.INVALID_PET_WEIGHT);
+        }
     }
 }

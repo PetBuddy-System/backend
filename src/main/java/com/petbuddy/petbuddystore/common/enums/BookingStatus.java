@@ -8,6 +8,7 @@ public enum BookingStatus {
     IN_PROGRESS,        //đơn đang thực hiện sau khi duyệt
     READY_FOR_PICKUP,
     COMPLETED,
-    CANCELLED
+    CANCELLED,
+    WAITING_STAFF
 }
 

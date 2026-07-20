@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.model;
 
 import com.petbuddy.petbuddystore.common.enums.BookingStatus;
+import com.petbuddy.petbuddystore.common.enums.StaffAssignmentMode;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -67,6 +68,16 @@ public class Booking {
     @Enumerated(EnumType.STRING)
     @Column(name = "booking_status")
     BookingStatus bookingStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "assignment_mode")
+    StaffAssignmentMode assignmentMode;
+
+    @Column(name = "requested_staff_id")
+    String requestedStaffId;
+
+    @Column(name = "last_auto_reassign_at")
+    LocalDateTime lastAutoReassignAt;
 
     @Column(name = "payment_deadline_at")
     LocalDateTime paymentDeadlineAt; //hạn thanh toán cọc
