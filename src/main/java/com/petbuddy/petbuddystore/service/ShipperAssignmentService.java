@@ -16,4 +16,5 @@ public interface ShipperAssignmentService {
     List<RestockEligibilityResponse> getShippersEligibleForRestock();
     List<ReturnShipperResponse> getAvailableShippers();
     void assignReturnShipper(Long returnRequestId, AssignReturnShipperRequest request);
+    void updateEstimatedDeliveryTime(Long orderId);
 }

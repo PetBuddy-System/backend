@@ -42,6 +42,8 @@ public class OrderDetail {
 
     Integer quantity;
 
+    Integer weight;
+
     BigDecimal totalPrice;
 
     @CreationTimestamp
