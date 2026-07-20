@@ -63,6 +63,7 @@ public class Order {
     @Column(columnDefinition = "NVARCHAR(500)")
     String note;
 
+    @Builder.Default
     @Column(nullable = false)
     Integer deliveryFailCount = 0;
 

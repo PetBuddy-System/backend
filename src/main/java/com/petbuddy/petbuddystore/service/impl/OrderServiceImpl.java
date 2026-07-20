@@ -119,6 +119,7 @@ public class OrderServiceImpl implements OrderService {
                     .unitPrice(unitPrice)
                     .salePrice(salePrice)
                     .quantity(item.getQuantity())
+                    .weight(product.getWeight())
                     .totalPrice(effectivePrice.multiply(BigDecimal.valueOf(item.getQuantity())))
                     .build();
 
