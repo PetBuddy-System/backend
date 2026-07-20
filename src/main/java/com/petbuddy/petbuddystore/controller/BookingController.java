@@ -3,8 +3,10 @@ package com.petbuddy.petbuddystore.controller;
 import com.petbuddy.petbuddystore.common.enums.BookingStatus;
 import com.petbuddy.petbuddystore.common.enums.BookingMediaType;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
+import com.petbuddy.petbuddystore.dto.request.AvailableGroomerRequest;
 import com.petbuddy.petbuddystore.dto.request.BookingCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.BookingUpdateRequest;
+import com.petbuddy.petbuddystore.dto.response.AvailableGroomerResponse;
 import com.petbuddy.petbuddystore.dto.response.BookingResponse;
 import com.petbuddy.petbuddystore.dto.response.MediaFileResponse;
 import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
@@ -67,8 +69,15 @@ public class BookingController {
         return ResponseEntity.ok(ApiResponse.success(bookingService.getBooking(bookingId)));
     }
 
+    @PostMapping("/available-groomers")
+    public ResponseEntity<ApiResponse<List<AvailableGroomerResponse>>> getAvailableGroomers(
+            @Valid @RequestBody AvailableGroomerRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(bookingService.getAvailableGroomers(request)));
+    }
+
     @PatchMapping("/{bookingId}/status")
-    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_GROOMER')")
+    @PreAuthorize("hasRole('MANAGER') or (hasRole('STAFF') and (hasAuthority('TASK_GROOMER') or hasAuthority('TASK_COORDINATOR')))")
     public ResponseEntity<ApiResponse<BookingResponse>> updateStatus(
             @PathVariable Integer bookingId,
             @Valid @RequestBody BookingUpdateRequest request
@@ -77,7 +86,7 @@ public class BookingController {
     }
 
     @PatchMapping("/{bookingId}/assign-groomer")
-    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_COORDINATOR')")
+    @PreAuthorize("hasRole('MANAGER') or (hasRole('STAFF') and hasAuthority('TASK_COORDINATOR'))")
     public ResponseEntity<ApiResponse<BookingResponse>> assignGroomer(
             @PathVariable Integer bookingId,
             @RequestParam String groomerId

@@ -37,4 +37,7 @@ public class UserCreationRequest {
 
     Role role;
     StaffTask staffTask;
+    String specialization;
+    String introduction;
+    Integer yearsOfExperience;
 }

@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.model;
 
+import com.petbuddy.petbuddystore.common.enums.WeightRange;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -46,8 +47,27 @@ public class BookingDetail {
     @Column(name = "duration_minute_snapshot")
     Integer durationMinute;
 
+    @Column(name = "base_duration_minute_snapshot")
+    Integer baseDurationMinute;
+
+    @Column(name = "additional_duration_minute_snapshot")
+    Integer additionalDurationMinute;
+
+    @Column(name = "total_duration_minute_snapshot")
+    Integer totalDurationMinute;
+
     @Column(name = "unit_price_snapshot")
     BigDecimal unitPrice;
+
+    @Column(name = "base_price_snapshot")
+    BigDecimal basePrice;
+
+    @Column(name = "additional_price_snapshot")
+    BigDecimal additionalPrice;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "weight_range_snapshot")
+    WeightRange weightRange;
 
     @Column(name = "quantity")
     Integer quantity;

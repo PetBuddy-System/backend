@@ -59,6 +59,7 @@ public class UserServiceImpl implements UserService {
             if (request.getStaffTask() == null) {
                 throw new AppException(ErrorCode.STAFF_TASK_REQUIRED);
             }
+            validateYearsOfExperience(request.getYearsOfExperience());
         } else {
             request.setStaffTask(null);
         }
@@ -104,6 +105,7 @@ public class UserServiceImpl implements UserService {
     public UserResponse updateUser(String userId, UserUpdateRequest request, List<MultipartFile> images) {
         User user = userRepository.findById(userId).
                 orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        validateYearsOfExperience(request.getYearsOfExperience());
         userMapper.updateUser(user, request);
         updateRoleAndStaffTask(user, request);
 
@@ -181,5 +183,11 @@ public class UserServiceImpl implements UserService {
         return userRepository.findAllByRole(Role.STAFF)
                 .stream()
                 .map(userMapper::toUserResponse).toList();
+    }
+
+    private void validateYearsOfExperience(Integer yearsOfExperience) {
+        if (yearsOfExperience != null && yearsOfExperience < 0) {
+            throw new AppException(ErrorCode.INVALID_YEARS_OF_EXPERIENCE);
+        }
     }
 }
