@@ -202,7 +202,7 @@ public class OrderServiceImpl implements OrderService {
                     } else if (order.getPayment().getStatus() != PaymentStatus.PAID) {
                         throw new AppException(ErrorCode.PAYMENT_NOT_COMPLETED);
                     }
-//                    emailService.sendOrderPaymentSuccessEmail(order.getUser().getEmail(), order);
+                    emailService.sendOrderPaymentSuccessEmail(order.getUser().getEmail(), order);
                     shipperAssignmentService.updateEstimatedDeliveryTime(orderId);
                 }
             }
