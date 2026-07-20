@@ -141,7 +141,7 @@ public class EmailServiceImpl implements EmailService {
             context.setVariable("shippingFee", order.getShippingFee());
             context.setVariable("finalAmount", order.getFinalAmount());
 
-            String html = templateEngine.process("payment-success", context);
+            String html = templateEngine.process("order-successed", context);
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 

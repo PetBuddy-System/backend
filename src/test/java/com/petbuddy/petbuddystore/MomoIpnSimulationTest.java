@@ -38,10 +38,10 @@ public class MomoIpnSimulationTest {
         // ---- THAY orderId này bằng momoOrderId thật bạn đã tạo qua createQrPayment ----
         // Lưu ý: đây là field "momoOrderId" (String) trong entity Payment,
         // KHÔNG phải paymentId hay orderId (Long) của Order.
-        String orderId = "ORDER_ID_CAN_THAY";
+        String orderId = "OD634095-1784506504846";
         String requestId = UUID.randomUUID().toString();
         String transId = String.valueOf(System.currentTimeMillis());
-        long amount = 100000; // phải khớp amount lúc tạo payment
+        long amount = 211000; // phải khớp amount lúc tạo payment
         String orderInfo = "Thanh toan don hang " + orderId;
         String orderType = "momo_wallet";
         String payType = "qr";

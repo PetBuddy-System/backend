@@ -99,4 +99,7 @@ public class Order {
 
     @Column(name = "shipped_at")
     LocalDateTime shippedAt;
+
+    @Column(name = "estimated_delivery_at")
+    LocalDateTime estimatedDeliveryAt;
 }

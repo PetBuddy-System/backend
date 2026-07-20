@@ -1,8 +1,5 @@
 package com.petbuddy.petbuddystore.dto.response;
 
-import com.petbuddy.petbuddystore.model.Order;
-import com.petbuddy.petbuddystore.model.Product;
-import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -24,6 +21,7 @@ public class OrderDetailResponse {
     BigDecimal unitPrice;
     BigDecimal salePrice;
     Integer quantity;
+    Integer weight;
     BigDecimal totalPrice;
     LocalDateTime createdAt;
 }
