@@ -154,6 +154,7 @@ public enum ErrorCode {
     ROUTE_CALCULATION_FAILED(5215,"Failed to calculate route",HttpStatus.INTERNAL_SERVER_ERROR),
     SHIPPER_CAPACITY_FULL(5216, "Shipper capacity is full", HttpStatus.BAD_REQUEST),
     SHIPPER_ZONE_NOT_COMPUTED(5217, "Shipper zone is not computed", HttpStatus.BAD_REQUEST),
+    INVALID_NEGOTIATED_DATE(5218, "Negotiated date must be in the future", HttpStatus.BAD_REQUEST),
 
     VOUCHER_NOT_FOUND(5301, "Voucher not found", HttpStatus.NOT_FOUND),
     VOUCHER_CODE_EXISTED(5302, "Voucher code already exists", HttpStatus.BAD_REQUEST),
