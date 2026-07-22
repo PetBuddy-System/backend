@@ -84,5 +84,9 @@ public class MediaFile {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "return_request_id")
-    private ReturnRequest returnRequest;
+    ReturnRequest returnRequest;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "conversation_message_id")
+    AIConversationMessage aiConversationMessage;
 }

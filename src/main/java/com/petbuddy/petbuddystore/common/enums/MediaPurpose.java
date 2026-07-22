@@ -8,6 +8,7 @@ public enum MediaPurpose {
     BLOG,
     SHIPPING,
     USER_PROFILE,
-    RETURN_REQUEST
+    RETURN_REQUEST,
+    AI_CHAT,
     ;
 }
