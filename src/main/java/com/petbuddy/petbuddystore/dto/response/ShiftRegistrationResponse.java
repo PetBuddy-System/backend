@@ -7,21 +7,20 @@ import lombok.experimental.FieldDefaults;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.List;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class WorkScheduleResponse {
-    String workScheduleId;
+public class ShiftRegistrationResponse {
+    String registrationId;
+    String staffId;
+    String staffName;
     LocalDate workDate;
-    LocalTime startTime;
-    LocalTime endTime;
-    String note;
-    ShiftType shiftType;
+    ShiftType preferredShift;
+    LocalTime preferredStartTime;
+    LocalTime preferredEndTime;
+    String reason;
     LocalDateTime createdAt;
-    LocalDateTime updatedAt;
-    List<StaffAssignedResponse> assignedStaffs;
 }

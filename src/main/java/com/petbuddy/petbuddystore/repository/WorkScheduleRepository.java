@@ -58,11 +58,4 @@ public interface WorkScheduleRepository extends JpaRepository<WorkSchedule, Stri
             " com.petbuddy.petbuddystore.common.enums.ScheduleStatus.WORKING)")
     Optional<LocalTime> findLatestEndTimeWithActiveStaff(@Param("workDate") LocalDate workDate);
 
-
-//
-//    List<StaffSchedule> findByStaff_UserIdOrderByWorkDateAscStartTimeAsc(String staffId);
-//    List<StaffSchedule> findByStaff_UserIdAndWorkDateBetweenOrderByWorkDateAscStartTimeAsc(String staffId, LocalDate fromDate, LocalDate toDate);
-//
-//    List<StaffSchedule> findByWorkDateOrderByStartTimeAsc(LocalDate workDate);
-//    List<StaffSchedule> findByWorkDateBetweenOrderByWorkDateAscStartTimeAsc(LocalDate fromDate, LocalDate toDate);
 }

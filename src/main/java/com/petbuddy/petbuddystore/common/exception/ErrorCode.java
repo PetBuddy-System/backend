@@ -301,6 +301,13 @@ public enum ErrorCode {
     CONVERSATION_NOT_FOUND(9021, "AI Conversation not found", HttpStatus.NOT_FOUND),
     MEDIA_READ_FAILED(9022, "Cannot read media file", HttpStatus.BAD_REQUEST),
     AI_CHAT_FAILED(9023, "AI Chat failed", HttpStatus.INTERNAL_SERVER_ERROR),
+    INVALID_REGISTER_TIME(9024, "Registration open time must be before registration close time", HttpStatus.BAD_REQUEST),
+    INVALID_REGISTER_CLOSE_TIME(9025, "Registration close time must be before work period starts", HttpStatus.BAD_REQUEST),
+    REGISTRATION_PERIOD_NOT_EXISTED(9026, "Shift registration period does not exist", HttpStatus.NOT_FOUND),
+    REGISTRATION_PERIOD_ALREADY_EXISTS(9027, "Shift registration period already exists", HttpStatus.BAD_REQUEST),
+    REGISTRATION_PERIOD_CLOSED(9028, "Shift registration period is closed", HttpStatus.BAD_REQUEST),
+    REGISTRATION_NOT_OPEN(9029, "Registration is not open", HttpStatus.BAD_REQUEST),
+    REGISTRATION_EXPIRED(9030, "Registration has expired", HttpStatus.BAD_REQUEST),
     ;
 
     int code;
