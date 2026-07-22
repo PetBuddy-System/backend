@@ -66,6 +66,10 @@ public class ReturnRequest {
         @Column(nullable = false)
         private Integer deliveryFailedCount = 0;
 
+        @Builder.Default
+        @Column(nullable = false)
+        private int pickupFailedCount = 0;
+
         @Enumerated(EnumType.STRING)
         private RefundMethod refundMethod;
 
@@ -90,11 +94,27 @@ public class ReturnRequest {
 
         private LocalDateTime approvedAt;
 
+        private LocalDateTime pickingUpAt;
+
+        private LocalDateTime pickupFailedAt;
+
         private LocalDateTime pickedUpAt;
 
         private LocalDateTime returnedToStoreAt;
 
+        private LocalDateTime readyToDeliverAt;
+
+        private LocalDateTime deliveringAt;
+
+        private LocalDateTime deliveringFailedAt;
+
         private LocalDateTime completedAt;
+
+        private LocalDateTime rejectedAt;
+
+        private LocalDateTime cancelledAt;
+
+        private LocalDateTime restockedAt;
 
         @UpdateTimestamp
         private LocalDateTime updatedAt;
@@ -105,6 +125,4 @@ public class ReturnRequest {
         @OneToMany(mappedBy = "returnRequest", cascade = CascadeType.ALL, orphanRemoval = true)
         private List<MediaFile> mediaFiles = new ArrayList<>();
 
-        @Column(name = "restocked_at")
-        private LocalDateTime restockedAt;
 }

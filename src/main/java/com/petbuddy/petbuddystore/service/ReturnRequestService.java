@@ -5,6 +5,7 @@ import com.petbuddy.petbuddystore.dto.request.CreateReturnRequest;
 import com.petbuddy.petbuddystore.dto.request.ReturnFilterRequest;
 import com.petbuddy.petbuddystore.dto.request.UpdateReturnStatusRequest;
 import com.petbuddy.petbuddystore.dto.response.CalculateRefundResponse;
+import com.petbuddy.petbuddystore.dto.response.ReturnManagementResponse;
 import com.petbuddy.petbuddystore.dto.response.ReturnRequestResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -26,7 +27,7 @@ public interface ReturnRequestService {
 
     ReturnRequestResponse cancelReturnRequest(Long id);
 
-    Page<ReturnRequestResponse> getAllReturnRequests(ReturnFilterRequest filter, String sortBy, Pageable pageable);
+    ReturnManagementResponse getAllReturnRequests(ReturnFilterRequest filter, String sortBy, Pageable pageable);
 
     ReturnRequestResponse updateReturnStatusByManagement(Long id, UpdateReturnStatusRequest request);
 

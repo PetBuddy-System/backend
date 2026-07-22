@@ -9,6 +9,7 @@ import com.petbuddy.petbuddystore.dto.request.CreateReturnRequest;
 import com.petbuddy.petbuddystore.dto.request.ReturnFilterRequest;
 import com.petbuddy.petbuddystore.dto.request.UpdateReturnStatusRequest;
 import com.petbuddy.petbuddystore.dto.response.CalculateRefundResponse;
+import com.petbuddy.petbuddystore.dto.response.ReturnManagementResponse;
 import com.petbuddy.petbuddystore.dto.response.ReturnRequestResponse;
 import com.petbuddy.petbuddystore.service.ReturnRequestService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -92,17 +93,18 @@ public class ReturnRequestController {
         // Management endpoints
         @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
         @GetMapping("/api/management/returns")
-        public ResponseEntity<ApiResponse<Page<ReturnRequestResponse>>> getAllReturnRequests(
-                        @RequestParam(required = false) ReturnStatus status,
-                        @RequestParam(required = false) String orderCode,
-                        @RequestParam(required = false) String returnCode,
-                        @RequestParam(required = false) RefundMethod refundMethod,
-                        @RequestParam(required = false) ReturnType type,
-                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
-                        @RequestParam(required = false) String keyword,
-                        @RequestParam(required = false) String sortBy,
-                        @ParameterObject @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        public ResponseEntity<ApiResponse<ReturnManagementResponse>> getAllReturnRequests(
+                @RequestParam(required = false) ReturnStatus status,
+                @RequestParam(required = false) String orderCode,
+                @RequestParam(required = false) String returnCode,
+                @RequestParam(required = false) RefundMethod refundMethod,
+                @RequestParam(required = false) ReturnType type,
+                @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+                @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+                @RequestParam(required = false) String keyword,
+                @RequestParam(required = false) String sortBy,
+                @ParameterObject
+                @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
                 ReturnFilterRequest filter = new ReturnFilterRequest();
                 filter.setStatus(status);
@@ -115,8 +117,8 @@ public class ReturnRequestController {
                 filter.setKeyword(keyword);
 
                 return ResponseEntity.ok(ApiResponse.success(
-                                "All return requests retrieved successfully",
-                                returnRequestService.getAllReturnRequests(filter, sortBy, pageable)));
+                        "All return requests retrieved successfully",
+                        returnRequestService.getAllReturnRequests(filter, sortBy, pageable)));
         }
 
         @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")

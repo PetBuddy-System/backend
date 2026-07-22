@@ -40,6 +40,12 @@ public class ReturnRequestResponse {
     String description;
     ReturnStatus status;
 
+    //Số lần lấy hàng thất bại (thêm mới)
+    Integer pickupFailedCount;
+
+    // Số lần giao hàng thất bại
+    Integer deliveryFailedCount;
+
     // Thông tin hoàn tiền
     RefundMethod refundMethod;
     RefundStatus refundStatus;
@@ -54,11 +60,18 @@ public class ReturnRequestResponse {
     // Timeline
     LocalDateTime createdAt;
     LocalDateTime approvedAt;
+    LocalDateTime pickingUpAt;
+    LocalDateTime pickupFailedAt;
     LocalDateTime pickedUpAt;
     LocalDateTime returnedToStoreAt;
+    LocalDateTime readyToDeliverAt;
+    LocalDateTime deliveringAt;
+    LocalDateTime deliveringFailedAt;
     LocalDateTime completedAt;
-    LocalDateTime updatedAt;
+    LocalDateTime rejectedAt;
+    LocalDateTime cancelledAt;
     LocalDateTime restockedAt;
+    LocalDateTime updatedAt;
 
     // Danh sách sản phẩm và file
     List<ReturnItemResponse> returnItems;

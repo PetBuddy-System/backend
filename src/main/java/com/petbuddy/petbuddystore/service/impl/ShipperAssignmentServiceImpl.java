@@ -434,6 +434,7 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
                 ReturnStatus.APPROVED,
                 ReturnStatus.PICKING_UP,
                 ReturnStatus.PICKED_UP,
+                ReturnStatus.PICKUP_FAILED,
                 ReturnStatus.RETURNED_TO_STORE,
                 ReturnStatus.READY_TO_DELIVER,
                 ReturnStatus.DELIVERING,
@@ -465,7 +466,6 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
                 .sorted(Comparator.comparing(ReturnShipperResponse::getActiveReturnCount))
                 .toList();
     }
-
     @Override
     @Transactional
     public void assignReturnShipper(Long returnRequestId,
@@ -474,9 +474,11 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
         ReturnRequest returnRequest = returnRequestRepository.findById(returnRequestId)
                 .orElseThrow(() -> new AppException(ErrorCode.RETURN_REQUEST_NOT_FOUND));
 
-        // Allow APPROVED or DELIVERING_FAILED
         if (returnRequest.getStatus() != ReturnStatus.APPROVED
-                && returnRequest.getStatus() != ReturnStatus.DELIVERING_FAILED) {
+                && returnRequest.getStatus() != ReturnStatus.DELIVERING_FAILED
+                && returnRequest.getStatus() != ReturnStatus.PICKUP_FAILED
+                && returnRequest.getStatus() != ReturnStatus.REJECTED_RETURN_SHIPPING
+                && returnRequest.getStatus() != ReturnStatus.RETURNED_TO_STORE) {
             throw new AppException(ErrorCode.INVALID_RETURN_STATUS);
         }
 
@@ -500,9 +502,24 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
         }
 
         returnRequest.setShipper(shipper);
+        returnRequest.setPickupFailedCount(0);
+        returnRequest.setDeliveryFailedCount(0);
 
         // If reassigned after a failed delivery, reset to READY_TO_DELIVER
         if (returnRequest.getStatus() == ReturnStatus.DELIVERING_FAILED) {
+            returnRequest.setStatus(ReturnStatus.READY_TO_DELIVER);
+        }
+
+        // If reassigned after a failed pickup, reset to APPROVED
+        if (returnRequest.getStatus() == ReturnStatus.PICKUP_FAILED) {
+            returnRequest.setStatus(ReturnStatus.APPROVED);
+        }
+
+        if (returnRequest.getStatus() == ReturnStatus.REJECTED_RETURN_SHIPPING) {
+            returnRequest.setStatus(ReturnStatus.READY_TO_DELIVER);
+        }
+
+        if (returnRequest.getStatus() == ReturnStatus.RETURNED_TO_STORE) {
             returnRequest.setStatus(ReturnStatus.READY_TO_DELIVER);
         }
 
