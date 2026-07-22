@@ -8,9 +8,7 @@ import com.petbuddy.petbuddystore.dto.request.CreateReturnRequest;
 import com.petbuddy.petbuddystore.dto.request.ReturnFilterRequest;
 import com.petbuddy.petbuddystore.dto.request.ReturnItemRequest;
 import com.petbuddy.petbuddystore.dto.request.UpdateReturnStatusRequest;
-import com.petbuddy.petbuddystore.dto.response.CalculateRefundResponse;
-import com.petbuddy.petbuddystore.dto.response.ReturnItemResponse;
-import com.petbuddy.petbuddystore.dto.response.ReturnRequestResponse;
+import com.petbuddy.petbuddystore.dto.response.*;
 import com.petbuddy.petbuddystore.mapper.ReturnRequestMapper;
 import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.*;
@@ -23,7 +21,6 @@ import jakarta.persistence.criteria.Predicate;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -46,7 +43,6 @@ import java.util.*;
 @Transactional
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-@Slf4j
 public class ReturnRequestServiceImpl implements ReturnRequestService {
 
     ReturnRequestRepository returnRequestRepository;
@@ -67,20 +63,7 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
         Order order = orderRepository.findById(request.getOrderId())
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
-        if (!order.getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new AppException(ErrorCode.ORDER_NOT_OWNED);
-        }
-
-        if (order.getStatus() != OrderStatus.COMPLETED) {
-            throw new AppException(ErrorCode.ORDER_NOT_COMPLETED);
-        }
-
-        LocalDate completedDate = order.getUpdatedAt().toLocalDate();
-        LocalDate today = LocalDate.now();
-        long days = ChronoUnit.DAYS.between(completedDate, today);
-        if (days > 30) {
-            throw new AppException(ErrorCode.RETURN_PERIOD_EXPIRED);
-        }
+        long days = validateOrderForReturn(order, currentUser);
 
         ReturnReason reasonEnum;
         try {
@@ -89,48 +72,21 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
             throw new AppException(ErrorCode.INVALID_KEY);
         }
 
-        BigDecimal totalRefundAmount = BigDecimal.ZERO;
-        List<ReturnItemResponse> itemsResponse = new ArrayList<>();
-
-        BigDecimal policyFactor = getRefundPolicyFactor(reasonEnum, days);
-
         if (request.getItems() == null || request.getItems().isEmpty()) {
             throw new AppException(ErrorCode.INVALID_KEY);
         }
+
+        BigDecimal policyFactor = getRefundPolicyFactor(reasonEnum, days);
+        BigDecimal totalRefundAmount = BigDecimal.ZERO;
+        List<ReturnItemResponse> itemsResponse = new ArrayList<>();
 
         for (ReturnItemRequest itemReq : request.getItems()) {
             OrderDetail orderDetail = orderDetailRepository.findById(itemReq.getOrderDetailId())
                     .orElseThrow(() -> new AppException(ErrorCode.ORDER_DETAIL_NOT_FOUND));
 
-            if (!orderDetail.getOrder().getOrderId().equals(order.getOrderId())) {
-                throw new AppException(ErrorCode.ORDER_DETAIL_NOT_FOUND);
-            }
+            validateReturnItem(orderDetail, order, itemReq.getQuantity());
 
-            if (itemReq.getQuantity() <= 0) {
-                throw new AppException(ErrorCode.RETURN_QUANTITY_INVALID);
-            }
-
-            int alreadyReturned = returnItemRepository.sumQuantityByOrderDetailIdAndStatusIn(
-                    orderDetail.getOrderDetailId(),
-                    List.of(ReturnStatus.PENDING, ReturnStatus.APPROVED, ReturnStatus.COMPLETED));
-
-            if (itemReq.getQuantity() > orderDetail.getQuantity() - alreadyReturned) {
-                throw new AppException(ErrorCode.RETURN_QUANTITY_EXCEEDED);
-            }
-
-            BigDecimal orderTotal = getOriginalTotal(order);
-            BigDecimal discount = getOriginalDiscount(order);
-
-            BigDecimal allocatedDetailDiscount = (discount != null && orderTotal.compareTo(BigDecimal.ZERO) > 0)
-                    ? discount.multiply(orderDetail.getTotalPrice()).divide(orderTotal, 4, RoundingMode.HALF_UP)
-                    : BigDecimal.ZERO;
-
-            BigDecimal detailValueAfterVoucher = orderDetail.getTotalPrice().subtract(allocatedDetailDiscount);
-            BigDecimal unitValueAfterVoucher = detailValueAfterVoucher
-                    .divide(BigDecimal.valueOf(orderDetail.getQuantity()), 4, RoundingMode.HALF_UP);
-            BigDecimal requestedValue = unitValueAfterVoucher.multiply(BigDecimal.valueOf(itemReq.getQuantity()));
-
-            BigDecimal itemRefund = requestedValue.multiply(policyFactor).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal itemRefund = calculateItemRefund(orderDetail, order, itemReq.getQuantity(), policyFactor);
             totalRefundAmount = totalRefundAmount.add(itemRefund);
 
             itemsResponse.add(ReturnItemResponse.builder()
@@ -156,20 +112,7 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
         Order order = orderRepository.findById(request.getOrderId())
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
-        if (!order.getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new AppException(ErrorCode.ORDER_NOT_OWNED);
-        }
-
-        if (order.getStatus() != OrderStatus.COMPLETED) {
-            throw new AppException(ErrorCode.ORDER_NOT_COMPLETED);
-        }
-
-        LocalDate completedDate = order.getUpdatedAt().toLocalDate();
-        LocalDate today = LocalDate.now();
-        long days = ChronoUnit.DAYS.between(completedDate, today);
-        if (days > 30) {
-            throw new AppException(ErrorCode.RETURN_PERIOD_EXPIRED);
-        }
+        long days = validateOrderForReturn(order, currentUser);
 
         ReturnType typeEnum;
         ReturnReason reasonEnum;
@@ -214,6 +157,11 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
             }
         }
 
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
+
+        BigDecimal policyFactor = getRefundPolicyFactor(reasonEnum, days);
         BigDecimal totalRefundAmount = BigDecimal.ZERO;
         List<ReturnItem> returnItems = new ArrayList<>();
 
@@ -233,66 +181,30 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                 .bankAccountHolder(refundMethodEnum == RefundMethod.BANK_TRANSFER ? request.getBankAccountHolder() : null)
                 .build();
 
-        BigDecimal policyFactor = getRefundPolicyFactor(reasonEnum, days);
-
-        if (request.getItems() == null || request.getItems().isEmpty()) {
-            throw new AppException(ErrorCode.INVALID_KEY);
-        }
-
         for (ReturnItemRequest itemReq : request.getItems()) {
             OrderDetail orderDetail = orderDetailRepository.findById(itemReq.getOrderDetailId())
                     .orElseThrow(() -> new AppException(ErrorCode.ORDER_DETAIL_NOT_FOUND));
 
-            if (!orderDetail.getOrder().getOrderId().equals(order.getOrderId())) {
-                throw new AppException(ErrorCode.ORDER_DETAIL_NOT_FOUND);
-            }
-
-            if (itemReq.getQuantity() <= 0) {
-                throw new AppException(ErrorCode.RETURN_QUANTITY_INVALID);
-            }
-
-            int alreadyReturned = returnItemRepository.sumQuantityByOrderDetailIdAndStatusIn(
-                    orderDetail.getOrderDetailId(),
-                    List.of(ReturnStatus.PENDING, ReturnStatus.APPROVED, ReturnStatus.COMPLETED));
-
-            if (itemReq.getQuantity() > orderDetail.getQuantity() - alreadyReturned) {
-                throw new AppException(ErrorCode.RETURN_QUANTITY_EXCEEDED);
-            }
+            validateReturnItem(orderDetail, order, itemReq.getQuantity());
 
             BigDecimal itemRefund = BigDecimal.ZERO;
-
             if (typeEnum == ReturnType.RETURN) {
-                BigDecimal orderTotal = getOriginalTotal(order);
-                BigDecimal discount = getOriginalDiscount(order);
-
-                BigDecimal allocatedDetailDiscount = (discount != null && orderTotal.compareTo(BigDecimal.ZERO) > 0)
-                        ? discount.multiply(orderDetail.getTotalPrice()).divide(orderTotal, 4, RoundingMode.HALF_UP)
-                        : BigDecimal.ZERO;
-
-                BigDecimal detailValueAfterVoucher = orderDetail.getTotalPrice().subtract(allocatedDetailDiscount);
-                BigDecimal unitValueAfterVoucher = detailValueAfterVoucher
-                        .divide(BigDecimal.valueOf(orderDetail.getQuantity()), 4, RoundingMode.HALF_UP);
-                BigDecimal requestedValue = unitValueAfterVoucher.multiply(BigDecimal.valueOf(itemReq.getQuantity()));
-
-                itemRefund = requestedValue.multiply(policyFactor).setScale(2, RoundingMode.HALF_UP);
+                itemRefund = calculateItemRefund(orderDetail, order, itemReq.getQuantity(), policyFactor);
                 totalRefundAmount = totalRefundAmount.add(itemRefund);
             }
 
-            ReturnItem returnItem = ReturnItem.builder()
+            returnItems.add(ReturnItem.builder()
                     .returnRequest(returnRequest)
                     .orderDetail(orderDetail)
                     .quantity(itemReq.getQuantity())
                     .refundAmount(itemRefund)
-                    .build();
-
-            returnItems.add(returnItem);
+                    .build());
         }
 
         returnRequest.setRefundAmount(totalRefundAmount.setScale(2, RoundingMode.HALF_UP));
         returnRequest.setReturnItems(returnItems);
 
         ReturnRequest saved = returnRequestRepository.save(returnRequest);
-
         return returnRequestMapper.toReturnRequestResponse(saved);
     }
 
@@ -377,339 +289,222 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
     }
 
     @Override
-    public Page<ReturnRequestResponse> getAllReturnRequests(
-            ReturnFilterRequest filter,
-            String sortBy,
-            Pageable pageable) {
+    public ReturnManagementResponse getAllReturnRequests(
+            ReturnFilterRequest filter, String sortBy, Pageable pageable) {
 
         User currentUser = getCurrentUser();
-
-        Pageable resolvedPageable = buildPageable(pageable, sortBy);
-
         Specification<ReturnRequest> spec = buildReturnSpec(filter);
 
-        if (currentUser.getRole() == Role.STAFF
-                && currentUser.getStaffTask() == StaffTask.SHIPPER) {
-
+        if (currentUser.getRole() == Role.STAFF && currentUser.getStaffTask() == StaffTask.SHIPPER) {
             spec = spec.and((root, query, cb) ->
-                    cb.equal(root.get("shipper").get("userId"),
-                            currentUser.getUserId()));
+                    cb.equal(root.get("shipper").get("userId"), currentUser.getUserId()));
         }
 
-        return returnRequestRepository.findAll(spec, resolvedPageable)
+        Page<ReturnRequestResponse> responsePage = returnRequestRepository
+                .findAll(spec, buildPageable(pageable, sortBy))
                 .map(returnRequestMapper::toReturnRequestResponse);
-    }
 
-    // ============================================================
-    // STAFF METHODS - COORDINATOR
-    // ============================================================
+        ReturnStatisticsResponse statistics = ReturnStatisticsResponse.builder()
+                .totalRequests(returnRequestRepository.count(spec))
+                .assigned(returnRequestRepository.count(
+                        spec.and((root, query, cb) -> cb.isNotNull(root.get("shipper")))))
+                .pending(countByStatus(spec, ReturnStatus.PENDING))
+                .approved(countByStatus(spec, ReturnStatus.APPROVED))
+                .completed(countByStatus(spec, ReturnStatus.COMPLETED))
+                .rejected(countByStatus(spec, ReturnStatus.REJECTED))
+                .build();
+
+        return ReturnManagementResponse.builder()
+                .returns(responsePage)
+                .statistics(statistics)
+                .build();
+    }
 
     @Override
     @Transactional
     public ReturnRequestResponse updateReturnStatusByManagement(Long id, UpdateReturnStatusRequest request) {
         checkLogin();
         User currentUser = getCurrentUser();
-
         ReturnRequest returnRequest = returnRequestRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.RETURN_REQUEST_NOT_FOUND));
-
         ReturnStatus newStatus = parseStatus(request.getStatus());
-        ReturnStatus currentStatus = returnRequest.getStatus();
-
-        // Validate
-        validateManagementStatusTransition(returnRequest.getType(), currentStatus, newStatus);
-
-        // Xử lý business logic
+        validateManagementStatusTransition(returnRequest.getType(), returnRequest.getStatus(), newStatus);
         processManagementStatusChange(returnRequest, newStatus, currentUser);
-
-        // Cập nhật common fields
-        updateCommonFields(returnRequest, request, newStatus);
-
-        ReturnRequest saved = returnRequestRepository.save(returnRequest);
-        return returnRequestMapper.toReturnRequestResponse(saved);
+        return returnRequestMapper.toReturnRequestResponse(returnRequestRepository.save(returnRequest));
     }
-
-    // ============================================================
-    // STAFF METHODS - SHIPPER
-    // ============================================================
 
     @Override
     @Transactional
     public ReturnRequestResponse updateReturnStatusByShipper(Long id, UpdateReturnStatusRequest request) {
         checkLogin();
         User currentUser = getCurrentUser();
-
         ReturnRequest returnRequest = returnRequestRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.RETURN_REQUEST_NOT_FOUND));
-
         ReturnStatus newStatus = parseStatus(request.getStatus());
-        ReturnStatus currentStatus = returnRequest.getStatus();
-
-        // Validate
-        validateShipperStatusTransition(returnRequest.getType(), currentStatus, newStatus);
-
-        // Xử lý business logic
+        validateShipperStatusTransition(returnRequest.getType(), returnRequest.getStatus(), newStatus);
         processShipperStatusChange(returnRequest, newStatus, currentUser);
-
-        // Cập nhật common fields
-        updateCommonFields(returnRequest, request, newStatus);
-
-        ReturnRequest saved = returnRequestRepository.save(returnRequest);
-        return returnRequestMapper.toReturnRequestResponse(saved);
+        return returnRequestMapper.toReturnRequestResponse(returnRequestRepository.save(returnRequest));
     }
 
-    // ============================================================
-    // PRIVATE VALIDATION METHODS
-    // ============================================================
-
     private void validateManagementStatusTransition(ReturnType type, ReturnStatus current, ReturnStatus next) {
-        // Trạng thái cuối không thể chuyển tiếp
-        if (isFinalStatus(current)) {
-            throw new AppException(ErrorCode.RETURN_REQUEST_ALREADY_PROCESSED);
-        }
+        if (isFinalStatus(current)) throw new AppException(ErrorCode.RETURN_REQUEST_ALREADY_PROCESSED);
 
-        // PENDING -> APPROVED, REJECTED
-        if (current == ReturnStatus.PENDING) {
-            if (next != ReturnStatus.APPROVED && next != ReturnStatus.REJECTED) {
+        switch (current) {
+            case PENDING:
+                if (next != ReturnStatus.APPROVED && next != ReturnStatus.REJECTED)
+                    throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                break;
+            case PICKUP_FAILED:
+                if (next != ReturnStatus.CANCELLED && next != ReturnStatus.APPROVED)
+                    throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                break;
+            case RETURNED_TO_STORE:
+                ReturnStatus allowed = (type == ReturnType.EXCHANGE) ? ReturnStatus.READY_TO_DELIVER : ReturnStatus.COMPLETED;
+                if (next != allowed && next != ReturnStatus.REJECTED_RETURN_SHIPPING)
+                    throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                break;
+            case REJECTED_RETURN_SHIPPING:
+                if (next != ReturnStatus.APPROVED)
+                    throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                break;
+            case DELIVERING_FAILED:
+                if (next != ReturnStatus.COMPLETED && next != ReturnStatus.APPROVED)
+                    throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                break;
+            default:
                 throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
-            }
-            return;
         }
-
-        // RETURNED_TO_STORE -> COMPLETED, REJECTED
-        if (current == ReturnStatus.RETURNED_TO_STORE) {
-            if (next != ReturnStatus.COMPLETED && next != ReturnStatus.REJECTED) {
-                throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
-            }
-            return;
-        }
-
-        // DELIVERING_FAILED -> CANCELLED (coordinator manual cancel)
-        if (current == ReturnStatus.DELIVERING_FAILED) {
-            if (next != ReturnStatus.CANCELLED) {
-                throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
-            }
-            return;
-        }
-
-        throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
     }
 
     private void validateShipperStatusTransition(ReturnType type, ReturnStatus current, ReturnStatus next) {
-        // Trạng thái cuối không thể chuyển tiếp
-        if (isFinalStatus(current)) {
-            throw new AppException(ErrorCode.RETURN_REQUEST_ALREADY_PROCESSED);
-        }
+        if (isFinalStatus(current)) throw new AppException(ErrorCode.RETURN_REQUEST_ALREADY_PROCESSED);
 
-        if (type == ReturnType.RETURN) {
-            // RETURN: APPROVED -> PICKING_UP/PICKED_UP -> RETURNED_TO_STORE
-            switch (current) {
-                case APPROVED:
-                    if (next != ReturnStatus.PICKING_UP) {
-                        throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
-                    }
-                    break;
-
-                case PICKING_UP:
-                    if (next != ReturnStatus.PICKED_UP) {
-                        throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
-                    }
-                    break;
-
-                case PICKED_UP:
-                    if (next != ReturnStatus.RETURNED_TO_STORE) {
-                        throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
-                    }
-                    break;
-
-                default:
+        switch (current) {
+            case APPROVED:
+                if (next != ReturnStatus.PICKING_UP) throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                break;
+            case PICKING_UP:
+                if (next != ReturnStatus.PICKED_UP && next != ReturnStatus.PICKUP_FAILED)
                     throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
-            }
-        } else if (type == ReturnType.EXCHANGE) {
-            // EXCHANGE: READY_TO_DELIVER -> DELIVERING -> COMPLETED
-            switch (current) {
-                case READY_TO_DELIVER:
-                    if (next != ReturnStatus.DELIVERING) {
-                        throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
-                    }
-                    break;
-
-                case DELIVERING:
-                    if (next != ReturnStatus.COMPLETED && next != ReturnStatus.DELIVERING_FAILED) {
-                        throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
-                    }
-                    break;
-
-                default:
+                break;
+            case PICKED_UP:
+                if (next != ReturnStatus.RETURNED_TO_STORE) throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                break;
+            case PICKUP_FAILED:
+                if (next != ReturnStatus.APPROVED) throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                break;
+            case READY_TO_DELIVER:
+                if (next != ReturnStatus.DELIVERING && next != ReturnStatus.DELIVERING_FAILED)
                     throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
-            }
+                break;
+            case DELIVERING:
+                if (next != ReturnStatus.COMPLETED && next != ReturnStatus.DELIVERING_FAILED)
+                    throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+                break;
+            default:
+                throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
         }
     }
 
-    // ============================================================
-    // PRIVATE BUSINESS LOGIC METHODS
-    // ============================================================
-
     private void processManagementStatusChange(ReturnRequest returnRequest,
-                                               ReturnStatus newStatus,
-                                               User currentUser) {
-        String userName = currentUser.getFullName() != null ?
-                currentUser.getFullName() :
-                currentUser.getEmail();
+                                               ReturnStatus newStatus, User currentUser) {
+        boolean isExchange = returnRequest.getType() == ReturnType.EXCHANGE;
+        returnRequest.setStatus(newStatus);
 
-        // Xử lý cho EXCHANGE
-        if (returnRequest.getType() == ReturnType.EXCHANGE) {
-            switch (newStatus) {
-                case APPROVED:
-                    returnRequest.setApprovedAt(LocalDateTime.now());
-                    returnRequest.setCoordinator(currentUser);
-                    returnStockService.reserveStockForExchange(returnRequest);
-                    log.info("Coordinator {} approved exchange request {}",
-                            userName, returnRequest.getReturnCode());
-                    break;
+        switch (newStatus) {
+            case APPROVED:
+                returnRequest.setApprovedAt(LocalDateTime.now());
+                returnRequest.setCoordinator(currentUser);
+                if (isExchange) returnStockService.reserveStockForExchange(returnRequest);
+                break;
 
-                case COMPLETED:
-                    returnStockService.confirmStockForExchange(returnRequest);
-                    returnRequest.setCompletedAt(LocalDateTime.now());
-                    log.info("Exchange completed for request {}", returnRequest.getReturnCode());
-                    break;
+            case REJECTED:
+            case REJECTED_RETURN_SHIPPING:
+                returnRequest.setRejectedAt(LocalDateTime.now());
+                returnRequest.setCoordinator(currentUser);
+                returnRequest.setRefundStatus(RefundStatus.FAILED);
+                if (isExchange) returnStockService.releaseReservedStock(returnRequest);
+                break;
 
-                case REJECTED:
-                    returnStockService.releaseReservedStock(returnRequest);
-                    returnRequest.setRefundStatus(RefundStatus.FAILED);
-                    returnRequest.setCoordinator(currentUser);
-                    log.info("Coordinator {} rejected exchange request {}",
-                            userName, returnRequest.getReturnCode());
-                    break;
+            case COMPLETED:
+                if (returnRequest.getRejectedAt() == null) {
+                    if (isExchange) {
+                        returnStockService.confirmStockForExchange(returnRequest);
+                    } else {
+                        paymentService.refundForReturn(returnRequest);
+                        returnRequest.setRefundStatus(RefundStatus.SUCCESS);
+                        applyReturnedQuantitiesToOrder(returnRequest);
+                    }
+                }
+                returnRequest.setCompletedAt(LocalDateTime.now());
+                break;
 
-                case CANCELLED:
-                    returnStockService.releaseReservedStock(returnRequest);
-                    returnRequest.setRefundStatus(RefundStatus.FAILED);
-                    returnRequest.setCoordinator(currentUser);
-                    log.info("Coordinator {} cancelled exchange request {}",
-                            userName, returnRequest.getReturnCode());
-                    break;
+            case CANCELLED:
+                returnRequest.setCancelledAt(LocalDateTime.now());
+                returnRequest.setCoordinator(currentUser);
+                returnRequest.setRefundStatus(RefundStatus.FAILED);
+                if (isExchange) returnStockService.releaseReservedStock(returnRequest);
+                break;
 
-                default:
-                    break;
-            }
-        }
-
-        // Xử lý cho RETURN
-        if (returnRequest.getType() == ReturnType.RETURN) {
-            switch (newStatus) {
-                case APPROVED:
-                    returnRequest.setApprovedAt(LocalDateTime.now());
-                    returnRequest.setCoordinator(currentUser);
-                    log.info("Coordinator {} approved return request {}",
-                            userName, returnRequest.getReturnCode());
-                    break;
-
-                case COMPLETED:
-                    paymentService.refundForReturn(returnRequest);
-                    returnRequest.setRefundStatus(RefundStatus.SUCCESS);
-                    returnRequest.setCompletedAt(LocalDateTime.now());
-                    applyReturnedQuantitiesToOrder(returnRequest);
-                    log.info("Return completed and refunded for request {}", returnRequest.getReturnCode());
-                    break;
-
-                case REJECTED:
-                    returnRequest.setRefundStatus(RefundStatus.FAILED);
-                    returnRequest.setCoordinator(currentUser);
-                    log.info("Coordinator {} rejected return request {}",
-                            userName, returnRequest.getReturnCode());
-                    break;
-
-                default:
-                    break;
-            }
+            default:
+                break;
         }
     }
 
     private void processShipperStatusChange(ReturnRequest returnRequest,
-                                            ReturnStatus newStatus,
-                                            User currentUser) {
-        String userName = currentUser.getFullName() != null ?
-                currentUser.getFullName() :
-                currentUser.getEmail();
+                                            ReturnStatus newStatus, User currentUser) {
+        switch (newStatus) {
+            case PICKING_UP:
+                returnRequest.setStatus(newStatus);
+                returnRequest.setPickingUpAt(LocalDateTime.now());
+                returnRequest.setShipper(currentUser);
+                break;
 
-        // Shipper xử lý cho RETURN
-        if (returnRequest.getType() == ReturnType.RETURN) {
-            switch (newStatus) {
-                case PICKING_UP:
-                    returnRequest.setPickedUpAt(LocalDateTime.now());
-                    returnRequest.setShipper(currentUser);
-                    log.info("Shipper {} is picking up return request {}",
-                            userName, returnRequest.getReturnCode());
-                    break;
+            case PICKED_UP:
+                returnRequest.setStatus(newStatus);
+                returnRequest.setPickedUpAt(LocalDateTime.now());
+                returnRequest.setShipper(currentUser);
+                break;
 
-                case PICKED_UP:
-                    returnRequest.setPickedUpAt(LocalDateTime.now());
-                    returnRequest.setShipper(currentUser);
-                    log.info("Shipper {} picked up return request {}",
-                            userName, returnRequest.getReturnCode());
-                    break;
+            case PICKUP_FAILED:
+                int pickupCount = returnRequest.getPickupFailedCount() + 1;
+                returnRequest.setPickupFailedCount(pickupCount);
+                returnRequest.setPickupFailedAt(LocalDateTime.now());
+                returnRequest.setStatus(pickupCount >= 3 ? newStatus : ReturnStatus.PICKING_UP);
+                if (pickupCount >= 3) returnRequest.setShipper(null);
+                break;
 
-                case RETURNED_TO_STORE:
-                    returnRequest.setReturnedToStoreAt(LocalDateTime.now());
-                    log.info("Shipper {} returned to store for request {}",
-                            userName, returnRequest.getReturnCode());
-                    break;
+            case RETURNED_TO_STORE:
+                returnRequest.setStatus(newStatus);
+                returnRequest.setReturnedToStoreAt(LocalDateTime.now());
+                break;
 
-                default:
-                    break;
-            }
-        }
+            case DELIVERING:
+                returnRequest.setStatus(newStatus);
+                returnRequest.setDeliveringAt(LocalDateTime.now());
+                break;
 
-        // Shipper xử lý cho EXCHANGE
-        if (returnRequest.getType() == ReturnType.EXCHANGE) {
-            switch (newStatus) {
-                case DELIVERING:
-                    returnRequest.setShipper(currentUser);
-                    log.info("Shipper {} is delivering exchange request {}",
-                            userName, returnRequest.getReturnCode());
-                    break;
+            case DELIVERING_FAILED:
+                int deliverCount = returnRequest.getDeliveryFailedCount() + 1;
+                returnRequest.setDeliveryFailedCount(deliverCount);
+                returnRequest.setDeliveringFailedAt(LocalDateTime.now());
+                returnRequest.setStatus(deliverCount >= 3 ? newStatus : ReturnStatus.READY_TO_DELIVER);
+                if (deliverCount >= 3) returnRequest.setShipper(null);
+                break;
 
-                case COMPLETED:
+            case COMPLETED:
+                returnRequest.setStatus(newStatus);
+                if (returnRequest.getType() == ReturnType.EXCHANGE)
                     returnStockService.confirmStockForExchange(returnRequest);
-                    returnRequest.setCompletedAt(LocalDateTime.now());
-                    log.info("Shipper {} delivered exchange request successfully {}",
-                            userName, returnRequest.getReturnCode());
-                    break;
+                returnRequest.setCompletedAt(LocalDateTime.now());
+                break;
 
-                case DELIVERING_FAILED:
-                    int newCount = returnRequest.getDeliveryFailedCount() + 1;
-                    returnRequest.setDeliveryFailedCount(newCount);
-                    if (newCount >= 3) {
-                        returnRequest.setShipper(null);
-                        log.warn("Exchange request {} reached {} delivery failures — shipper unassigned, returned to coordinator",
-                                returnRequest.getReturnCode(), newCount);
-                    } else {
-                        log.info("Shipper {} failed to deliver exchange request {} (failedCount={})",
-                                userName, returnRequest.getReturnCode(), newCount);
-                    }
-                    break;
-
-                default:
-                    break;
-            }
+            default:
+                break;
         }
     }
 
-    // ============================================================
-    // PRIVATE UPDATE COMMON FIELDS
-    // ============================================================
 
-    private void updateCommonFields(ReturnRequest returnRequest,
-                                    UpdateReturnStatusRequest request,
-                                    ReturnStatus newStatus) {
-        returnRequest.setStatus(newStatus);
-        returnRequest.setUpdatedAt(LocalDateTime.now());
-
-        if (request.getStaffNote() != null) {
-            returnRequest.setStaffNote(request.getStaffNote());
-        }
-    }
 
     private void applyReturnedQuantitiesToOrder(ReturnRequest returnRequest) {
         Order order = returnRequest.getOrder();
@@ -781,10 +576,56 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
         orderRepository.save(order);
     }
 
-    // ============================================================
-    // PRIVATE HELPER METHODS
-    // ============================================================
+    private long countByStatus(Specification<ReturnRequest> base, ReturnStatus status) {
+        return returnRequestRepository.count(
+                base.and((root, query, cb) -> cb.equal(root.get("status"), status)));
+    }
 
+    private long validateOrderForReturn(Order order, User currentUser) {
+        if (!order.getUser().getUserId().equals(currentUser.getUserId())) {
+            throw new AppException(ErrorCode.ORDER_NOT_OWNED);
+        }
+        if (order.getStatus() != OrderStatus.COMPLETED) {
+            throw new AppException(ErrorCode.ORDER_NOT_COMPLETED);
+        }
+        long days = ChronoUnit.DAYS.between(order.getUpdatedAt().toLocalDate(), LocalDate.now());
+        if (days > 30) {
+            throw new AppException(ErrorCode.RETURN_PERIOD_EXPIRED);
+        }
+        return days;
+    }
+
+    private void validateReturnItem(OrderDetail orderDetail, Order order, int quantity) {
+        if (!orderDetail.getOrder().getOrderId().equals(order.getOrderId())) {
+            throw new AppException(ErrorCode.ORDER_DETAIL_NOT_FOUND);
+        }
+        if (quantity <= 0) {
+            throw new AppException(ErrorCode.RETURN_QUANTITY_INVALID);
+        }
+        int alreadyReturned = returnItemRepository.sumQuantityByOrderDetailIdAndStatusIn(
+                orderDetail.getOrderDetailId(),
+                List.of(ReturnStatus.PENDING, ReturnStatus.APPROVED, ReturnStatus.COMPLETED));
+        if (quantity > orderDetail.getQuantity() - alreadyReturned) {
+            throw new AppException(ErrorCode.RETURN_QUANTITY_EXCEEDED);
+        }
+    }
+
+    private BigDecimal calculateItemRefund(OrderDetail orderDetail, Order order,
+                                           int quantity, BigDecimal policyFactor) {
+        BigDecimal orderTotal = getOriginalTotal(order);
+        BigDecimal discount  = getOriginalDiscount(order);
+
+        BigDecimal allocatedDetailDiscount = (discount != null && orderTotal.compareTo(BigDecimal.ZERO) > 0)
+                ? discount.multiply(orderDetail.getTotalPrice()).divide(orderTotal, 4, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        BigDecimal detailValueAfterVoucher = orderDetail.getTotalPrice().subtract(allocatedDetailDiscount);
+        BigDecimal unitValueAfterVoucher   = detailValueAfterVoucher
+                .divide(BigDecimal.valueOf(orderDetail.getQuantity()), 4, RoundingMode.HALF_UP);
+        BigDecimal requestedValue = unitValueAfterVoucher.multiply(BigDecimal.valueOf(quantity));
+
+        return requestedValue.multiply(policyFactor).setScale(2, RoundingMode.HALF_UP);
+    }
 
     private BigDecimal getOriginalDiscount(Order order) {
         return order.getOriginalDiscountAmount() != null

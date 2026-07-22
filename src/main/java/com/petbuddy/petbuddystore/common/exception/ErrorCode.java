@@ -115,7 +115,7 @@ public enum ErrorCode {
     PRODUCT_WEIGHT_INVALID(4262, "khối lượng phải nằm trong khoảng 1 tới 100 000", HttpStatus.BAD_REQUEST),
     PRODUCT_WEIGHT_REQUIRED(4263,"Khối lượng là bắt buộc",HttpStatus.BAD_REQUEST),
     INVALID_SHIPPER(4264, "kh tim thấy shipper", HttpStatus.BAD_REQUEST),
-    INVALID_RETURN_STATUS(4265,"chỉ đucowj đổi từ APPROVED",HttpStatus.BAD_REQUEST),
+    INVALID_RETURN_STATUS(4265,"chỉ được đổi từ APPROVED",HttpStatus.BAD_REQUEST),
 
 
     REVIEW_NOT_FOUND(4300, "Review not found", HttpStatus.NOT_FOUND),
