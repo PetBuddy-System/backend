@@ -168,6 +168,7 @@ public class VnPayServiceImpl implements VnPayService {
                 transactionNo,
                 transactionDate,
                 createBy,
+                createDate,
                 params.get("vnp_IpAddr"),
                 orderInfo
         );

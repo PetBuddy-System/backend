@@ -191,9 +191,7 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
             if (currentLoad >= maxCapacity) continue;
 
             Double distance = distanceToShipperZone(order, schedule);
-            if (distance != null && distance > capacityProperties.getMaxOperationalRadiusKm()) {
-                continue;
-            }
+
             suggestions.add(ShipperSuggestionResponse.builder()
                     .staffId(schedule.getStaff().getUserId())
                     .staffName(schedule.getStaff().getFullName())
