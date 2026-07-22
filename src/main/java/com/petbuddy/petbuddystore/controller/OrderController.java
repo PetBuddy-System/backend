@@ -25,6 +25,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -112,5 +113,32 @@ public class OrderController {
     public ResponseEntity<ApiResponse<OrderResponse>> confirmReturnedToWarehouse(@PathVariable Long orderId) {
         return ResponseEntity.ok(ApiResponse.success("Xác nhận đã trả hàng về kho thành công",
                 orderService.confirmReturnedToWarehouse(orderId)));
+    }
+
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_COORDINATOR')")
+    @PostMapping("/{orderId}/coordinator-report-unreachable")
+    public ResponseEntity<ApiResponse<OrderResponse>> coordinatorReportUnreachable(
+            @PathVariable Long orderId,
+            @RequestParam String note) {
+        return ResponseEntity.ok(ApiResponse.success("Đã ghi nhận không liên lạc được khách hàng",
+                orderService.coordinatorReportUnreachable(orderId, note)));
+    }
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_COORDINATOR')")
+    @PostMapping("/{orderId}/coordinator-negotiate-redelivery")
+    public ResponseEntity<ApiResponse<OrderResponse>> coordinatorNegotiateRedelivery(
+            @PathVariable Long orderId,
+            @RequestParam LocalDate negotiatedDate,
+            @RequestParam String note) {
+        return ResponseEntity.ok(ApiResponse.success("Đã ghi nhận yêu cầu giao lại với ngày thỏa thuận",
+                orderService.coordinatorNegotiateRedelivery(orderId, negotiatedDate, note)));
+    }
+
+
+
+    @PostMapping("/retry-noon")
+        public ResponseEntity<Void> retryNoon() {
+            orderService.retryNoonDeliveryContacts();
+            return ResponseEntity.ok().build();
+
     }
 }

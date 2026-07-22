@@ -8,6 +8,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -107,4 +108,11 @@ public class Order {
 
     @Column(name = "estimated_delivery_at")
     LocalDateTime estimatedDeliveryAt;
+
+    @Builder.Default
+    @Column(name = "post_coordinator_redelivery", nullable = false)
+    Boolean postCoordinatorRedelivery = false;
+
+    @Column(name = "negotiated_delivery_date")
+    LocalDate negotiatedDeliveryDate;
 }

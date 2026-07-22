@@ -21,6 +21,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Page<Order> findByStaffSchedule_Staff_UserId(String userId, Pageable pageable);
     boolean existsByUserUserIdAndOrderDetailsProductProductIdAndStatus(String userId, UUID productId, OrderStatus status);
     List<Order> findByStatusAndLatitudeIsNotNullAndLongitudeIsNotNull(OrderStatus status);
-    long countByStaffSchedule_StaffScheduleIdAndStatusIn(String staffScheduleId, List<OrderStatus> statuses);
+    List<Order> findByStatusAndDeliveryFailCountAndUpdatedAtBetween(
+            OrderStatus status, int failCount, LocalDateTime from, LocalDateTime to);
 }
 

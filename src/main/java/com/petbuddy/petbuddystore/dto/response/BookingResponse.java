@@ -21,6 +21,13 @@ public class BookingResponse {
     String customerName;
     String customerPhone;
     String address;
+    Double latitude;
+    Double longitude;
+    String addressNote;
+    Double distanceKm;
+    BigDecimal travelFee;
+    Integer estimatedTravelMinute;
+    Boolean homeServiceRequirementsAccepted;
     LocalDateTime scheduledAt;
     LocalDateTime estimatedEndAt;
     BookingStatus bookingStatus;
@@ -32,9 +39,15 @@ public class BookingResponse {
     LocalDateTime paymentDeadlineAt;
     StaffAssignmentMode assignmentMode;
     String requestedStaffId;
+    String requestedStaffName;
     String staffScheduleId;
     String staffId;
     String staffName;
+    String assignedStaffId;
+    String assignedStaffName;
+    LocalDateTime departedAt;
+    LocalDateTime actualStartedAt;
+    LocalDateTime actualCompletedAt;
     String stripeClientSecret;
     List<BookingDetailResponse> bookingDetails;
 }

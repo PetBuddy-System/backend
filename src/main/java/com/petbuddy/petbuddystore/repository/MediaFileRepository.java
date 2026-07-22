@@ -13,4 +13,10 @@ public interface MediaFileRepository extends JpaRepository<MediaFile, Long> {
             BookingMediaType bookingMediaType,
             MediaStatus mediaStatus
     );
+
+    boolean existsByBookingDetail_BookingDetailIdAndBookingMediaTypeAndMediaStatus(
+            Integer bookingDetailId,
+            BookingMediaType bookingMediaType,
+            MediaStatus mediaStatus
+    );
 }

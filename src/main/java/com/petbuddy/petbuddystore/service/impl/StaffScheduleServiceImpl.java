@@ -130,7 +130,7 @@ public class StaffScheduleServiceImpl implements StaffScheduleService {
 
         if (!bookingRepository.findByStaffScheduleAndBookingStatusIn(
                 staffSchedule,
-                List.of(BookingStatus.ACCEPTED, BookingStatus.IN_PROGRESS, BookingStatus.READY_FOR_PICKUP)
+                List.of(BookingStatus.ACCEPTED, BookingStatus.ON_THE_WAY, BookingStatus.IN_PROGRESS, BookingStatus.READY_FOR_PICKUP)
         ).isEmpty()) {
             throw new AppException(ErrorCode.STAFF_HAS_UNFINISHED_BOOKING);
         }

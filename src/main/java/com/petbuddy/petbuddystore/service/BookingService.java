@@ -7,6 +7,7 @@ import com.petbuddy.petbuddystore.dto.request.BookingCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.BookingUpdateRequest;
 import com.petbuddy.petbuddystore.dto.response.AvailableGroomerResponse;
 import com.petbuddy.petbuddystore.dto.response.BookingResponse;
+import com.petbuddy.petbuddystore.dto.response.BookingPreviewResponse;
 import com.petbuddy.petbuddystore.dto.response.MediaFileResponse;
 import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
 import org.springframework.web.multipart.MultipartFile;
@@ -16,6 +17,7 @@ import java.util.List;
 
 public interface BookingService {
     BookingResponse createBooking(BookingCreationRequest request);
+    BookingPreviewResponse previewBooking(BookingCreationRequest request);
     List<BookingResponse> getMyBookings();
     PaymentResponse retryPayment(Integer bookingId);
     List<BookingResponse> getBookings(BookingStatus status, LocalDate fromDate, LocalDate toDate);
