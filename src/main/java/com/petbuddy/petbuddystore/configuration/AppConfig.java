@@ -6,6 +6,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -35,8 +36,8 @@ public class AppConfig {
         return RestClient.builder().build();
     }
 
-//    @Bean
-//    public ChatClient chatClient() {
-//        return ChatClient.builder().build();
-//    }
+    @Bean
+    ChatClient chatClient(ChatClient.Builder builder) {
+        return builder.build();
+    }
 }

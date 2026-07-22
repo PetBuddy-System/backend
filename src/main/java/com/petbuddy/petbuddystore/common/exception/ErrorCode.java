@@ -36,6 +36,8 @@ public enum ErrorCode {
     STAFF_TASK_REQUIRED(2012, "Staff task is required", HttpStatus.BAD_REQUEST),
 
     MESSAGE_EXCEED_LIMIT(2101, "Message must be less than 2000 characters", HttpStatus.BAD_REQUEST),
+    MESSAGE_REQUIRED(2102, "Message is required", HttpStatus.BAD_REQUEST),
+    MESSAGE_OR_IMAGE_REQUIRED(2103, "Message or image is required", HttpStatus.BAD_REQUEST),
 
     OTP_EXPIRED(3001, "OTP has expired", HttpStatus.BAD_REQUEST),
     OTP_INVALID(3002, "OTP is invalid", HttpStatus.BAD_REQUEST),
@@ -274,6 +276,9 @@ public enum ErrorCode {
     TOO_EARLY_TO_CHECKIN(9018, "It's not time to check in yet", HttpStatus.BAD_REQUEST),
     MISSED_CHECKIN(9019, "Check-in time has closed", HttpStatus.BAD_REQUEST),
     TOO_EARLY_TO_CHECKOUT(9020, "It's not time to check out yet", HttpStatus.BAD_REQUEST),
+    CONVERSATION_NOT_FOUND(9021, "AI Conversation not found", HttpStatus.NOT_FOUND),
+    MEDIA_READ_FAILED(9022, "Cannot read media file", HttpStatus.BAD_REQUEST),
+    AI_CHAT_FAILED(9023, "AI Chat failed", HttpStatus.INTERNAL_SERVER_ERROR),
     ;
 
     int code;

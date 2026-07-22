@@ -21,4 +21,6 @@ public interface UserService {
     UserResponse updateUserStatus(String userId, UserUpdateStatusRequest request);
     UserResponse getCurrentUser();
     Page<UserResponse> getUsers(Role role, StaffTask staffTask, int page, int size);
+    User getCurrentUserEntity();
+    User getCurrentUserEntityOrNull();
 }

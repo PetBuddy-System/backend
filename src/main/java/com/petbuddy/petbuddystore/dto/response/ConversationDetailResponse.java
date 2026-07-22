@@ -1,7 +1,5 @@
 package com.petbuddy.petbuddystore.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.petbuddy.petbuddystore.common.enums.ChatInputType;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -12,9 +10,8 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public class ChatAIResponse {
+public class ConversationDetailResponse {
     String conversationId;
-    String answer;
-    List<MediaFileResponse> mediaFiles;
+    String title;
+    List<ConversationMessageResponse> messages;
 }

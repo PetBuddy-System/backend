@@ -17,4 +17,5 @@ public interface FileService {
     MediaFile uploadUserProfileImage(MultipartFile file);
     MediaFile uploadReturnImage(MultipartFile file);
     void validateReturnImages(List<MultipartFile> files);
+    MediaFile uploadAIChatImage(MultipartFile file);
 }

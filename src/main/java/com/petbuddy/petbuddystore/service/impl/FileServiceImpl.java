@@ -58,7 +58,13 @@ public class FileServiceImpl implements FileService {
     }
 
     @Override
-    public MediaFile uploadReturnImage(MultipartFile file) {return uploadImage(file, MediaPurpose.RETURN_REQUEST, "returns");
+    public MediaFile uploadAIChatImage(MultipartFile file) {
+        return uploadImage(file, MediaPurpose.AI_CHAT, "ai-chat");
+    }
+
+    @Override
+    public MediaFile uploadReturnImage(MultipartFile file) {
+        return uploadImage(file, MediaPurpose.RETURN_REQUEST, "returns");
     }
 
     @Override
