@@ -13,9 +13,11 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -93,6 +95,32 @@ public class CatalogController {
                 ApiResponse.success(
                         "Catalog status updated successfully",
                         catalogService.updateCatalogStatus(catalogId, status)
+                )
+        );
+    }
+
+    @PutMapping(value = "/{catalogId}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Upload catalog image")
+    public ResponseEntity<ApiResponse<CatalogResponse>> uploadCatalogImage(
+            @PathVariable Integer catalogId,
+            @RequestPart("file") MultipartFile file) {
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Catalog image uploaded successfully",
+                        catalogService.uploadCatalogImage(catalogId, file)
+                )
+        );
+    }
+
+    @DeleteMapping("/{catalogId}/image")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Delete catalog image")
+    public ResponseEntity<ApiResponse<CatalogResponse>> deleteCatalogImage(@PathVariable Integer catalogId) {
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Catalog image deleted successfully",
+                        catalogService.deleteCatalogImage(catalogId)
                 )
         );
     }

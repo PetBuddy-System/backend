@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.service.impl;
 
 import com.petbuddy.petbuddystore.common.enums.AttendanceStatus;
+import com.petbuddy.petbuddystore.common.enums.BookingStatus;
 import com.petbuddy.petbuddystore.common.enums.Role;
 import com.petbuddy.petbuddystore.common.enums.ScheduleStatus;
 import com.petbuddy.petbuddystore.common.enums.StaffTask;
@@ -13,6 +14,7 @@ import com.petbuddy.petbuddystore.model.StaffSchedule;
 import com.petbuddy.petbuddystore.model.User;
 import com.petbuddy.petbuddystore.model.WorkSchedule;
 import com.petbuddy.petbuddystore.repository.StaffScheduleRepository;
+import com.petbuddy.petbuddystore.repository.BookingRepository;
 import com.petbuddy.petbuddystore.repository.UserRepository;
 import com.petbuddy.petbuddystore.service.StaffScheduleService;
 import lombok.AccessLevel;
@@ -35,6 +37,7 @@ import java.util.List;
 public class StaffScheduleServiceImpl implements StaffScheduleService {
     StaffScheduleMapper staffScheduleMapper;
     StaffScheduleRepository staffScheduleRepository;
+    BookingRepository bookingRepository;
     UserRepository userRepository;
 
     @Override
@@ -123,6 +126,13 @@ public class StaffScheduleServiceImpl implements StaffScheduleService {
 
         if (staffSchedule.getScheduleStatus() != ScheduleStatus.WORKING) {
             throw new AppException(ErrorCode.CANNOT_CHECKOUT);
+        }
+
+        if (!bookingRepository.findByStaffScheduleAndBookingStatusIn(
+                staffSchedule,
+                List.of(BookingStatus.ACCEPTED, BookingStatus.IN_PROGRESS, BookingStatus.READY_FOR_PICKUP)
+        ).isEmpty()) {
+            throw new AppException(ErrorCode.STAFF_HAS_UNFINISHED_BOOKING);
         }
 
         LocalDateTime now = LocalDateTime.now();

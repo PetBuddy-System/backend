@@ -94,11 +94,28 @@ public interface StaffScheduleRepository extends JpaRepository<StaffSchedule, St
     """)
     Optional<StaffSchedule> findByIdWithWorkScheduleAndStaff(@Param("staffScheduleId") String staffScheduleId);
 
-    @Query("SELECT s FROM StaffSchedule s WHERE s.workSchedule.workDate = :date AND s.scheduleStatus IN :statuses")
-    List<StaffSchedule> findOnDutySchedules(LocalDate date, List<ScheduleStatus> statuses);
+    @Query("""
+        SELECT ss FROM StaffSchedule ss
+        JOIN FETCH ss.workSchedule ws
+        JOIN FETCH ss.staff st
+        WHERE ws.workDate = :date
+        AND ss.scheduleStatus IN :statuses
+        """)
+    List<StaffSchedule> findOnDutySchedules(
+            @Param("date") LocalDate date,
+            @Param("statuses") List<ScheduleStatus> statuses);
 
-    @Query("SELECT s FROM StaffSchedule s WHERE s.staff.userId = :staffId AND s.workSchedule.workDate = :date AND s.scheduleStatus IN :statuses")
-    Optional<StaffSchedule> findTodayScheduleByStaffId(String staffId, LocalDate date, List<ScheduleStatus> statuses);
+    @Query("""
+        SELECT ss FROM StaffSchedule ss
+        JOIN FETCH ss.workSchedule ws
+        WHERE ss.staff.userId = :staffId
+        AND ws.workDate = :date
+        AND ss.scheduleStatus IN :statuses
+        """)
+    Optional<StaffSchedule> findTodayScheduleByStaffId(
+            @Param("staffId") String staffId,
+            @Param("date") LocalDate date,
+            @Param("statuses") List<ScheduleStatus> statuses);
 
     @Query("""
         SELECT ss
@@ -114,6 +131,25 @@ public interface StaffScheduleRepository extends JpaRepository<StaffSchedule, St
     List<StaffSchedule> findWorkingSchedulesByStaffTask(
             @Param("date") LocalDate date,
             @Param("status") ScheduleStatus status,
+            @Param("staffTask") StaffTask staffTask,
+            @Param("userStatus") UserStatus userStatus
+    );
+
+    @Query("""
+        SELECT DISTINCT ss
+        FROM StaffSchedule ss
+        JOIN FETCH ss.workSchedule ws
+        JOIN FETCH ss.staff s
+        LEFT JOIN FETCH s.mediaFiles
+        WHERE ws.workDate = :date
+          AND ss.scheduleStatus IN :statuses
+          AND s.staffTask = :staffTask
+          AND s.status = :userStatus
+        ORDER BY s.userId ASC
+    """)
+    List<StaffSchedule> findGroomerSchedulesForAssignment(
+            @Param("date") LocalDate date,
+            @Param("statuses") List<ScheduleStatus> statuses,
             @Param("staffTask") StaffTask staffTask,
             @Param("userStatus") UserStatus userStatus
     );

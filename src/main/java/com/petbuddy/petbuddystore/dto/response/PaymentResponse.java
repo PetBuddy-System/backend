@@ -26,6 +26,7 @@ public class PaymentResponse {
     PaymentStatus status;
     BigDecimal amount;
     String stripeClientSecret;
+    String momoPayUrl;
     LocalDateTime paidAt;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;

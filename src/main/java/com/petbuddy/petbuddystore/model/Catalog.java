@@ -61,6 +61,15 @@ public class Catalog {
     @Column(name = "duration_config")
     String durationConfig;
 
+    @Column(name = "additional_duration_config")
+    String additionalDurationConfig;
+
+    @Column(name = "additional_price_per_minute")
+    BigDecimal additionalPricePerMinute;
+
+    @Column(name = "image_url")
+    String imageUrl;
+
     @Column (name = "status")
     @Enumerated (EnumType.STRING)
     CatalogStatus status;

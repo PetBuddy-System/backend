@@ -15,11 +15,12 @@ import java.util.UUID;
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
     Page<Order> findByUser_UserIdOrderByCreatedAtDesc(String userId, Pageable pageable);
-    List<Order> findByStatusAndPaymentExpiredAtBeforeAndPayment_PaymentMethod(
-            OrderStatus status, LocalDateTime now, PaymentMethod paymentMethod);
-    long countByStaffSchedule_StaffScheduleId(String staffScheduleId);
+    List<Order> findByStatusAndPaymentExpiredAtBeforeAndPayment_PaymentMethodIn(
+            OrderStatus status, LocalDateTime dateTime, List<PaymentMethod> methods);
     long countByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
     Page<Order> findByStaffSchedule_Staff_UserId(String userId, Pageable pageable);
     boolean existsByUserUserIdAndOrderDetailsProductProductIdAndStatus(String userId, UUID productId, OrderStatus status);
+    List<Order> findByStatusAndLatitudeIsNotNullAndLongitudeIsNotNull(OrderStatus status);
+    long countByStaffSchedule_StaffScheduleIdAndStatusIn(String staffScheduleId, List<OrderStatus> statuses);
 }
 

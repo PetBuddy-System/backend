@@ -47,6 +47,15 @@ public class Payment {
     @Column(name = "stripe_payment_intent_id", unique = true)
     String stripePaymentIntentId;
 
+    @Column(name = "momo_trans_id", unique = true)
+    String momoTransId;
+
+    @Column(name = "momo_order_id", unique = true)
+    String momoOrderId;
+
+    @Column(name = "momo_request_id", unique = true)
+    String momoRequestId;
+
     @Column(name = "stripe_client_secret")
     String stripeClientSecret;
 
@@ -65,5 +74,8 @@ public class Payment {
     LocalDateTime refundedAt;
 
     @Column(name = "refunded_amount")
-    private BigDecimal refundedAmount;
+    BigDecimal refundedAmount;
+
+    @Column(name = "momo_pay_url", length = 500)
+    String momoPayUrl;
 }

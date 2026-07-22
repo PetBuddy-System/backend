@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.service.impl;
 
+import com.petbuddy.petbuddystore.common.enums.ApplyScope;
 import com.petbuddy.petbuddystore.common.enums.DiscountType;
 import com.petbuddy.petbuddystore.common.enums.PromotionStatus;
 import com.petbuddy.petbuddystore.common.enums.VoucherStatus;
@@ -57,6 +58,7 @@ public class VoucherServiceImpl implements VoucherService {
         if (request.getExpiredAt().isBefore(request.getStartAt())) {
             throw new AppException(ErrorCode.VOUCHER_INVALID_DATE);
         }
+        validateShippingScopeDiscountType(request.getApplyScope(), request.getDiscountType());
 
         Voucher voucher = voucherMapper.toVoucher(request);
         voucher.setUsedCount(0);
@@ -90,6 +92,7 @@ public class VoucherServiceImpl implements VoucherService {
         if (voucherRepository.existsByVoucherCodeAndVoucherIdNot(request.getVoucherCode(), id)) {
             throw new AppException(ErrorCode.VOUCHER_CODE_EXISTED);
         }
+        validateShippingScopeDiscountType(request.getApplyScope(), request.getDiscountType());
 
         voucherMapper.updateVoucherFromRequest(request, voucher);
         voucher.setUpdatedAt(LocalDateTime.now());
@@ -108,10 +111,12 @@ public class VoucherServiceImpl implements VoucherService {
                     return response;
                 });
     }
+
     @Override
     public BigDecimal applyVoucherToOrder(Order order, String voucherCode, User user, BigDecimal totalAmount) {
         if (voucherCode == null || voucherCode.trim().isEmpty()) {
             order.setVoucher(null);
+            order.setShippingDiscountAmount(BigDecimal.ZERO);
             return BigDecimal.ZERO;
         }
         validateNoActivePromotionProduct(order);
@@ -119,6 +124,26 @@ public class VoucherServiceImpl implements VoucherService {
                 .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
 
         validateVoucher(voucher, user, totalAmount);
+
+        if (voucher.getApplyScope() == ApplyScope.SHIPPING) {
+            BigDecimal shippingDiscount = calculateDiscount(voucher, order.getShippingFee());
+
+            voucher.setUsedCount(voucher.getUsedCount() + 1);
+            voucherRepository.save(voucher);
+
+            UserVouchers userVoucher = UserVouchers.builder()
+                    .user(user)
+                    .voucher(voucher)
+                    .usedAt(LocalDateTime.now())
+                    .build();
+            UserVouchers savedUserVoucher = userVoucherRepository.save(userVoucher);
+
+            order.setVoucher(voucher);
+            order.setShippingDiscountAmount(shippingDiscount);
+            auditService.logVoucherUsage(savedUserVoucher,"VOUCHER_USED" ,user);
+
+            return BigDecimal.ZERO;
+        }
 
         BigDecimal discountAmount = calculateDiscount(voucher, totalAmount);
 
@@ -133,7 +158,8 @@ public class VoucherServiceImpl implements VoucherService {
         UserVouchers savedUserVoucher = userVoucherRepository.save(userVoucher);
 
         order.setVoucher(voucher);
-        auditService.logVoucherUsage(savedUserVoucher, user);
+        order.setShippingDiscountAmount(BigDecimal.ZERO);
+        auditService.logVoucherUsage(savedUserVoucher, "VOUCHER_USED" ,user);
 
         return discountAmount;
     }
@@ -146,19 +172,20 @@ public class VoucherServiceImpl implements VoucherService {
         voucherRepository.save(oldVoucher);
         userVoucherRepository.deleteByUserAndVoucher(order.getUser(), oldVoucher);
         order.setVoucher(null);
+        order.setShippingDiscountAmount(BigDecimal.ZERO);
     }
 
-    private BigDecimal calculateDiscount(Voucher voucher, BigDecimal orderAmount) {
+    private BigDecimal calculateDiscount(Voucher voucher, BigDecimal baseAmount) {
         BigDecimal discount;
         if (voucher.getDiscountType() == DiscountType.PERCENTAGE) {
-            discount = orderAmount.multiply(voucher.getDiscountValue()).divide(BigDecimal.valueOf(100));
+            discount = baseAmount.multiply(voucher.getDiscountValue()).divide(BigDecimal.valueOf(100));
             if (voucher.getMaxDiscount() != null) {
                 discount = discount.min(voucher.getMaxDiscount());
             }
         } else {
             discount = voucher.getDiscountValue();
         }
-        return discount.min(orderAmount);
+        return discount.min(baseAmount);
     }
 
     private void validateVoucher(Voucher voucher, User user, BigDecimal totalAmount) {
@@ -176,6 +203,12 @@ public class VoucherServiceImpl implements VoucherService {
         long userUsedCount = userVoucherRepository.countByUserAndVoucher(user, voucher);
         if (voucher.getPerUserLimit() != null && userUsedCount >= voucher.getPerUserLimit())
             throw new AppException(ErrorCode.VOUCHER_USER_LIMIT_EXCEEDED);
+    }
+
+    private void validateShippingScopeDiscountType(ApplyScope applyScope, DiscountType discountType) {
+        if (applyScope == ApplyScope.SHIPPING && discountType == DiscountType.PERCENTAGE) {
+            throw new AppException(ErrorCode.VOUCHER_SHIPPING_MUST_BE_FIXED_AMOUNT);
+        }
     }
 
     private User getCurrentUser() {

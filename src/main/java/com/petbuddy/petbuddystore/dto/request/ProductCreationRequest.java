@@ -1,10 +1,7 @@
 package com.petbuddy.petbuddystore.dto.request;
 
 import com.petbuddy.petbuddystore.common.enums.ProductUnit;
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,6 +25,11 @@ public class ProductCreationRequest {
     String ingredients;
 
     String usageInstructions;
+
+    @NotNull(message = "PRODUCT_WEIGHT_REQUIRED")
+    @Min(value = 1, message = "PRODUCT_WEIGHT_INVALID")
+    @Max(value = 100000, message = "PRODUCT_WEIGHT_INVALID")
+    Integer weight; // gram (g)
 
     @NotNull(message = "PRODUCT_PRICE_REQUIRED")
     @DecimalMin(value = "0.0", inclusive = false, message = "PRODUCT_PRICE_INVALID")

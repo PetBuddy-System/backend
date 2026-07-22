@@ -58,6 +58,15 @@ public class User {
     @Column(name = "staff_task", columnDefinition = "VARCHAR(50)")
     StaffTask staffTask;
 
+    @Column(name = "specialization")
+    String specialization;
+
+    @Column(name = "introduction", columnDefinition = "TEXT")
+    String introduction;
+
+    @Column(name = "years_of_experience")
+    Integer yearsOfExperience;
+
     @Enumerated(EnumType.STRING)
     UserStatus status;
 

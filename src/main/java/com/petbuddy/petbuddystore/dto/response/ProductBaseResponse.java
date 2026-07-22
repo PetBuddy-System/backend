@@ -26,6 +26,7 @@ public abstract class ProductBaseResponse {
     BigDecimal salePrice;
     String brandName;
     ProductUnit unit;
+    Integer weight;
 
     String thumbnailUrl;
 

@@ -11,6 +11,7 @@ import com.petbuddy.petbuddystore.model.MediaFile;
 import com.petbuddy.petbuddystore.model.Product;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
@@ -37,9 +38,7 @@ public interface ProductService {
 
     Product getProductEntityByName(String name);
 
-    Product createProductFromImport(String name, String description, BigDecimal price,
-                                    String brandName, Category category, String ingredients,
-                                    String usageInstructions, ProductUnit unit, List<MediaFile> mediaFiles);
+    Product createProductFromImport(String name, String description, BigDecimal salePrice, String brandName, Category category, String ingredients, String usageInstructions, ProductUnit unit, Integer weight, List<MediaFile> mediaFiles);
 
     void updateLastBatchSequence(Product product, long lastBatchSequence);
 }

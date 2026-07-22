@@ -112,6 +112,11 @@ public enum ErrorCode {
     INVALID_REQUEST(4257, "Yêu cầu không hợp lệ", HttpStatus.BAD_REQUEST),
     RESTOCK_ONLY_AFTER_COMPLETED(4260, "Chỉ có thể nhập kho sau khi đơn đã hoàn tiền (COMPLETED)", HttpStatus.BAD_REQUEST),
     ALREADY_RESTOCKED(4261, "Đơn hàng đã được nhập kho trước đó", HttpStatus.BAD_REQUEST),
+    PRODUCT_WEIGHT_INVALID(4262, "khối lượng phải nằm trong khoảng 1 tới 100 000", HttpStatus.BAD_REQUEST),
+    PRODUCT_WEIGHT_REQUIRED(4263,"Khối lượng là bắt buộc",HttpStatus.BAD_REQUEST),
+    INVALID_SHIPPER(4264, "kh tim thấy shipper", HttpStatus.BAD_REQUEST),
+    INVALID_RETURN_STATUS(4265,"chỉ đucowj đổi từ APPROVED",HttpStatus.BAD_REQUEST),
+
 
     REVIEW_NOT_FOUND(4300, "Review not found", HttpStatus.NOT_FOUND),
     REVIEW_ALREADY_EXISTS(4301, "You have already reviewed this product", HttpStatus.CONFLICT),
@@ -148,6 +153,7 @@ public enum ErrorCode {
     SHIPPER_TOO_FAR_FROM_CLUSTER(5214,"The distance between orders are too far",HttpStatus.FORBIDDEN),
     ROUTE_CALCULATION_FAILED(5215,"Failed to calculate route",HttpStatus.INTERNAL_SERVER_ERROR),
     SHIPPER_CAPACITY_FULL(5216, "Shipper capacity is full", HttpStatus.BAD_REQUEST),
+    SHIPPER_ZONE_NOT_COMPUTED(5217, "Shipper zone is not computed", HttpStatus.BAD_REQUEST),
 
     VOUCHER_NOT_FOUND(5301, "Voucher not found", HttpStatus.NOT_FOUND),
     VOUCHER_CODE_EXISTED(5302, "Voucher code already exists", HttpStatus.BAD_REQUEST),
@@ -159,6 +165,7 @@ public enum ErrorCode {
     VOUCHER_USER_LIMIT_EXCEEDED(5308, "You have reached voucher usage limit",HttpStatus.BAD_REQUEST),
     VOUCHER_INVALID_STATUS(5309, "Voucher is inactive",HttpStatus.BAD_REQUEST),
     VOUCHER_NOT_APPLICABLE_WITH_PROMOTION(5310, "Voucher is not applicable with promotion",HttpStatus.BAD_REQUEST),
+    VOUCHER_SHIPPING_MUST_BE_FIXED_AMOUNT(5311, "Shipping must be fixed amount", HttpStatus.BAD_REQUEST),
 
     LOCATION_OUTSIDE_HCM(5401,"Location is outside Ho Chi Minh city",HttpStatus.BAD_REQUEST),
     INVALID_COORDINATES(5402,"Invalid coordinates",HttpStatus.BAD_REQUEST),
@@ -188,6 +195,7 @@ public enum ErrorCode {
     REFUND_METHOD_NOT_SUPPORTED(5517,"Phương thức hoàn tiền không được hỗ trợ", HttpStatus.BAD_REQUEST),
     NO_REMAINING_AMOUNT_TO_REFUND(5518,"Không còn số tiền nào để hoàn trả", HttpStatus.BAD_REQUEST),
     REFUND_AMOUNT_EXCEEDS_REMAINING(5519,"Số tiền hoàn trả vượt quá số tiền còn lại", HttpStatus.BAD_REQUEST),
+    PAYMENT_MOMO_ERROR(5520,"Lỗi thanh toán MoMo", HttpStatus.BAD_REQUEST),
 
 
 
@@ -271,6 +279,20 @@ public enum ErrorCode {
     BOOKING_BEFORE_SERVICE_MEDIA_REQUIRED(9034, "Before-service booking media is required", HttpStatus.BAD_REQUEST),
     BOOKING_AFTER_SERVICE_MEDIA_REQUIRED(9035, "After-service booking media is required", HttpStatus.BAD_REQUEST),
     INVALID_TIME_SLOT_CAPACITY(9036, "Time slot capacity must be greater than 0", HttpStatus.BAD_REQUEST),
+    INVALID_PET_WEIGHT(9037, "Pet weight must be greater than 0 and less than or equal to 100 kg", HttpStatus.BAD_REQUEST),
+    INVALID_ADDITIONAL_DURATION_CONFIG(9038, "Additional duration config is invalid", HttpStatus.BAD_REQUEST),
+    INVALID_ADDITIONAL_PRICE_PER_MINUTE(9039, "Additional price per minute must be greater than or equal to 0", HttpStatus.BAD_REQUEST),
+    INVALID_ASSIGNMENT_MODE(9040, "Assignment mode is invalid", HttpStatus.BAD_REQUEST),
+    REQUESTED_GROOMER_REQUIRED(9041, "Requested groomer is required", HttpStatus.BAD_REQUEST),
+    REQUESTED_GROOMER_NOT_AVAILABLE(9042, "Requested groomer is not available", HttpStatus.BAD_REQUEST),
+    NO_AVAILABLE_GROOMER(9043, "No available groomer found", HttpStatus.BAD_REQUEST),
+    BOOKING_OUTSIDE_STAFF_SHIFT(9044, "Booking is outside staff shift", HttpStatus.BAD_REQUEST),
+    STAFF_BOOKING_OVERLAP(9045, "Staff already has another booking in this time range", HttpStatus.CONFLICT),
+    PET_BOOKING_OVERLAP(9046, "Pet already has another booking in this time range", HttpStatus.CONFLICT),
+    STAFF_HAS_UNFINISHED_BOOKING(9047, "Staff still has unfinished booking", HttpStatus.BAD_REQUEST),
+    BOOKING_WAITING_FOR_STAFF(9048, "Booking is waiting for staff assignment", HttpStatus.BAD_REQUEST),
+    CATALOG_IMAGE_INVALID(9049, "Catalog image is invalid", HttpStatus.BAD_REQUEST),
+    INVALID_YEARS_OF_EXPERIENCE(9050, "Years of experience must be greater than or equal to 0", HttpStatus.BAD_REQUEST),
 
     WORK_SCHEDULE_IN_THE_PAST(9017, "Cannot create a work schedule in the past", HttpStatus.BAD_REQUEST),
     TOO_EARLY_TO_CHECKIN(9018, "It's not time to check in yet", HttpStatus.BAD_REQUEST),

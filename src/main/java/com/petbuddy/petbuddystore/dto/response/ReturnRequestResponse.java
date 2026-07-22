@@ -14,28 +14,53 @@ import java.util.List;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ReturnRequestResponse {
+    // Thông tin yêu cầu
     Long returnRequestId;
     String returnCode;
+
+    // Thông tin đơn hàng
     Long orderId;
     String orderCode;
+
+    // Thông tin địa chỉ giao hàng
+    String recipientName;
+    String phoneNumber;
+    String address;
+    Double latitude;
+    Double longitude;
+
+    // Thông tin người dùng
     UserResponse requestedBy;
-    UserResponse processedBy;
+    UserResponse coordinator;
+    UserResponse shipper;
+
+    // Thông tin yêu cầu
     ReturnType type;
     ReturnReason reason;
     String description;
     ReturnStatus status;
+
+    // Thông tin hoàn tiền
     RefundMethod refundMethod;
     RefundStatus refundStatus;
     BigDecimal refundAmount;
-    String staffNote;
     String bankName;
     String bankAccountNumber;
     String bankAccountHolder;
+
+    // Ghi chú
+    String staffNote;
+
+    // Timeline
     LocalDateTime createdAt;
-    LocalDateTime processedAt;
+    LocalDateTime approvedAt;
+    LocalDateTime pickedUpAt;
+    LocalDateTime returnedToStoreAt;
     LocalDateTime completedAt;
     LocalDateTime updatedAt;
     LocalDateTime restockedAt;
+
+    // Danh sách sản phẩm và file
     List<ReturnItemResponse> returnItems;
     List<MediaFileResponse> mediaFiles;
 }

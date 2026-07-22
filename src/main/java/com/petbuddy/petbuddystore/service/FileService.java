@@ -18,4 +18,6 @@ public interface FileService {
     MediaFile uploadReturnImage(MultipartFile file);
     void validateReturnImages(List<MultipartFile> files);
     MediaFile uploadAIChatImage(MultipartFile file);
+    void deleteFile(String fileUrlOrKey);
+    MediaFile uploadCatalogImage(MultipartFile file);
 }

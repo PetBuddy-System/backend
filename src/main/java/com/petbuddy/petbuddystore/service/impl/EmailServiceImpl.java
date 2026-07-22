@@ -2,6 +2,7 @@ package com.petbuddy.petbuddystore.service.impl;
 
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
+import com.petbuddy.petbuddystore.model.Order;
 import com.petbuddy.petbuddystore.service.EmailService;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -126,5 +127,43 @@ public class EmailServiceImpl implements EmailService {
             log.info("Booking notification fallback: to={}, customerName={}, serviceName={}, date={}, time={}, totalAmount={}",
                     to, customerName, serviceName, date, time, totalAmount);
         }
+    }
+
+    @Override
+    public void sendOrderPaymentSuccessEmail(String toEmail, Order order) {
+        try {
+            Context context = new Context();
+            context.setVariable("recipientName", order.getRecipientName());
+            context.setVariable("orderCode", order.getOrderCode());
+            context.setVariable("orderDetails", order.getOrderDetails());
+            context.setVariable("totalAmount", order.getTotalAmount());
+            context.setVariable("discountAmount", order.getDiscountAmount());
+            context.setVariable("shippingFee", order.getShippingFee());
+            context.setVariable("finalAmount", order.getFinalAmount());
+
+            String html = templateEngine.process("order-successed", context);
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail);
+            helper.setTo(toEmail);
+            helper.setSubject("Đặt hàng thành công - Đơn hàng " + order.getOrderCode());
+            helper.setText(html, true);
+            mailSender.send(message);
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            throw new AppException(ErrorCode.EMAIL_SEND_FAILED);
+        }
+    }
+    @Override
+    public void sendOrderBombedEmail(String toEmail, Order order) {
+        String subject = "Đơn hàng " + order.getOrderCode() + " đã bị hủy do không liên lạc được";
+        sendHtmlEmail(toEmail, subject, "order-bombed", Map.of(
+                "recipientName", order.getRecipientName(),
+                "orderCode", order.getOrderCode(),
+                "failCount", order.getDeliveryFailCount(),
+                "finalAmount", order.getFinalAmount(),
+                "cancelReason", order.getCancelReason() != null ? order.getCancelReason() : "Không liên lạc được với khách hàng"
+        ));
     }
 }

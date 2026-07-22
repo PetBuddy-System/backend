@@ -54,12 +54,22 @@ public class Order {
 
     BigDecimal totalAmount;
 
+    BigDecimal originalTotalAmount;
+
     BigDecimal discountAmount;
 
+    BigDecimal originalDiscountAmount;
+
+    BigDecimal shippingDiscountAmount;
+    
     BigDecimal finalAmount;
 
     @Column(columnDefinition = "NVARCHAR(500)")
     String note;
+
+    @Builder.Default
+    @Column(nullable = false)
+    Integer deliveryFailCount = 0;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     List<OrderDetail> orderDetails = new ArrayList<>();
@@ -94,4 +104,7 @@ public class Order {
 
     @Column(name = "shipped_at")
     LocalDateTime shippedAt;
+
+    @Column(name = "estimated_delivery_at")
+    LocalDateTime estimatedDeliveryAt;
 }

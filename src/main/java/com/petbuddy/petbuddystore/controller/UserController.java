@@ -96,4 +96,11 @@ public class UserController {
                 .body(ApiResponse.success(userService.getCurrentUser()));
     }
 
+    @GetMapping("/staff")
+    @Operation(description = "Lấy danh sách toàn bộ staff")
+    public ResponseEntity<ApiResponse<List<UserResponse>>> getAllStaffs(){
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(ApiResponse.success(userService.getAllStaffs()));
+    }
+
 }

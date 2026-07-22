@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 
@@ -94,6 +95,29 @@ public class FileServiceImpl implements FileService {
     @Override
     public MediaFile uploadBookingImage(MultipartFile file) {
         return uploadImage(file, MediaPurpose.BOOKING, "bookings");
+    }
+
+    @Override
+    public MediaFile uploadCatalogImage(MultipartFile file) {
+        return uploadImage(file, MediaPurpose.CATALOG, "catalogs");
+    }
+
+    @Override
+    public void deleteFile(String fileUrlOrKey) {
+        if (fileUrlOrKey == null || fileUrlOrKey.isBlank()) {
+            return;
+        }
+
+        try {
+            String fileKey = resolveFileKey(fileUrlOrKey);
+            s3Client.deleteObject(DeleteObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(fileKey)
+                    .build());
+        } catch (Exception e) {
+            log.error("Delete file failed: {}", e.getMessage());
+            throw new AppException(ErrorCode.DELETE_FILE_FAILED);
+        }
     }
 
     private MediaFile uploadImage(MultipartFile file, MediaPurpose mediaPurpose, String folder) {
@@ -209,7 +233,18 @@ public class FileServiceImpl implements FileService {
             return "image/gif";
         }
         return null;
-    }    private String buildFileUrl(String fileKey){
+    }
+
+    private String resolveFileKey(String fileUrlOrKey) {
+        String value = fileUrlOrKey.trim();
+        int amazonIndex = value.indexOf(".amazonaws.com/");
+        if (amazonIndex >= 0) {
+            return value.substring(amazonIndex + ".amazonaws.com/".length());
+        }
+        return value.startsWith("/") ? value.substring(1) : value;
+    }
+
+    private String buildFileUrl(String fileKey){
         return "https://" + bucketName + ".s3.amazonaws.com/" + fileKey;
     }
 

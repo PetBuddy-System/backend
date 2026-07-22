@@ -13,4 +13,8 @@ public class StaffInfoResponse {
     String staffId;
     String fullName;
     String email;
+    String specialization;
+    String introduction;
+    Integer yearsOfExperience;
+    String avatar;
 }

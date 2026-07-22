@@ -40,8 +40,9 @@ public class OrderExpirationScheduler {
     @Scheduled(fixedRate = 60 * 1000)
     public void expirePendingOrders() {
         List<Order> expired = orderRepository
-                .findByStatusAndPaymentExpiredAtBeforeAndPayment_PaymentMethod(
-                        OrderStatus.PENDING, LocalDateTime.now(), PaymentMethod.CARD);
+                .findByStatusAndPaymentExpiredAtBeforeAndPayment_PaymentMethodIn(
+                        OrderStatus.PENDING, LocalDateTime.now(),
+                        List.of(PaymentMethod.CARD, PaymentMethod.MOMO));
 
         for (Order order : expired) {
             try {
@@ -54,20 +55,29 @@ public class OrderExpirationScheduler {
     private void expireSingleOrder(Order order) {
         Payment payment = order.getPayment();
 
-        if (payment == null || payment.getPaymentMethod() != PaymentMethod.CARD) {
+        if (payment == null
+                || (payment.getPaymentMethod() != PaymentMethod.CARD
+                && payment.getPaymentMethod() != PaymentMethod.MOMO)) {
             return;
         }
         if (payment.getStatus() == PaymentStatus.PAID) {
             throw new AppException(ErrorCode.PAYMENT_ALREADY_PAID);
         }
 
-        if (payment.getStripePaymentIntentId() != null) {
-            try {
-                paymentService.cancelStripeIntent(payment.getStripePaymentIntentId());
-            } catch (AppException ex) {
-                if (ex.getErrorCode() == ErrorCode.PAYMENT_ALREADY_PAID) {
-                    throw ex;
+        if (payment.getPaymentMethod() == PaymentMethod.CARD) {
+            if (payment.getStripePaymentIntentId() != null) {
+                try {
+                    paymentService.cancelStripeIntent(payment.getStripePaymentIntentId());
+                } catch (AppException ex) {
+                    if (ex.getErrorCode() == ErrorCode.PAYMENT_ALREADY_PAID) {
+                        throw ex;
+                    }
                 }
+            }
+        } else { // MOMO
+            boolean actuallyPaid = paymentService.confirmMomoStatus(order);
+            if (actuallyPaid) {
+                throw new AppException(ErrorCode.PAYMENT_ALREADY_PAID);
             }
         }
 

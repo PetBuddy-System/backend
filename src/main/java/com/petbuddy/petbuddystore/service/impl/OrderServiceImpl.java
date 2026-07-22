@@ -44,16 +44,21 @@ public class OrderServiceImpl implements OrderService {
     ProductBatchRepository productBatchRepository;
     UserRepository userRepository;
     OrderDetailRepository orderDetailRepository;
+    OrderBatchLocationRepository orderBatchLocationRepository; // ⭐ THÊM: để cộng lại kho đúng batch khi RETURNED_TO_WAREHOUSE
     StaffScheduleRepository staffScheduleRepository;
     ProductService productService;
     CartService cartService;
     PaymentService paymentService;
     VoucherService voucherService;
     ShippingRuleService shippingRuleService;
+    EmailService emailService;
     AuditService auditService;
+    ShipperAssignmentService shipperAssignmentService;
     FileService fileService;
     OrderMapper orderMapper;
     PaymentRepository paymentRepository;
+
+    private static final int MAX_DELIVERY_FAIL_COUNT = 3;
 
     @Override
     public OrderResponse createOrder(CreateOrderRequest request) {
@@ -84,8 +89,9 @@ public class OrderServiceImpl implements OrderService {
                 .latitude(request.getLatitude())
                 .note(request.getNote())
                 .shippingFee(shippingFee)
+                .shippingDiscountAmount(BigDecimal.ZERO)
                 .status(OrderStatus.PENDING)
-                .paymentExpiredAt(LocalDateTime.now().plusMinutes(1))
+                .paymentExpiredAt(LocalDateTime.now().plusMinutes(15))
                 .createdAt(LocalDateTime.now())
                 .build();
 
@@ -113,6 +119,7 @@ public class OrderServiceImpl implements OrderService {
                     .unitPrice(unitPrice)
                     .salePrice(salePrice)
                     .quantity(item.getQuantity())
+                    .weight(product.getWeight())
                     .totalPrice(effectivePrice.multiply(BigDecimal.valueOf(item.getQuantity())))
                     .build();
 
@@ -121,12 +128,16 @@ public class OrderServiceImpl implements OrderService {
         }
 
         BigDecimal discountAmount = voucherService.applyVoucherToOrder(order, request.getVoucherCode(), user, total);
-        BigDecimal finalAmount = total.subtract(discountAmount);
+        BigDecimal finalAmount = total.subtract(discountAmount)
+                .add(order.getShippingFee())
+                .subtract(order.getShippingDiscountAmount());
 
         order.setOrderDetails(orderDetails);
         order.setTotalAmount(total);
+        order.setOriginalTotalAmount(total);
         order.setDiscountAmount(discountAmount);
-        order.setFinalAmount(finalAmount.add(shippingFee));
+        order.setOriginalDiscountAmount(discountAmount);
+        order.setFinalAmount(finalAmount);
         orderRepository.save(order);
 
         paymentService.createPayment(order, method);
@@ -157,15 +168,22 @@ public class OrderServiceImpl implements OrderService {
             order.setNote(request.getNote());
         }
 
+        order.setOriginalTotalAmount(order.getTotalAmount());
         if (request.getVoucherCode() != null) {
             voucherService.releaseVoucherFromOrder(order);
             BigDecimal discountAmount = voucherService.applyVoucherToOrder(
                     order, request.getVoucherCode(), user, order.getTotalAmount());
             order.setDiscountAmount(discountAmount);
-            order.setFinalAmount(order.getTotalAmount().subtract(discountAmount).add(order.getShippingFee()));
+            order.setOriginalDiscountAmount(discountAmount);
+            order.setFinalAmount(order.getTotalAmount().subtract(discountAmount)
+                    .add(order.getShippingFee())
+                    .subtract(order.getShippingDiscountAmount()));
         }
         else {
+            voucherService.releaseVoucherFromOrder(order);
             order.setDiscountAmount(BigDecimal.ZERO);
+            order.setOriginalDiscountAmount(BigDecimal.ZERO);
+            order.setFinalAmount(order.getTotalAmount().add(order.getShippingFee()).subtract(order.getShippingDiscountAmount()));
         }
 
         Order updated = orderRepository.save(order);
@@ -190,6 +208,8 @@ public class OrderServiceImpl implements OrderService {
                     } else if (order.getPayment().getStatus() != PaymentStatus.PAID) {
                         throw new AppException(ErrorCode.PAYMENT_NOT_COMPLETED);
                     }
+                    emailService.sendOrderPaymentSuccessEmail(order.getUser().getEmail(), order);
+                    shipperAssignmentService.updateEstimatedDeliveryTime(orderId);
                 }
             }
             case CONFIRMED -> {
@@ -200,7 +220,6 @@ public class OrderServiceImpl implements OrderService {
                 if (newStatus != OrderStatus.PICKED && newStatus != OrderStatus.CANCELLED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
             }
-
             case PICKED -> {
                 if (newStatus != OrderStatus.CANCELLED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
@@ -226,7 +245,9 @@ public class OrderServiceImpl implements OrderService {
                 if (newStatus != OrderStatus.COMPLETED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
             }
-            case COMPLETED, CANCELLED -> throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+            // BOMBED chỉ được set qua reportDeliveryFailed(); RETURNED_TO_WAREHOUSE chỉ qua confirmReturnedToWarehouse()
+            case COMPLETED, CANCELLED, BOMBED, RETURNED_TO_WAREHOUSE ->
+                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
         }
 
         if (newStatus == OrderStatus.CANCELLED) {
@@ -337,6 +358,76 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
         return orderMapper.toOrderResponse(order);
+    }
+
+    @Override
+    public OrderResponse reportDeliveryFailed(Long orderId, String reason) {
+        checkLogin();
+        User currentUser = getCurrentUser();
+        Order order = findOrder(orderId);
+
+        if (order.getStatus() != OrderStatus.SHIPPING) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        validateShipperOnDuty(currentUser);
+        if (!order.getStaffSchedule().getStaff().getUserId().equals(currentUser.getUserId())) {
+            throw new AppException(ErrorCode.NOT_THE_ASSIGNED_SHIPPER);
+        }
+
+        int failCount = (order.getDeliveryFailCount() != null ? order.getDeliveryFailCount() : 0) + 1;
+        order.setDeliveryFailCount(failCount);
+        order.setCancelReason(reason);
+        order.setStaffSchedule(null);
+
+        if (failCount >= MAX_DELIVERY_FAIL_COUNT) {
+            order.setStatus(OrderStatus.BOMBED);
+
+            if (order.getPayment().getStatus() == PaymentStatus.PAID) {
+                paymentService.cancelPaymentForOrder(order);
+                auditService.logPaymentRefund(order.getPayment(), order.getPayment().getAmount(),
+                        "Hoàn tiền do khách bom hàng sau " + failCount + " lần giao", currentUser);
+            }
+            auditService.logOrderBombed(order,
+                    "Không liên lạc được khách sau " + failCount + " lần giao: " + reason, currentUser);
+            emailService.sendOrderBombedEmail(order.getUser().getEmail(), order);
+        } else {
+            order.setStatus(OrderStatus.PICKED);
+        }
+
+        order.setUpdatedAt(LocalDateTime.now());
+        Order saved = orderRepository.save(order);
+        return orderMapper.toOrderResponse(saved);
+    }
+
+    @Override
+    public OrderResponse confirmReturnedToWarehouse(Long orderId) {
+        checkLogin();
+        User currentUser = getCurrentUser();
+        Order order = findOrder(orderId);
+
+        if (order.getStatus() != OrderStatus.BOMBED) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        List<OrderBatchLocation> locations = orderBatchLocationRepository.findByOrderDetail_Order_OrderId(orderId);
+
+        for (OrderBatchLocation location : locations) {
+            ProductBatch batch = location.getBatch();
+            batch.setStockQuantity(batch.getStockQuantity() + location.getQuantity());
+            if (batch.getStatus() != ProductStatus.ACTIVE) {
+                batch.setStatus(ProductStatus.ACTIVE);
+            }
+            productBatchRepository.save(batch);
+        }
+
+        order.setStatus(OrderStatus.RETURNED_TO_WAREHOUSE);
+        order.setUpdatedAt(LocalDateTime.now());
+        Order saved = orderRepository.save(order);
+
+        auditService.logOrderReturnedToWarehouse(order, "Xác nhận đã trả hàng về kho, cộng lại tồn kho", currentUser);
+
+        return orderMapper.toOrderResponse(saved);
     }
 
     private List<PickingItemResponse> buildPickingList(Order order) {

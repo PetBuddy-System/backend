@@ -25,6 +25,8 @@ public interface BookingMapper {
     @Mapping(source = "catalog.catalogId", target = "catalogId")
     @Mapping(source = "timeSlot.id", target = "timeSlotId")
     @Mapping(target = "timeSlot", expression = "java(bookingDetail.getTimeSlot() == null ? null : bookingDetail.getTimeSlot().getStartTime().toString())")
+    @Mapping(target = "petImage", expression = "java(resolvePetImage(bookingDetail))")
+    @Mapping(source = "catalog.imageUrl", target = "catalogImage")
     BookingDetailResponse toBookingDetailResponse(BookingDetail bookingDetail);
 
     MediaFileResponse toMediaFileResponse(MediaFile mediaFile);
@@ -34,8 +36,24 @@ public interface BookingMapper {
             return null;
         }
         int totalDuration = booking.getBookingDetails().stream()
-                .mapToInt(detail -> detail.getDurationMinute() == null ? 0 : detail.getDurationMinute())
+                .mapToInt(detail -> {
+                    if (detail.getTotalDurationMinute() != null) {
+                        return detail.getTotalDurationMinute();
+                    }
+                    return detail.getDurationMinute() == null ? 0 : detail.getDurationMinute();
+                })
                 .sum();
         return booking.getScheduledAt().plusMinutes(totalDuration);
+    }
+
+    default String resolvePetImage(BookingDetail bookingDetail) {
+        if (bookingDetail == null || bookingDetail.getPet() == null || bookingDetail.getPet().getMediaFiles() == null) {
+            return null;
+        }
+        return bookingDetail.getPet().getMediaFiles().stream()
+                .map(MediaFile::getFileUrl)
+                .filter(fileUrl -> fileUrl != null && !fileUrl.isBlank())
+                .findFirst()
+                .orElse(null);
     }
 }

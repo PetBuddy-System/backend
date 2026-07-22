@@ -23,5 +23,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     boolean existsByOrder_OrderId(Long orderId);
 
     Optional<Payment> findByStripeRefundId(String stripeRefundId);
+    Optional<Payment> findByMomoOrderId(String momoOrderId);
 
 }

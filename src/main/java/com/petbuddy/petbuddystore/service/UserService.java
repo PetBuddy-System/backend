@@ -23,4 +23,5 @@ public interface UserService {
     Page<UserResponse> getUsers(Role role, StaffTask staffTask, int page, int size);
     User getCurrentUserEntity();
     User getCurrentUserEntityOrNull();
+    List<UserResponse> getAllStaffs();
 }

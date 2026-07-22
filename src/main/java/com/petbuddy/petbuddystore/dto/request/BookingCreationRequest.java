@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.dto.request;
 
+import com.petbuddy.petbuddystore.common.enums.StaffAssignmentMode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotEmpty;
@@ -32,6 +33,10 @@ public class BookingCreationRequest {
     LocalDate scheduledAt;
 
     String note;
+
+    StaffAssignmentMode assignmentMode;
+
+    String requestedStaffId;
 
     @Valid
     @NotEmpty

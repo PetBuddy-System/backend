@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đặt hàng thành công - PetBuddy</title>
+</head>
+
+<body style="margin:0;padding:0;background:#f2f9ff;font-family:Arial, sans-serif">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:30px 10px">
+    <tr>
+        <td align="center">
+
+            <table width="520" cellpadding="0" cellspacing="0"
+                   style="background:#ffffff;border-radius:16px;padding:30px;border:1px solid #d8efff">
+
+                <tr>
+                    <td align="center">
+                        <h1 style="margin:0;color:#38aeea;">🐾 PetBuddy</h1>
+                        <p style="margin:6px 0 22px;color:#7aaec8;font-size:13px">
+                            Cửa hàng chăm sóc thú cưng
+                        </p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td align="center">
+                        <h2 style="color:#27ae60;margin-bottom:10px">
+                            Đặt hàng thành công 🎉
+                        </h2>
+                        <p style="color:#667085;font-size:14px;line-height:1.6">
+                            Cảm ơn <b th:text="${recipientName}"></b> đã đặt hàng tại PetBuddy.
+                            Đơn hàng <b th:text="${orderCode}"></b> của bạn đã được đặt thành công
+                            và đang được chuẩn bị.
+                        </p>
+                    </td>
+                </tr>
+
+                <!-- Danh sách sản phẩm -->
+                <tr>
+                    <td>
+                        <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:15px">
+                            <tr th:each="item : ${orderDetails}">
+                                <td style="padding:10px 0;border-bottom:1px solid #eef4f8">
+                                    <table width="100%" cellpadding="0" cellspacing="0">
+                                        <tr>
+                                            <td width="60" style="vertical-align:top">
+                                                <img th:if="${item.productImage != null}"
+                                                     th:src="${item.productImage}"
+                                                     width="56" height="56"
+                                                     style="border-radius:8px;object-fit:cover;border:1px solid #e2e8f0" />
+                                                <div th:if="${item.productImage == null}"
+                                                     style="width:56px;height:56px;border-radius:8px;background:#f1f5f9"></div>
+                                            </td>
+                                            <td style="vertical-align:top;padding-left:12px">
+                                                <p style="margin:0 0 6px;font-size:14px;font-weight:bold;color:#334155"
+                                                   th:text="${item.productName}"></p>
+                                                <p style="margin:0;font-size:12px;color:#94a3b8">
+                                                    SL: <span th:text="${item.quantity}"></span>
+                                                </p>
+                                            </td>
+                                            <td align="right" style="vertical-align:top;white-space:nowrap">
+                                                <!-- Có giá giảm: gạch giá gốc, hiện giá giảm -->
+                                                <div th:if="${item.salePrice != null}">
+                                                    <p style="margin:0;font-size:12px;color:#a0aec0;text-decoration:line-through"
+                                                       th:text="${#numbers.formatInteger(item.unitPrice, 0, 'POINT')} + ' đ'"></p>
+                                                    <p style="margin:2px 0 0;font-size:14px;font-weight:bold;color:#e53e3e"
+                                                       th:text="${#numbers.formatInteger(item.salePrice, 0, 'POINT')} + ' đ'"></p>
+                                                </div>
+                                                <!-- Không có giá giảm -->
+                                                <div th:if="${item.salePrice == null}">
+                                                    <p style="margin:0;font-size:14px;font-weight:bold;color:#334155"
+                                                       th:text="${#numbers.formatInteger(item.unitPrice, 0, 'POINT')} + ' đ'"></p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <!-- Tổng kết đơn hàng -->
+                <tr>
+                    <td>
+                        <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:15px;font-size:13px;color:#667085">
+                            <tr>
+                                <td style="padding:4px 0">Tạm tính</td>
+                                <td align="right" th:text="${#numbers.formatInteger(totalAmount, 0, 'POINT')} + ' đ'"></td>
+                            </tr>
+                            <tr th:if="${discountAmount != null and discountAmount.compareTo(T(java.math.BigDecimal).ZERO) > 0}">
+                                <td style="padding:4px 0">Giảm giá voucher</td>
+                                <td align="right" style="color:#e53e3e"
+                                    th:text="'- ' + ${#numbers.formatInteger(discountAmount, 0, 'POINT')} + ' đ'"></td>
+                            </tr>
+                            <tr>
+                                <td style="padding:4px 0">Phí vận chuyển</td>
+                                <td align="right" th:text="${#numbers.formatInteger(shippingFee, 0, 'POINT')} + ' đ'"></td>
+                            </tr>
+                            <tr>
+                                <td style="padding:10px 0 0;font-size:15px;font-weight:bold;color:#334155;border-top:1px solid #eef4f8">
+                                    Tổng thanh toán
+                                </td>
+                                <td align="right" style="padding:10px 0 0;font-size:15px;font-weight:bold;color:#27ae60;border-top:1px solid #eef4f8"
+                                    th:text="${#numbers.formatInteger(finalAmount, 0, 'POINT')} + ' đ'"></td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td align="center">
+                        <div style="
+                            margin-top:20px;
+                            padding:14px;
+                            background:#eafaf1;
+                            border:1px dashed #27ae60;
+                            border-radius:12px;
+                            font-size:14px;
+                            font-weight:bold;
+                            color:#27ae60;
+                        ">
+                            ✅ Đơn hàng đang được xử lý
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td align="center" style="padding-top:25px">
+                        <p style="font-size:12px;color:#a0aec0;line-height:1.5">
+                            PetBuddy Store — mọi thắc mắc xin liên hệ bộ phận hỗ trợ.
+                        </p>
+                    </td>
+                </tr>
+
+            </table>
+
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

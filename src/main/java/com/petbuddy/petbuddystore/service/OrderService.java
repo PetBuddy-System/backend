@@ -25,4 +25,6 @@ public interface OrderService {
     OrderResponse confirmCancelOrder(Long orderId);
     Order getOrderEntityById(Long orderId);
     boolean hasUserPurchasedProduct(String userId, UUID productId);
+    OrderResponse reportDeliveryFailed(Long orderId, String reason);
+    OrderResponse confirmReturnedToWarehouse(Long orderId);
 }
