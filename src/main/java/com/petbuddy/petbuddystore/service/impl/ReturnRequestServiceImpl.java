@@ -118,8 +118,8 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                 throw new AppException(ErrorCode.RETURN_QUANTITY_EXCEEDED);
             }
 
-            BigDecimal orderTotal = order.getTotalAmount();
-            BigDecimal discount = order.getDiscountAmount();
+            BigDecimal orderTotal = getOriginalTotal(order);
+            BigDecimal discount = getOriginalDiscount(order);
 
             BigDecimal allocatedDetailDiscount = (discount != null && orderTotal.compareTo(BigDecimal.ZERO) > 0)
                     ? discount.multiply(orderDetail.getTotalPrice()).divide(orderTotal, 4, RoundingMode.HALF_UP)
@@ -262,8 +262,8 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
             BigDecimal itemRefund = BigDecimal.ZERO;
 
             if (typeEnum == ReturnType.RETURN) {
-                BigDecimal orderTotal = order.getTotalAmount();
-                BigDecimal discount = order.getDiscountAmount();
+                BigDecimal orderTotal = getOriginalTotal(order);
+                BigDecimal discount = getOriginalDiscount(order);
 
                 BigDecimal allocatedDetailDiscount = (discount != null && orderTotal.compareTo(BigDecimal.ZERO) > 0)
                         ? discount.multiply(orderDetail.getTotalPrice()).divide(orderTotal, 4, RoundingMode.HALF_UP)
@@ -484,6 +484,14 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
             return;
         }
 
+        // DELIVERING_FAILED -> CANCELLED (coordinator manual cancel)
+        if (current == ReturnStatus.DELIVERING_FAILED) {
+            if (next != ReturnStatus.CANCELLED) {
+                throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+            }
+            return;
+        }
+
         throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
     }
 
@@ -527,7 +535,7 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                     break;
 
                 case DELIVERING:
-                    if (next != ReturnStatus.COMPLETED) {
+                    if (next != ReturnStatus.COMPLETED && next != ReturnStatus.DELIVERING_FAILED) {
                         throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
                     }
                     break;
@@ -574,6 +582,14 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                             userName, returnRequest.getReturnCode());
                     break;
 
+                case CANCELLED:
+                    returnStockService.releaseReservedStock(returnRequest);
+                    returnRequest.setRefundStatus(RefundStatus.FAILED);
+                    returnRequest.setCoordinator(currentUser);
+                    log.info("Coordinator {} cancelled exchange request {}",
+                            userName, returnRequest.getReturnCode());
+                    break;
+
                 default:
                     break;
             }
@@ -593,6 +609,7 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                     paymentService.refundForReturn(returnRequest);
                     returnRequest.setRefundStatus(RefundStatus.SUCCESS);
                     returnRequest.setCompletedAt(LocalDateTime.now());
+                    applyReturnedQuantitiesToOrder(returnRequest);
                     log.info("Return completed and refunded for request {}", returnRequest.getReturnCode());
                     break;
 
@@ -660,6 +677,19 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                             userName, returnRequest.getReturnCode());
                     break;
 
+                case DELIVERING_FAILED:
+                    int newCount = returnRequest.getDeliveryFailedCount() + 1;
+                    returnRequest.setDeliveryFailedCount(newCount);
+                    if (newCount >= 3) {
+                        returnRequest.setShipper(null);
+                        log.warn("Exchange request {} reached {} delivery failures — shipper unassigned, returned to coordinator",
+                                returnRequest.getReturnCode(), newCount);
+                    } else {
+                        log.info("Shipper {} failed to deliver exchange request {} (failedCount={})",
+                                userName, returnRequest.getReturnCode(), newCount);
+                    }
+                    break;
+
                 default:
                     break;
             }
@@ -681,9 +711,94 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
         }
     }
 
+    private void applyReturnedQuantitiesToOrder(ReturnRequest returnRequest) {
+        Order order = returnRequest.getOrder();
+
+        BigDecimal originalOrderTotal = getOriginalTotal(order);
+        BigDecimal originalDiscount = getOriginalDiscount(order);
+
+        for (ReturnItem item : returnRequest.getReturnItems()) {
+            OrderDetail detail = item.getOrderDetail();
+
+            int newQty = detail.getQuantity() - item.getQuantity();
+            if (newQty < 0) {
+                throw new AppException(ErrorCode.RETURN_QUANTITY_EXCEEDED);
+            }
+
+            BigDecimal effectivePrice = detail.getSalePrice() != null
+                    ? detail.getSalePrice()
+                    : detail.getUnitPrice();
+
+            BigDecimal newLineTotal = effectivePrice
+                    .multiply(BigDecimal.valueOf(newQty))
+                    .setScale(2, RoundingMode.HALF_UP);
+
+            detail.setQuantity(newQty);
+            detail.setTotalPrice(newLineTotal);
+
+            orderDetailRepository.save(detail);
+        }
+
+        // Tính lại tổng tiền hàng
+        BigDecimal newOrderTotal = order.getOrderDetails().stream()
+                .map(OrderDetail::getTotalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        order.setTotalAmount(newOrderTotal);
+
+        // Phân bổ lại voucher theo tỷ lệ giống calculateRefund()
+        BigDecimal remainingDiscount = BigDecimal.ZERO;
+
+        if (originalDiscount.compareTo(BigDecimal.ZERO) > 0
+                && originalOrderTotal.compareTo(BigDecimal.ZERO) > 0) {
+
+            for (OrderDetail detail : order.getOrderDetails()) {
+
+                if (detail.getQuantity() <= 0) {
+                    continue;
+                }
+
+                BigDecimal allocatedDiscount = originalDiscount
+                        .multiply(detail.getTotalPrice())
+                        .divide(originalOrderTotal, 4, RoundingMode.HALF_UP);
+
+                remainingDiscount = remainingDiscount.add(allocatedDiscount);
+            }
+        }
+
+        remainingDiscount = remainingDiscount.setScale(2, RoundingMode.HALF_UP);
+        order.setDiscountAmount(remainingDiscount);
+
+        order.setFinalAmount(
+                newOrderTotal
+                        .subtract(remainingDiscount)
+                        .add(order.getShippingFee())
+                        .subtract(order.getShippingDiscountAmount())
+                        .setScale(2, RoundingMode.HALF_UP)
+        );
+
+        orderRepository.save(order);
+    }
+
     // ============================================================
     // PRIVATE HELPER METHODS
     // ============================================================
+
+
+    private BigDecimal getOriginalDiscount(Order order) {
+        return order.getOriginalDiscountAmount() != null
+                ? order.getOriginalDiscountAmount()
+                : Optional.ofNullable(order.getDiscountAmount())
+                .orElse(BigDecimal.ZERO);
+    }
+
+    private BigDecimal getOriginalTotal(Order order) {
+        return order.getOriginalTotalAmount() != null
+                ? order.getOriginalTotalAmount()
+                : Optional.ofNullable(order.getTotalAmount())
+                .orElse(BigDecimal.ZERO);
+    }
 
     private ReturnStatus parseStatus(String status) {
         try {

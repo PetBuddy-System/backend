@@ -16,6 +16,8 @@ public enum ReturnStatus {
 
     DELIVERING,
 
+    DELIVERING_FAILED,
+
     COMPLETED,
 
     REJECTED,

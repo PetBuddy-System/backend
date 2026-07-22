@@ -55,7 +55,11 @@ public class Order {
 
     BigDecimal totalAmount;
 
+    BigDecimal originalTotalAmount;
+
     BigDecimal discountAmount;
+
+    BigDecimal originalDiscountAmount;
 
     BigDecimal shippingDiscountAmount;
     

@@ -135,7 +135,9 @@ public class OrderServiceImpl implements OrderService {
 
         order.setOrderDetails(orderDetails);
         order.setTotalAmount(total);
+        order.setOriginalTotalAmount(total);
         order.setDiscountAmount(discountAmount);
+        order.setOriginalDiscountAmount(discountAmount);
         order.setFinalAmount(finalAmount);
         orderRepository.save(order);
 
@@ -167,11 +169,13 @@ public class OrderServiceImpl implements OrderService {
             order.setNote(request.getNote());
         }
 
+        order.setOriginalTotalAmount(order.getTotalAmount());
         if (request.getVoucherCode() != null) {
             voucherService.releaseVoucherFromOrder(order);
             BigDecimal discountAmount = voucherService.applyVoucherToOrder(
                     order, request.getVoucherCode(), user, order.getTotalAmount());
             order.setDiscountAmount(discountAmount);
+            order.setOriginalDiscountAmount(discountAmount);
             order.setFinalAmount(order.getTotalAmount().subtract(discountAmount)
                     .add(order.getShippingFee())
                     .subtract(order.getShippingDiscountAmount()));
@@ -179,7 +183,8 @@ public class OrderServiceImpl implements OrderService {
         else {
             voucherService.releaseVoucherFromOrder(order);
             order.setDiscountAmount(BigDecimal.ZERO);
-            order.setFinalAmount(order.getTotalAmount().add(order.getShippingFee()));
+            order.setOriginalDiscountAmount(BigDecimal.ZERO);
+            order.setFinalAmount(order.getTotalAmount().add(order.getShippingFee()).subtract(order.getShippingDiscountAmount()));
         }
 
         Order updated = orderRepository.save(order);

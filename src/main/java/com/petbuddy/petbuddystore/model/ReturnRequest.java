@@ -62,6 +62,10 @@ public class ReturnRequest {
         @Enumerated(EnumType.STRING)
         private ReturnStatus status;
 
+        @Builder.Default
+        @Column(nullable = false)
+        private Integer deliveryFailedCount = 0;
+
         @Enumerated(EnumType.STRING)
         private RefundMethod refundMethod;
 

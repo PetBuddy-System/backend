@@ -438,7 +438,8 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
                 ReturnStatus.PICKED_UP,
                 ReturnStatus.RETURNED_TO_STORE,
                 ReturnStatus.READY_TO_DELIVER,
-                ReturnStatus.DELIVERING
+                ReturnStatus.DELIVERING,
+                ReturnStatus.DELIVERING_FAILED
         );
 
         return schedules.stream()
@@ -475,7 +476,9 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
         ReturnRequest returnRequest = returnRequestRepository.findById(returnRequestId)
                 .orElseThrow(() -> new AppException(ErrorCode.RETURN_REQUEST_NOT_FOUND));
 
-        if (returnRequest.getStatus() != ReturnStatus.APPROVED) {
+        // Allow APPROVED or DELIVERING_FAILED
+        if (returnRequest.getStatus() != ReturnStatus.APPROVED
+                && returnRequest.getStatus() != ReturnStatus.DELIVERING_FAILED) {
             throw new AppException(ErrorCode.INVALID_RETURN_STATUS);
         }
 
@@ -499,6 +502,12 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
         }
 
         returnRequest.setShipper(shipper);
+
+        // If reassigned after a failed delivery, reset to READY_TO_DELIVER
+        if (returnRequest.getStatus() == ReturnStatus.DELIVERING_FAILED) {
+            returnRequest.setStatus(ReturnStatus.READY_TO_DELIVER);
+        }
+
         returnRequestRepository.save(returnRequest);
     }
     @Override
