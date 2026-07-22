@@ -18,7 +18,8 @@ import javax.crypto.spec.SecretKeySpec;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
@@ -68,10 +69,11 @@ public class VnPayServiceImpl implements VnPayService {
         params.put("vnp_ReturnUrl", returnUrl);
         params.put("vnp_IpAddr", clientIp);
 
-        LocalDateTime now = LocalDateTime.now();
-        String createDate = now.format(FMT);
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+        String createDate = now.format(formatter);
         params.put("vnp_CreateDate", createDate);
-        params.put("vnp_ExpireDate", now.plusMinutes(15).format(FMT));
+        params.put("vnp_ExpireDate", now.plusMinutes(15).format(formatter));
 
         List<String> fieldNames = new ArrayList<>(params.keySet());
         Collections.sort(fieldNames);
@@ -131,7 +133,7 @@ public class VnPayServiceImpl implements VnPayService {
     @Override
     public VnPayRefundResponse createRefund(Payment payment, BigDecimal refundAmount, String createBy) {
         String requestId = UUID.randomUUID().toString().replace("-", "").substring(0, 20);
-        LocalDateTime now = LocalDateTime.now();
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
         String createDate = now.format(FMT);
         long amount = refundAmount.longValue() * 100;
 
