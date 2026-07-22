@@ -13,8 +13,10 @@ import java.util.Collection;
 public interface ReturnItemRepository extends JpaRepository<ReturnItem, Long> {
 
     @Query("SELECT COALESCE(SUM(ri.quantity), 0) FROM ReturnItem ri " +
-           "WHERE ri.orderDetail.orderDetailId = :orderDetailId " +
-           "AND ri.returnRequest.status IN :statuses")
+            "JOIN ri.returnRequest rr " +
+            "WHERE ri.orderDetail.orderDetailId = :orderDetailId " +
+            "AND rr.status IN :statuses " +
+            "AND rr.rejectedAt IS NULL")
     int sumQuantityByOrderDetailIdAndStatusIn(
             @Param("orderDetailId") Long orderDetailId,
             @Param("statuses") Collection<ReturnStatus> statuses);
