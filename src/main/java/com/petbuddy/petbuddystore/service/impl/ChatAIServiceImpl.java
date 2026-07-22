@@ -109,10 +109,11 @@ public class ChatAIServiceImpl implements ChatAIService {
 
     private String callAI(List<Message> promptMessages) {
         try {
-            return chatClient.prompt()
+            String rawAnswer = chatClient.prompt()
                     .messages(promptMessages)
                     .call()
                     .content();
+            return removeThinking(rawAnswer);
 
         } catch (Exception e) {
             log.error("AI chat failed", e);
@@ -263,5 +264,17 @@ public class ChatAIServiceImpl implements ChatAIService {
         } catch (IOException e) {
             throw new AppException(ErrorCode.MEDIA_READ_FAILED);
         }
+    }
+
+    private String removeThinking(String content) {
+        if (content == null || content.isBlank()) {
+            return content;
+        }
+
+        String cleaned = content;
+        cleaned = cleaned.replaceAll("(?is)<think\\b[^>]*>.*?</think>", "");
+        cleaned = cleaned.replaceAll("(?is)<think\\b[^>]*>.*$", "");
+        cleaned = cleaned.replaceAll("(?i)</?think\\b[^>]*>", "");
+        return cleaned.trim();
     }
 }

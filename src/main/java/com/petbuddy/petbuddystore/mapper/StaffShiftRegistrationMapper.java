@@ -16,7 +16,7 @@ public interface StaffShiftRegistrationMapper {
 
     @Mapping(source = "staff.userId", target = "staffId")
     @Mapping(source = "staff.fullName", target = "staffName")
+    @Mapping(source = "staff.email", target = "staffEmail")
     ShiftRegistrationResponse toShiftRegistrationResponse(StaffShiftRegistration staffShiftRegistration);
 
-    void updateShiftRegistration(@MappingTarget StaffShiftRegistration staffShiftRegistration, ShiftRegistrationUpdateRequest request);
 }

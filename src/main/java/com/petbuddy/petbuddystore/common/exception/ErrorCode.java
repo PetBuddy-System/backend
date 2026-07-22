@@ -154,6 +154,7 @@ public enum ErrorCode {
     ROUTE_CALCULATION_FAILED(5215,"Failed to calculate route",HttpStatus.INTERNAL_SERVER_ERROR),
     SHIPPER_CAPACITY_FULL(5216, "Shipper capacity is full", HttpStatus.BAD_REQUEST),
     SHIPPER_ZONE_NOT_COMPUTED(5217, "Shipper zone is not computed", HttpStatus.BAD_REQUEST),
+    INVALID_NEGOTIATED_DATE(5218, "Negotiated date must be in the future", HttpStatus.BAD_REQUEST),
 
     VOUCHER_NOT_FOUND(5301, "Voucher not found", HttpStatus.NOT_FOUND),
     VOUCHER_CODE_EXISTED(5302, "Voucher code already exists", HttpStatus.BAD_REQUEST),
@@ -316,6 +317,16 @@ public enum ErrorCode {
     REGISTRATION_PERIOD_CLOSED(9028, "Shift registration period is closed", HttpStatus.BAD_REQUEST),
     REGISTRATION_NOT_OPEN(9029, "Registration is not open", HttpStatus.BAD_REQUEST),
     REGISTRATION_EXPIRED(9030, "Registration has expired", HttpStatus.BAD_REQUEST),
+    SHIFT_REGISTRATION_EMPTY(9031, "Shift registration list must not be empty", HttpStatus.BAD_REQUEST),
+    SHIFT_REGISTRATION_ALREADY_EXISTS(9032, "Staff has already registered shifts for this period", HttpStatus.BAD_REQUEST),
+    WORK_DATE_REQUIRED(9033, "Work date is required", HttpStatus.BAD_REQUEST),
+    SHIFT_TYPE_REQUIRED(9034, "Shift type is required", HttpStatus.BAD_REQUEST),
+    WORK_DATE_OUT_OF_REGISTRATION_PERIOD(9035, "Work date must be within the registration work period", HttpStatus.BAD_REQUEST),
+    CUSTOM_SHIFT_TIME_REQUIRED(9036, "Custom shift start time and end time are required", HttpStatus.BAD_REQUEST),
+    CUSTOM_SHIFT_REASON_REQUIRED(9037, "Custom shift reason is required", HttpStatus.BAD_REQUEST),
+    INVALID_SHIFT_TIME(9038, "Shift start time must be before shift end time", HttpStatus.BAD_REQUEST),
+    DUPLICATE_SHIFT_REGISTRATION(9039, "Duplicate shift registration is not allowed", HttpStatus.BAD_REQUEST),
+    CUSTOM_SHIFT_FIELDS_NOT_ALLOWED(9040, "Custom shift fields are only allowed for custom shift type", HttpStatus.BAD_REQUEST),
     ;
 
     int code;

@@ -17,6 +17,7 @@ public class ShiftRegistrationResponse {
     String registrationId;
     String staffId;
     String staffName;
+    String staffEmail;
     LocalDate workDate;
     ShiftType preferredShift;
     LocalTime preferredStartTime;

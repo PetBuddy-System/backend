@@ -136,12 +136,6 @@ public class StaffScheduleServiceImpl implements StaffScheduleService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        WorkSchedule workSchedule = staffSchedule.getWorkSchedule();
-        LocalDateTime endTime = LocalDateTime.of(workSchedule.getWorkDate(), workSchedule.getEndTime());
-
-        if (now.isBefore(endTime)) {
-            throw new AppException(ErrorCode.TOO_EARLY_TO_CHECKOUT);
-        }
 
         staffSchedule.setScheduleStatus(ScheduleStatus.COMPLETED);
         staffSchedule.setCheckOutAt(now);

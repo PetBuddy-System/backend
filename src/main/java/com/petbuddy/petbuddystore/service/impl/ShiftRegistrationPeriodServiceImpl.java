@@ -42,6 +42,13 @@ public class ShiftRegistrationPeriodServiceImpl implements ShiftRegistrationPeri
             throw new AppException(ErrorCode.INVALID_REGISTER_CLOSE_TIME);
         }
 
+        boolean existed = shiftRegistrationPeriodRepository.existsByWorkFromDateLessThanEqualAndWorkToDateGreaterThanEqual(
+                        request.getWorkToDate(), request.getWorkFromDate());
+
+        if (existed) {
+            throw new AppException(ErrorCode.REGISTRATION_PERIOD_ALREADY_EXISTS);
+        }
+
         ShiftRegistrationPeriod period = shiftRegistrationPeriodMapper.toShiftRegistrationPeriod(request);
         period.setStatus(RegistrationPeriodStatus.OPEN);
 

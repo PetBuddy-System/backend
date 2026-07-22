@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.configuration;
 
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -34,12 +35,11 @@ public class SecurityConfig {
     };
 
     private static final String[] PUBLIC_ENDPOINTS_SWAGGER = {
+            "/v3/api-docs",
             "/v3/api-docs/**",
-            "/swagger-ui/**",
             "/swagger-ui.html",
-            "/pet-buddy/v3/api-docs/**",
-            "/pet-buddy/swagger-ui/**",
-            "/pet-buddy/swagger-ui.html",
+            "/swagger-ui/**",
+            "/swagger-ui/index.html"
     };
 
     private static final String[] WEBHOOK_ENDPOINT = {"/api/payments/webhook","/api/payments/momo/ipn"};
@@ -51,7 +51,7 @@ public class SecurityConfig {
         httpSecurity.authorizeHttpRequests(auth ->
                 auth.requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
-                        .requestMatchers(PUBLIC_ENDPOINTS_SWAGGER).permitAll()
+                        .requestMatchers(HttpMethod.GET,PUBLIC_ENDPOINTS_SWAGGER).permitAll()
                         .requestMatchers(HttpMethod.POST, WEBHOOK_ENDPOINT).permitAll()
                         .anyRequest().authenticated());
 
@@ -82,7 +82,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration corsConfiguration = new CorsConfiguration();
-        corsConfiguration.setAllowedOrigins(List.of("http://localhost:5173"));
+        corsConfiguration.setAllowedOrigins(List.of("http://localhost:5173", "https://petbuddy2.vercel.app"));
         corsConfiguration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         corsConfiguration.setAllowedHeaders(List.of("*"));
         corsConfiguration.setAllowCredentials(true);

@@ -4,8 +4,11 @@ import com.petbuddy.petbuddystore.common.enums.ShiftType;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 @Entity
@@ -40,4 +43,11 @@ public class StaffShiftRegistration {
 
     @Column(columnDefinition = "TEXT")
     String reason;
+
+    @CreationTimestamp
+    @Column(updatable = false)
+    LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    LocalDateTime updatedAt;
 }

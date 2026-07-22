@@ -22,4 +22,7 @@ public interface ShiftRegistrationPeriodRepository extends JpaRepository<ShiftRe
     """)
     Page<ShiftRegistrationPeriod> findRegistrationPeriods(@Param("fromDate") LocalDate fromDate, @Param("toDate") LocalDate toDate,
                                                           @Param("status") RegistrationPeriodStatus status, Pageable pageable);
+
+    boolean existsByWorkFromDateLessThanEqualAndWorkToDateGreaterThanEqual(LocalDate workToDate, LocalDate workFromDate);
+
 }

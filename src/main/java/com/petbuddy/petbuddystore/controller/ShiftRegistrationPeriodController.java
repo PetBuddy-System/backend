@@ -18,6 +18,7 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -30,6 +31,7 @@ import java.time.LocalDate;
 public class ShiftRegistrationPeriodController {
     ShiftRegistrationPeriodService shiftRegistrationPeriodService;
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @PostMapping()
     @Operation(description = "Tạo mới đăng ký ca làm việc")
     public ResponseEntity<ApiResponse<RegistrationPeriodResponse>> createShiftRegistration(@RequestBody @Valid RegistrationPeriodCreationRequest request) {
@@ -37,6 +39,7 @@ public class ShiftRegistrationPeriodController {
                 .body(ApiResponse.success("Shift registration created successfully", shiftRegistrationPeriodService.createShiftRegistration(request)));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @GetMapping()
     @Operation(description = "Lấy tất cả đăng ký lịch làm việc có phân trang, filter theo date, theo status")
     public ResponseEntity<ApiResponse<Page<RegistrationPeriodResponse>>> getRegistrationPeriods(@RequestParam(required = false) LocalDate fromDate,
@@ -48,6 +51,7 @@ public class ShiftRegistrationPeriodController {
                 .body(ApiResponse.success(shiftRegistrationPeriodService.getRegistrationPeriods(fromDate, toDate, status, page, size)));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @GetMapping("/{periodId}")
     @Operation(description = "Lấy thông tin đăng ký lịch làm việc theo id")
     public ResponseEntity<ApiResponse<RegistrationPeriodResponse>> getRegistrationById(@PathVariable String periodId) {
@@ -55,6 +59,7 @@ public class ShiftRegistrationPeriodController {
                 .body(ApiResponse.success(shiftRegistrationPeriodService.getRegistrationById(periodId)));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @PutMapping("/{periodId}")
     @Operation(description = "Update status dang ky lịch làm việc theo id")
     public ResponseEntity<ApiResponse<RegistrationPeriodResponse>> updateStatus(@PathVariable String periodId, @RequestParam RegistrationPeriodStatus status){
