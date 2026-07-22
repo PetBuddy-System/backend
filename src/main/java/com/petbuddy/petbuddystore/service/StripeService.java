@@ -14,7 +14,7 @@ public interface StripeService {
     PaymentIntent createPaymentIntent(Payment payment);
     PaymentIntent createBookingDepositIntent(Payment payment);
     void cancelIntent(String paymentIntentId);
-    Refund createRefund(Payment payment);
+    Refund createRefund(Payment payment ,BigDecimal refundAmount );
     Refund createRefundForReturn(Payment payment, BigDecimal amount, ReturnRequest returnRequest);
     Event constructEvent(String payload, String sigHeader);
     <T extends StripeObject> T extractStripeObject(Event event, Class<T> type, ErrorCode errorCodeOnFailure);

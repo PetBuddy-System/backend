@@ -88,12 +88,13 @@ public class StripeServiceImpl implements StripeService {
     }
 
     @Override
-    public Refund createRefund(Payment payment) {
+    public Refund createRefund(Payment payment, BigDecimal amount) {
         try {
             RefundCreateParams params = RefundCreateParams.builder()
                     .setPaymentIntent(payment.getStripePaymentIntentId())
                     .putMetadata("order_id", String.valueOf(payment.getOrder().getOrderId()))
                     .putMetadata("order_code", payment.getOrder().getOrderCode())
+                    .setAmount(amount.longValue())
                     .build();
             return Refund.create(params);
         } catch (StripeException ex) {

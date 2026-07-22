@@ -42,8 +42,8 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
     UserRepository userRepository;
 
     static double MAX_DISTANCE_FOR_ORS_CALL_KM = 7.0;
-    static List<OrderStatus> ACTIVE_ORDER_STATUSES = List.of(OrderStatus.PICKED, OrderStatus.SHIPPING);
-    static int MAX_LOOKAHEAD_DAYS = 60;
+    static List<OrderStatus> ACTIVE_ORDER_STATUSES = List.of(OrderStatus.PICKED, OrderStatus.SHIPPING,  OrderStatus.AWAITING_REDELIVERY);
+    static int MAX_LOOKAHEAD_DAYS = 30;
 
     @Override
     @Transactional
@@ -191,7 +191,9 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
             if (currentLoad >= maxCapacity) continue;
 
             Double distance = distanceToShipperZone(order, schedule);
-
+            if (distance != null && distance > capacityProperties.getMaxOperationalRadiusKm()) {
+                continue;
+            }
             suggestions.add(ShipperSuggestionResponse.builder()
                     .staffId(schedule.getStaff().getUserId())
                     .staffName(schedule.getStaff().getFullName())
