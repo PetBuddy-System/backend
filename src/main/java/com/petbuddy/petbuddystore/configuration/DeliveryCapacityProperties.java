@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 public class DeliveryCapacityProperties {
 
     /** Vận tốc trung bình xe máy trong nội thành (km/h) - có kẹt xe, đèn đỏ... */
-    double avgSpeedKmh = 25.0;
+    double avgSpeedKmh = 35.0;
 
     /** Thời gian xử lý tại mỗi điểm giao: gửi hàng, chờ khách, thu COD... (phút) */
     double handlingTimeMinutes = 5.0;

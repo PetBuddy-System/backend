@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,4 +28,7 @@ public interface OrderService {
     boolean hasUserPurchasedProduct(String userId, UUID productId);
     OrderResponse reportDeliveryFailed(Long orderId, String reason);
     OrderResponse confirmReturnedToWarehouse(Long orderId);
+    void retryNoonDeliveryContacts();
+    OrderResponse coordinatorReportUnreachable(Long orderId, String note);
+    OrderResponse coordinatorNegotiateRedelivery(Long orderId, LocalDate negotiatedDate, String note);
 }

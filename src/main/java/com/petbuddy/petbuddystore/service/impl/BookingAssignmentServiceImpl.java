@@ -18,7 +18,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
@@ -29,8 +31,11 @@ import java.util.List;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class BookingAssignmentServiceImpl implements BookingAssignmentService {
+    static final int DEFAULT_HOME_TRAVEL_MINUTE = 30;
+    static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     static final List<BookingStatus> STAFF_OCCUPYING_STATUSES = List.of(
             BookingStatus.ACCEPTED,
+            BookingStatus.ON_THE_WAY,
             BookingStatus.IN_PROGRESS,
             BookingStatus.READY_FOR_PICKUP
     );
@@ -51,15 +56,13 @@ public class BookingAssignmentServiceImpl implements BookingAssignmentService {
         }
         User groomer = userRepository.findById(groomerId)
                 .orElseThrow(() -> new AppException(ErrorCode.REQUESTED_GROOMER_NOT_AVAILABLE));
-        LocalDateTime bookingStart = booking.getScheduledAt();
-        LocalDateTime bookingEnd = bookingStart.plusMinutes(getBookingDuration(booking));
-        findAssignableScheduleForGroomer(groomer, bookingStart, bookingEnd, booking.getBookingId());
+        validateGroomerProfile(groomer);
     }
 
     @Override
     public void assignAfterPaymentSucceeded(Booking booking) {
-        LocalDateTime bookingStart = booking.getScheduledAt();
-        LocalDateTime bookingEnd = bookingStart.plusMinutes(getBookingDuration(booking));
+        LocalDateTime bookingStart = getOccupiedStart(booking);
+        LocalDateTime bookingEnd = getOccupiedEnd(booking);
 
         try {
             StaffSchedule staffSchedule;
@@ -69,7 +72,7 @@ public class BookingAssignmentServiceImpl implements BookingAssignmentService {
                 }
                 User groomer = userRepository.findById(booking.getRequestedStaffId())
                         .orElseThrow(() -> new AppException(ErrorCode.REQUESTED_GROOMER_NOT_AVAILABLE));
-                staffSchedule = findAssignableScheduleForGroomer(groomer, bookingStart, bookingEnd, booking.getBookingId());
+                staffSchedule = findAssignableScheduleForGroomer(groomer, booking.getScheduledAt().toLocalDate(), bookingStart, bookingEnd, booking.getBookingId(), isHomeBooking(booking));
             } else {
                 staffSchedule = findBestAvailableGroomer(bookingStart, bookingEnd, null);
                 if (staffSchedule == null) {
@@ -95,14 +98,12 @@ public class BookingAssignmentServiceImpl implements BookingAssignmentService {
 
         User groomer = userRepository.findById(groomerId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-        LocalDateTime bookingStart = booking.getScheduledAt();
-        LocalDateTime bookingEnd = bookingStart.plusMinutes(getBookingDuration(booking));
-        StaffSchedule staffSchedule = findAssignableScheduleForGroomer(groomer, bookingStart, bookingEnd, booking.getBookingId());
+        LocalDateTime bookingStart = getOccupiedStart(booking);
+        LocalDateTime bookingEnd = getOccupiedEnd(booking);
+        StaffSchedule staffSchedule = findAssignableScheduleForGroomer(groomer, booking.getScheduledAt().toLocalDate(), bookingStart, bookingEnd, booking.getBookingId(), isHomeBooking(booking));
 
         applyAssignment(booking, staffSchedule);
         booking.setBookingStatus(BookingStatus.ACCEPTED);
-        booking.setAssignmentMode(StaffAssignmentMode.SELECTED);
-        booking.setRequestedStaffId(groomer.getUserId());
     }
 
     @Override
@@ -125,20 +126,23 @@ public class BookingAssignmentServiceImpl implements BookingAssignmentService {
 
     private StaffSchedule findAssignableScheduleForGroomer(
             User groomer,
+            LocalDate scheduleDate,
             LocalDateTime bookingStart,
             LocalDateTime bookingEnd,
-            Integer ignoredBookingId
+            Integer ignoredBookingId,
+            boolean travelBufferIncluded
     ) {
-        if (groomer.getRole() != Role.STAFF
-                || groomer.getStaffTask() != StaffTask.GROOMER
-                || groomer.getStatus() != UserStatus.ACTIVE) {
-            throw new AppException(ErrorCode.REQUESTED_GROOMER_NOT_AVAILABLE);
-        }
+        validateGroomerProfile(groomer);
 
         StaffSchedule schedule = staffScheduleRepository
-                .findScheduleForDate(groomer.getUserId(), bookingStart.toLocalDate(), ASSIGNABLE_SCHEDULE_STATUSES)
+                .findScheduleForDate(groomer.getUserId(), scheduleDate, ASSIGNABLE_SCHEDULE_STATUSES)
                 .orElseThrow(() -> new AppException(ErrorCode.REQUESTED_GROOMER_NOT_AVAILABLE));
 
+        if (!isWithinShift(schedule, bookingStart, bookingEnd)) {
+            throw new AppException(travelBufferIncluded
+                    ? ErrorCode.STAFF_TRAVEL_TIME_NOT_ENOUGH
+                    : ErrorCode.BOOKING_OUTSIDE_STAFF_SHIFT);
+        }
         if (!isScheduleAssignable(schedule, bookingStart, bookingEnd, ignoredBookingId)) {
             throw new AppException(ErrorCode.REQUESTED_GROOMER_NOT_AVAILABLE);
         }
@@ -159,6 +163,16 @@ public class BookingAssignmentServiceImpl implements BookingAssignmentService {
                 || schedule.getAttendanceStatus() == AttendanceStatus.ABSENT) {
             return false;
         }
+        if (!isWithinShift(schedule, bookingStart, bookingEnd)) {
+            return false;
+        }
+        return !hasStaffOverlap(schedule, bookingStart, bookingEnd, ignoredBookingId);
+    }
+
+    private boolean isWithinShift(StaffSchedule schedule, LocalDateTime bookingStart, LocalDateTime bookingEnd) {
+        if (schedule == null || schedule.getWorkSchedule() == null) {
+            return false;
+        }
         LocalDateTime shiftStart = LocalDateTime.of(
                 schedule.getWorkSchedule().getWorkDate(),
                 schedule.getWorkSchedule().getStartTime()
@@ -167,10 +181,7 @@ public class BookingAssignmentServiceImpl implements BookingAssignmentService {
                 schedule.getWorkSchedule().getWorkDate(),
                 schedule.getWorkSchedule().getEndTime()
         );
-        if (bookingStart.isBefore(shiftStart) || bookingEnd.isAfter(shiftEnd)) {
-            return false;
-        }
-        return !hasStaffOverlap(schedule, bookingStart, bookingEnd, ignoredBookingId);
+        return !bookingStart.isBefore(shiftStart) && !bookingEnd.isAfter(shiftEnd);
     }
 
     private boolean hasStaffOverlap(
@@ -191,9 +202,18 @@ public class BookingAssignmentServiceImpl implements BookingAssignmentService {
                 .filter(existing -> ignoredBookingId == null || !existing.getBookingId().equals(ignoredBookingId))
                 .anyMatch(existing -> {
                     LocalDateTime existingStart = existing.getScheduledAt();
-                    LocalDateTime existingEnd = existingStart.plusMinutes(getBookingDuration(existing));
+                    LocalDateTime existingEnd = getOccupiedEnd(existing);
+                    existingStart = getOccupiedStart(existing);
                     return bookingStart.isBefore(existingEnd) && bookingEnd.isAfter(existingStart);
                 });
+    }
+
+    private void validateGroomerProfile(User groomer) {
+        if (groomer.getRole() != Role.STAFF
+                || groomer.getStaffTask() != StaffTask.GROOMER
+                || groomer.getStatus() != UserStatus.ACTIVE) {
+            throw new AppException(ErrorCode.REQUESTED_GROOMER_NOT_AVAILABLE);
+        }
     }
 
     private int countStaffBookingsForRoundRobin(StaffSchedule schedule) {
@@ -209,7 +229,7 @@ public class BookingAssignmentServiceImpl implements BookingAssignmentService {
     }
 
     private void applyAssignment(Booking booking, StaffSchedule staffSchedule) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(VIETNAM_ZONE);
         booking.setStaffSchedule(staffSchedule);
         staffSchedule.setAssignedAt(now);
         staffScheduleRepository.save(staffSchedule);
@@ -226,5 +246,30 @@ public class BookingAssignmentServiceImpl implements BookingAssignmentService {
             return detail.getTotalDurationMinute();
         }
         return detail.getDurationMinute() == null ? 0 : detail.getDurationMinute();
+    }
+
+    private LocalDateTime getOccupiedStart(Booking booking) {
+        if (!isHomeBooking(booking)) {
+            return booking.getScheduledAt();
+        }
+        return booking.getScheduledAt().minusMinutes(getEstimatedTravelMinute(booking));
+    }
+
+    private LocalDateTime getOccupiedEnd(Booking booking) {
+        LocalDateTime serviceEnd = booking.getScheduledAt().plusMinutes(getBookingDuration(booking));
+        if (!isHomeBooking(booking)) {
+            return serviceEnd;
+        }
+        return serviceEnd.plusMinutes(getEstimatedTravelMinute(booking));
+    }
+
+    private int getEstimatedTravelMinute(Booking booking) {
+        return booking.getEstimatedTravelMinute() == null || booking.getEstimatedTravelMinute() <= 0
+                ? DEFAULT_HOME_TRAVEL_MINUTE
+                : booking.getEstimatedTravelMinute();
+    }
+
+    private boolean isHomeBooking(Booking booking) {
+        return LocationType.AT_HOME.name().equals(booking.getBookingType());
     }
 }

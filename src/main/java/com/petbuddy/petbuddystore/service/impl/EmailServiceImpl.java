@@ -166,4 +166,18 @@ public class EmailServiceImpl implements EmailService {
                 "cancelReason", order.getCancelReason() != null ? order.getCancelReason() : "Không liên lạc được với khách hàng"
         ));
     }
+
+    @Override
+    public void sendRefundSuccessEmail(String toEmail, Order order, java.math.BigDecimal refundAmount) {
+        String subject = "Hoàn tiền thành công - Đơn hàng " + order.getOrderCode();
+        sendHtmlEmail(toEmail, subject, "refund-success", Map.of(
+                "recipientName", order.getRecipientName(),
+                "orderCode", order.getOrderCode(),
+                "totalAmount", order.getFinalAmount(),
+                "refundAmount", refundAmount,
+                "refundedAt", order.getPayment().getRefundedAt() != null
+                        ? order.getPayment().getRefundedAt()
+                        : LocalDateTime.now()
+        ));
+    }
 }

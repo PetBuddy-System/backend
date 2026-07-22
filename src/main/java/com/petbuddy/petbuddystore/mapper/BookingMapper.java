@@ -16,8 +16,11 @@ public interface BookingMapper {
     @Mapping(source = "staffSchedule.staffScheduleId", target = "staffScheduleId")
     @Mapping(source = "staffSchedule.staff.userId", target = "staffId")
     @Mapping(source = "staffSchedule.staff.fullName", target = "staffName")
+    @Mapping(source = "staffSchedule.staff.userId", target = "assignedStaffId")
+    @Mapping(source = "staffSchedule.staff.fullName", target = "assignedStaffName")
     @Mapping(source = "bookingStatus", target = "bookingStatus")
     @Mapping(target = "estimatedEndAt", expression = "java(calculateEstimatedEndAt(booking))")
+    @Mapping(target = "requestedStaffName", ignore = true)
     @Mapping(target = "stripeClientSecret", ignore = true)
     BookingResponse toBookingResponse(Booking booking);
 
