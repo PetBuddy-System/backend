@@ -1,0 +1,382 @@
+package com.petbuddy.petbuddystore.service.impl;
+
+import com.petbuddy.petbuddystore.common.enums.PromotionType;
+import com.petbuddy.petbuddystore.common.enums.ProductStatus;
+import com.petbuddy.petbuddystore.common.enums.PromotionStatus;
+import com.petbuddy.petbuddystore.common.exception.AppException;
+import com.petbuddy.petbuddystore.common.exception.ErrorCode;
+import com.petbuddy.petbuddystore.dto.request.PromotionRequest;
+import com.petbuddy.petbuddystore.dto.request.PromotionDetailRequest;
+import com.petbuddy.petbuddystore.dto.request.PromotionUpdateRequest;
+import com.petbuddy.petbuddystore.dto.response.PromotionListResponse;
+import com.petbuddy.petbuddystore.dto.response.PromotionResponse;
+import com.petbuddy.petbuddystore.dto.response.PromotionDetailResponse;
+import com.petbuddy.petbuddystore.mapper.PromotionDetailMapper;
+import com.petbuddy.petbuddystore.mapper.PromotionMapper;
+import com.petbuddy.petbuddystore.model.Product;
+import com.petbuddy.petbuddystore.model.Promotion;
+import com.petbuddy.petbuddystore.model.PromotionDetail;
+import com.petbuddy.petbuddystore.model.User;
+import com.petbuddy.petbuddystore.repository.ProductRepository;
+import com.petbuddy.petbuddystore.repository.PromotionDetailRepository;
+import com.petbuddy.petbuddystore.repository.PromotionRepository;
+import com.petbuddy.petbuddystore.repository.UserRepository;
+import com.petbuddy.petbuddystore.service.AuditService;
+import com.petbuddy.petbuddystore.service.PromotionService;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.transaction.Transactional;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.util.*;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@Slf4j
+public class PromotionServiceImpl implements PromotionService {
+
+    PromotionRepository promotionRepository;
+    ProductRepository productRepository;
+    PromotionMapper promotionMapper;
+    PromotionDetailMapper promotionDetailMapper;
+    PromotionDetailRepository promotionDetailRepository;
+    UserRepository userRepository;
+    AuditService auditService;
+
+    @Override
+    public PromotionResponse createPromotion(PromotionRequest request) {
+        if (request.getStartDate().isAfter(request.getEndDate()) || request.getStartDate().isEqual(request.getEndDate())) {
+            throw new AppException(ErrorCode.PROMOTION_INVALID_DATE);
+        }
+
+        Promotion promotion = promotionMapper.toPromotion(request);
+        promotion.setPromotionCode(generatePromotionCode());
+        if (promotion.getStatus() == null) {
+            promotion.setStatus(PromotionStatus.DRAFT);
+        }
+
+        if (request.getPromotionDetails() != null) {
+            for (PromotionDetailRequest detailReq : request.getPromotionDetails()) {
+                Product product = productRepository.findById(detailReq.getProductId())
+                        .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
+
+                if (product.getStatus() == ProductStatus.DELETED) {
+                    throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
+                }
+                validateProductHasActivePromotion(detailReq.getProductId());
+                validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getSalePrice());
+                PromotionDetail detail = PromotionDetail.builder()
+                        .promotion(promotion)
+                        .product(product)
+                        .promotionType(detailReq.getPromotionType())
+                        .discountValue(detailReq.getDiscountValue())
+                        .build();
+
+                promotion.getPromotionDetails().add(detail);
+            }
+        }
+
+        promotion.setCreatedAt(LocalDateTime.now());
+        promotion.setUpdatedAt(LocalDateTime.now());
+
+        Promotion saved = promotionRepository.save(promotion);
+
+        User currentUser = getCurrentUser();
+        auditService.logPromotionCreate(saved, "CREATE_PROMOTION", null, currentUser);
+
+        return convertToPromotionResponseWithCalculations(saved);
+    }
+
+    @Override
+    public Page<PromotionListResponse> getPromotions(String keyword, PromotionStatus status, Pageable pageable, String sortBy) {
+        Pageable resolvedPageable = buildPageable(pageable, sortBy);
+        Specification<Promotion> spec = buildPromotionSpec(keyword, status);
+        return promotionRepository.findAll(spec, resolvedPageable)
+                .map(promotionMapper::toListPromotionResponse);
+    }
+
+    @Override
+    public PromotionResponse getPromotionById(UUID id) {
+        Promotion promotion = promotionRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.PROMOTION_NOT_FOUND));
+
+        if (promotion.getStatus() == PromotionStatus.DELETED || promotion.getDeletedAt() != null) {
+            throw new AppException(ErrorCode.PROMOTION_NOT_FOUND);
+        }
+
+        return convertToPromotionResponseWithCalculations(promotion);
+    }
+
+    @Override
+    public PromotionResponse updatePromotion(UUID id, PromotionUpdateRequest request) {
+        User currentUser = getCurrentUser();
+
+        // ⭐ LOG - Bắt đầu update
+        log.info("🔄 Starting updatePromotion for ID: {}", id);
+        log.info("📦 Request payload: {}", request);
+
+        Promotion promotion = promotionRepository.findByIdWithDetails(id)
+                .orElseThrow(() -> new AppException(ErrorCode.PROMOTION_NOT_FOUND));
+
+        if (promotion.getStatus() == PromotionStatus.DELETED || promotion.getDeletedAt() != null) {
+            throw new AppException(ErrorCode.PROMOTION_NOT_FOUND);
+        }
+
+        Promotion oldPromotion = promotionMapper.clonePromotion(promotion, promotionDetailMapper);
+
+        LocalDateTime newStart = request.getStartDate() != null ? request.getStartDate() : promotion.getStartDate();
+        LocalDateTime newEnd = request.getEndDate() != null ? request.getEndDate() : promotion.getEndDate();
+        if (newStart != null && newEnd != null && (newStart.isAfter(newEnd) || newStart.isEqual(newEnd))) {
+            throw new AppException(ErrorCode.PROMOTION_INVALID_DATE);
+        }
+
+        promotionMapper.updatePromotionFromRequest(request, promotion);
+
+        if (request.getStatus() != null) {
+            if (request.getStatus() == PromotionStatus.DELETED) {
+                promotion.setDeletedAt(LocalDateTime.now());
+            } else {
+                promotion.setDeletedAt(null);
+            }
+            promotion.setStatus(request.getStatus());
+        }
+
+        // ⭐ LOG - Kiểm tra promotionDetails từ request
+        log.info("📦 Promotion details from request: {}", request.getPromotionDetails());
+
+        if (request.getPromotionDetails() != null) {
+            // ⭐ LOG - Số lượng detail
+            log.info("📦 Number of promotion details: {}", request.getPromotionDetails().size());
+
+            // ⭐ LOG chi tiết từng detail
+            for (int i = 0; i < request.getPromotionDetails().size(); i++) {
+                PromotionDetailRequest detailReq = request.getPromotionDetails().get(i);
+                log.info("📦 Detail {} - productId: {}, promotionType: {}, discountValue: {}",
+                        i,
+                        detailReq.getProductId(),
+                        detailReq.getPromotionType(),
+                        detailReq.getDiscountValue()
+                );
+
+                if (detailReq.getProductId() == null) {
+                    log.error("❌ productId is NULL at index {}", i);
+                    throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
+                }
+
+                Product product = productRepository.findById(detailReq.getProductId())
+                        .orElseThrow(() -> {
+                            log.error("❌ Product not found with ID: {}", detailReq.getProductId());
+                            return new AppException(ErrorCode.PRODUCT_NOT_FOUND);
+                        });
+
+                if (product.getStatus() == ProductStatus.DELETED) {
+                    log.error("❌ Product is DELETED with ID: {}", detailReq.getProductId());
+                    throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
+                }
+
+                validateProductHasActivePromotionForUpdate(detailReq.getProductId(), id);
+                validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getSalePrice());
+            }
+
+            // ⭐ LOG - Xóa details cũ
+            log.info("🗑️ Clearing old promotion details, count: {}", promotion.getPromotionDetails().size());
+            promotion.getPromotionDetails().clear();
+            log.info("✅ Old promotion details cleared");
+
+            // ⭐ LOG - Thêm details mới
+            log.info("📦 Adding new promotion details...");
+            for (PromotionDetailRequest detailReq : request.getPromotionDetails()) {
+                log.info("📦 Processing detail - productId: {}", detailReq.getProductId());
+
+                Product product = productRepository.findById(detailReq.getProductId())
+                        .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
+
+                if (product.getStatus() == ProductStatus.DELETED) {
+                    throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
+                }
+
+                validateDiscount(detailReq.getPromotionType(), detailReq.getDiscountValue(), product.getSalePrice());
+
+                PromotionDetail detail = PromotionDetail.builder()
+                        .promotion(promotion)
+                        .product(product)  // ⭐ Đảm bảo product không null
+                        .promotionType(detailReq.getPromotionType())
+                        .discountValue(detailReq.getDiscountValue())
+                        .build();
+
+                log.info("✅ Created PromotionDetail: {}", detail);
+                promotion.getPromotionDetails().add(detail);
+            }
+        } else {
+            log.info("ℹ️ No promotion details in request");
+        }
+
+        // ⭐ LOG - Lưu promotion
+        log.info("💾 Saving promotion with {} details", promotion.getPromotionDetails().size());
+        promotion.setUpdatedAt(LocalDateTime.now());
+        Promotion saved = promotionRepository.save(promotion);
+
+        log.info("✅ Promotion updated successfully: {}", saved.getPromotionId());
+        auditService.logPromotionUpdate(oldPromotion, saved, request.getReason(), request.getNote(), currentUser);
+
+        return convertToPromotionResponseWithCalculations(saved);
+    }
+
+    private void validateProductHasActivePromotion(UUID productId) {
+        if (promotionDetailRepository.existsActivePromotionForProduct(productId, PromotionStatus.ACTIVE, null)) {
+            throw new AppException(ErrorCode.PRODUCT_HAS_ACTIVE_PROMOTION);
+        }
+    }
+
+    private void validateProductHasActivePromotionForUpdate(UUID productId, UUID currentPromotionId) {
+        if (promotionDetailRepository.existsActivePromotionForProduct(productId, PromotionStatus.ACTIVE, currentPromotionId)) {
+            throw new AppException(ErrorCode.PRODUCT_HAS_ACTIVE_PROMOTION);
+        }
+    }
+
+    private String generatePromotionCode() {
+        String code;
+        do {
+            code = "PRM" + UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase();
+        } while (promotionRepository.existsByPromotionCode(code));
+        return code;
+    }
+
+    private User getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        String userId = authentication.getName();
+        log.info("=== DEBUG: UserId from SecurityContext: '{}' ===", userId);
+
+        if (userId == null || userId.isEmpty()) {
+            throw new AppException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        return userRepository.findById(userId)
+                .orElseThrow(() -> {
+                    log.error("User not found with userId: '{}'", userId);
+                    return new AppException(ErrorCode.USER_NOT_FOUND);
+                });
+    }
+
+    private BigDecimal calculateDiscountAmount(BigDecimal price, PromotionType type, BigDecimal value) {
+        if (price == null || value == null) {
+            return BigDecimal.ZERO;
+        }
+
+        if (type == PromotionType.PERCENTAGE) {
+            return price.multiply(value)
+                    .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
+        } else if (type == PromotionType.FIXED_AMOUNT) {
+            return value.min(price);
+        }
+        return BigDecimal.ZERO;
+    }
+
+    private PromotionResponse convertToPromotionResponseWithCalculations(Promotion promotion) {
+        PromotionResponse response = promotionMapper.toPromotionResponse(promotion);
+        if (response.getPromotionDetails() != null && !response.getPromotionDetails().isEmpty()) {
+            for (PromotionDetailResponse detailResponse : response.getPromotionDetails()) {
+                PromotionDetail detail = promotion.getPromotionDetails().stream()
+                        .filter(d -> d.getPromotionDetailId().equals(detailResponse.getPromotionDetailId()))
+                        .findFirst()
+                        .orElse(null);
+                if (detail != null) {
+                    BigDecimal discountAmount = calculateDiscountAmount(
+                            detailResponse.getSalePrice(),
+                            detail.getPromotionType(),
+                            detail.getDiscountValue()
+                    );
+                    BigDecimal promotionPrice = detailResponse.getSalePrice().subtract(discountAmount);
+                    if (promotionPrice.compareTo(BigDecimal.ZERO) < 0) {
+                        promotionPrice = BigDecimal.ZERO;
+                    }
+                    detailResponse.setDiscountAmount(discountAmount);
+                    detailResponse.setPromotionPrice(promotionPrice);
+                    detailResponse.setPromotionType(detail.getPromotionType());
+                }
+            }
+        }
+        return response;
+    }
+
+    private void validateDiscount(PromotionType type, BigDecimal value, BigDecimal price) {
+        if (value == null || value.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new AppException(ErrorCode.PROMOTION_DISCOUNT_INVALID);
+        }
+        if (type == PromotionType.PERCENTAGE) {
+            if (value.compareTo(BigDecimal.valueOf(100)) > 0) {
+                throw new AppException(ErrorCode.PROMOTION_DISCOUNT_INVALID);
+            }
+        } else if (type == PromotionType.FIXED_AMOUNT) {
+            if (value.compareTo(price) > 0) {
+                throw new AppException(ErrorCode.PROMOTION_DISCOUNT_INVALID);
+            }
+        }
+    }
+
+    private Specification<Promotion> buildPromotionSpec(String keyword, PromotionStatus status) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (keyword != null && !keyword.isBlank()) {
+                String[] terms = keyword.trim().toLowerCase().split("\\s+");
+                for (String term : terms) {
+                    String searchTerm = "%" + term + "%";
+                    predicates.add(cb.or(
+                            cb.like(cb.lower(root.get("name")), searchTerm),
+                            cb.like(cb.lower(root.get("description")), searchTerm),
+                            cb.like(cb.lower(root.get("promotionCode")), searchTerm)
+                    ));
+                }
+            }
+
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            } else {
+                predicates.add(cb.notEqual(root.get("status"), PromotionStatus.DELETED));
+            }
+            predicates.add(cb.isNull(root.get("deletedAt")));
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    private Pageable buildPageable(Pageable pageable, String sortBy) {
+        if (sortBy == null || sortBy.isBlank()) {
+            sortBy = "createdAt_desc";
+        }
+        String[] parts = sortBy.split("_");
+        String field = parts[0];
+        if (field.equals("date")) {
+            field = "startDate";
+        }
+        Sort.Direction direction = (parts.length > 1 && parts[1].equalsIgnoreCase("asc"))
+                ? Sort.Direction.ASC
+                : Sort.Direction.DESC;
+
+        Set<String> allowedFields = Set.of("name", "startDate", "endDate", "status", "createdAt");
+        if (!allowedFields.contains(field)) {
+            throw new AppException(ErrorCode.INVALID_SORT_OPTION);
+        }
+
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by(direction, field));
+    }
+}

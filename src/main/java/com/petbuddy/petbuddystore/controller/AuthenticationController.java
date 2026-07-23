@@ -5,20 +5,23 @@ import com.petbuddy.petbuddystore.common.enums.Role;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.*;
 import com.petbuddy.petbuddystore.dto.response.AuthenticationResponse;
+import com.petbuddy.petbuddystore.dto.response.ResetOtpResponse;
 import com.petbuddy.petbuddystore.service.AuthenticationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.util.UriComponentsBuilder;
 
+import java.io.IOException;
 import java.text.ParseException;
 
 @RestController
@@ -26,6 +29,7 @@ import java.text.ParseException;
 @RequestMapping("/api/auth")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Authentication API", description = "Bảo mật user")
+@Slf4j
 public class AuthenticationController {
     AuthenticationService authenticationService;
 
@@ -42,6 +46,19 @@ public class AuthenticationController {
     public ResponseEntity<ApiResponse<AuthenticationResponse>> authenticate(@RequestBody AuthenticationRequest request){
         return ResponseEntity.status(HttpStatus.OK)
                 .body(ApiResponse.success("Login successfully", authenticationService.authenticate(request)));
+    }
+
+    @GetMapping("/outbound/authentication")
+    @Operation(description = "Login with Google")
+    public void outboundAuthenticate(@RequestParam("code") String code, HttpServletResponse response) throws IOException {
+        AuthenticationResponse authResponse = authenticationService.outboundAuthenticate(code);
+        String redirectUrl = UriComponentsBuilder
+                .fromUriString("http://localhost:5173/oauth2/success")
+                .queryParam("accessToken", authResponse.getAccessToken())
+                .queryParam("refreshToken", authResponse.getRefreshToken())
+                .build()
+                .toUriString();
+        response.sendRedirect(redirectUrl);
     }
 
     @PostMapping("/logout")
@@ -87,8 +104,14 @@ public class AuthenticationController {
                 .body(ApiResponse.success("Otp forgot password has been sent to your email"));
     }
 
+    @PostMapping("/verify-reset-otp")
+    public ResponseEntity<ApiResponse<ResetOtpResponse>> verifyResetOtp(@Valid @RequestBody VerifyEmailRequest request){
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(ApiResponse.success("Otp verify successfully", authenticationService.verifyResetOtp(request)));
+    }
+
     @PostMapping("/reset-password")
-    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request){
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) throws ParseException, JOSEException {
         authenticationService.resetPassword(request);
         return ResponseEntity.status(HttpStatus.OK)
                 .body(ApiResponse.success("Password reset successfully"));

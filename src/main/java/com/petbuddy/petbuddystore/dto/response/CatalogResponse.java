@@ -22,7 +22,11 @@ public class CatalogResponse {
     BigDecimal price;
     WeightRange weightRange;
     Integer durationMinute;
+    Integer bufferTime;
     CatalogStatus status;
+    String additionalDurationConfig;
+    BigDecimal additionalPricePerMinute;
+    String imageUrl;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 }

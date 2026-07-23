@@ -1,6 +1,5 @@
 package com.petbuddy.petbuddystore.dto.request;
 
-import com.petbuddy.petbuddystore.common.enums.CageSize;
 import com.petbuddy.petbuddystore.common.enums.CageStatus;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -11,8 +10,6 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CageUpdateRequest {
-    String cageCode;
-    CageSize cageSize;
-    Integer capacity;
     CageStatus cageStatus;
+    String note;
 }

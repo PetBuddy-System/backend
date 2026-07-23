@@ -14,5 +14,5 @@ public interface ShippingRuleService {
     List<ShippingRule> getAllShippingRules();
     ShippingRule getShippingRuleById(Long id);
     void deleteShippingRule(Long id);
-
+    void validateLocation(double lat, double lon);
 }

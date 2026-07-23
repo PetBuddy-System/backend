@@ -15,6 +15,7 @@ public interface BlogMapper {
     Blog toBlog(BlogCreationRequest request);
 
     @Mapping(source = "user.userId", target = "userId")
+    @Mapping(source = "mediaFiles", target = "mediaFiles")
     BlogResponse toBlogResponse(Blog blog);
 
     void updateBlog(@MappingTarget Blog blog, BlogUpdateRequest request);

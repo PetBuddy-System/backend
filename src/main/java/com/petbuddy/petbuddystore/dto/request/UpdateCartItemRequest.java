@@ -12,5 +12,5 @@ import lombok.experimental.FieldDefaults;
 public class UpdateCartItemRequest {
     Integer quantity;
 
-    private Boolean acceptPriceChange;
+   Boolean acceptPriceChange;
 }

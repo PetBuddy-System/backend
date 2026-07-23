@@ -1,9 +1,10 @@
 package com.petbuddy.petbuddystore.service;
 
+import com.petbuddy.petbuddystore.common.enums.CatalogStatus;
 import com.petbuddy.petbuddystore.dto.request.CatalogCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.CatalogUpdateRequest;
 import com.petbuddy.petbuddystore.dto.response.CatalogResponse;
-import com.petbuddy.petbuddystore.model.Catalog;
+import org.springframework.web.multipart.MultipartFile;
 
 
 import java.util.List;
@@ -14,4 +15,7 @@ public interface CatalogService {
     CatalogResponse createCatalog(CatalogCreationRequest request);
     CatalogResponse getCatalogById(int catalogId);
     CatalogResponse updateCatalog(int catalogId, CatalogUpdateRequest updateRequest);
+    CatalogResponse updateCatalogStatus(Integer catalogId, CatalogStatus status);
+    CatalogResponse uploadCatalogImage(Integer catalogId, MultipartFile file);
+    CatalogResponse deleteCatalogImage(Integer catalogId);
 }

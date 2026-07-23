@@ -1,14 +1,20 @@
 package com.petbuddy.petbuddystore.service.impl;
 
+import com.petbuddy.petbuddystore.common.enums.AttendanceStatus;
+import com.petbuddy.petbuddystore.common.enums.BookingStatus;
 import com.petbuddy.petbuddystore.common.enums.Role;
 import com.petbuddy.petbuddystore.common.enums.ScheduleStatus;
+import com.petbuddy.petbuddystore.common.enums.StaffTask;
+import com.petbuddy.petbuddystore.common.enums.UserStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.response.StaffScheduleResponse;
 import com.petbuddy.petbuddystore.mapper.StaffScheduleMapper;
 import com.petbuddy.petbuddystore.model.StaffSchedule;
 import com.petbuddy.petbuddystore.model.User;
+import com.petbuddy.petbuddystore.model.WorkSchedule;
 import com.petbuddy.petbuddystore.repository.StaffScheduleRepository;
+import com.petbuddy.petbuddystore.repository.BookingRepository;
 import com.petbuddy.petbuddystore.repository.UserRepository;
 import com.petbuddy.petbuddystore.service.StaffScheduleService;
 import lombok.AccessLevel;
@@ -31,6 +37,7 @@ import java.util.List;
 public class StaffScheduleServiceImpl implements StaffScheduleService {
     StaffScheduleMapper staffScheduleMapper;
     StaffScheduleRepository staffScheduleRepository;
+    BookingRepository bookingRepository;
     UserRepository userRepository;
 
     @Override
@@ -39,6 +46,33 @@ public class StaffScheduleServiceImpl implements StaffScheduleService {
 
         List<StaffSchedule> staffSchedules = staffScheduleRepository.findMySchedules(staff.getUserId(), fromDate, toDate, scheduleStatus);
         return staffSchedules.stream()
+                .map(staffScheduleMapper::toStaffScheduleResponse)
+                .toList();
+    }
+
+    @Override
+    public StaffScheduleResponse getStaffSchedule(String staffScheduleId) {
+        StaffSchedule staffSchedule = staffScheduleRepository.findByIdWithWorkScheduleAndStaff(staffScheduleId)
+                .orElseThrow(() -> new AppException(ErrorCode.STAFF_SCHEDULE_NOT_EXISTED));
+        return staffScheduleMapper.toStaffScheduleResponse(staffSchedule);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StaffScheduleResponse> getWorkingGroomers(LocalDate date) {
+        User coordinator = getCurrentStaff();
+        if (coordinator.getStaffTask() != StaffTask.COORDINATOR) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        LocalDate targetDate = date == null ? LocalDate.now() : date;
+        return staffScheduleRepository.findWorkingSchedulesByStaffTask(
+                        targetDate,
+                        ScheduleStatus.WORKING,
+                        StaffTask.GROOMER,
+                        UserStatus.ACTIVE
+                )
+                .stream()
                 .map(staffScheduleMapper::toStaffScheduleResponse)
                 .toList();
     }
@@ -54,10 +88,33 @@ public class StaffScheduleServiceImpl implements StaffScheduleService {
             throw new AppException(ErrorCode.CANNOT_CHECKIN);
         }
 
-        staffSchedule.setScheduleStatus(ScheduleStatus.WORKING);
-        staffSchedule.setCheckInAt(LocalDateTime.now());
-        return staffScheduleMapper.toStaffScheduleResponse(staffScheduleRepository.save(staffSchedule));
+        LocalDateTime now = LocalDateTime.now();
+        WorkSchedule workSchedule = staffSchedule.getWorkSchedule();
+        LocalDateTime startTime = LocalDateTime.of(workSchedule.getWorkDate(), workSchedule.getStartTime());
 
+        LocalDateTime earlyCheckIn = startTime.minusMinutes(15);
+        LocalDateTime onTimeCheckIn = startTime.plusMinutes(5);
+        LocalDateTime absentCheckIn = startTime.plusMinutes(30);
+
+        if (now.isBefore(earlyCheckIn)){
+            throw new AppException(ErrorCode.TOO_EARLY_TO_CHECKIN);
+        }
+
+        if (now.isAfter(absentCheckIn)){
+            staffSchedule.setAttendanceStatus(AttendanceStatus.ABSENT);
+            staffScheduleRepository.save(staffSchedule);
+            throw new AppException(ErrorCode.MISSED_CHECKIN);
+        }
+
+        if (!now.isAfter(onTimeCheckIn)) {
+            staffSchedule.setAttendanceStatus(AttendanceStatus.ON_TIME);
+        } else {
+            staffSchedule.setAttendanceStatus(AttendanceStatus.LATE);
+        }
+
+        staffSchedule.setScheduleStatus(ScheduleStatus.WORKING);
+        staffSchedule.setCheckInAt(now);
+        return staffScheduleMapper.toStaffScheduleResponse(staffScheduleRepository.save(staffSchedule));
     }
 
     @Override
@@ -71,8 +128,17 @@ public class StaffScheduleServiceImpl implements StaffScheduleService {
             throw new AppException(ErrorCode.CANNOT_CHECKOUT);
         }
 
+        if (!bookingRepository.findByStaffScheduleAndBookingStatusIn(
+                staffSchedule,
+                List.of(BookingStatus.ACCEPTED, BookingStatus.ON_THE_WAY, BookingStatus.IN_PROGRESS, BookingStatus.READY_FOR_PICKUP)
+        ).isEmpty()) {
+            throw new AppException(ErrorCode.STAFF_HAS_UNFINISHED_BOOKING);
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
         staffSchedule.setScheduleStatus(ScheduleStatus.COMPLETED);
-        staffSchedule.setCheckOutAt(LocalDateTime.now());
+        staffSchedule.setCheckOutAt(now);
         return staffScheduleMapper.toStaffScheduleResponse(staffScheduleRepository.save(staffSchedule));
     }
 

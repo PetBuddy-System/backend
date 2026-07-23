@@ -3,14 +3,17 @@ package com.petbuddy.petbuddystore.controller;
 import com.petbuddy.petbuddystore.common.enums.ScheduleStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.response.StaffScheduleResponse;
+import com.petbuddy.petbuddystore.dto.response.UserResponse;
 import com.petbuddy.petbuddystore.dto.response.WorkScheduleResponse;
 import com.petbuddy.petbuddystore.service.StaffScheduleService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -30,6 +33,21 @@ public class StaffScheduleController {
                                                                                    @RequestParam(required = false) ScheduleStatus scheduleStatus) {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(ApiResponse.success(staffScheduleService.getMySchedules(fromDate, toDate, scheduleStatus)));
+    }
+
+    @GetMapping("/{staffScheduleId}")
+    @Operation(description = "Lấy thông tin chi tiết lịch làm việc staff theo id")
+    public ResponseEntity<ApiResponse<StaffScheduleResponse>> getStaffSchedule(@PathVariable String staffScheduleId){
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(ApiResponse.success(staffScheduleService.getStaffSchedule(staffScheduleId)));
+    }
+
+    @GetMapping("/working-groomers")
+    @PreAuthorize("hasRole('STAFF') and hasAuthority('TASK_COORDINATOR')")
+    @Operation(description = "Lấy danh sách Groomer đã check-in để coordinator gán booking")
+    public ResponseEntity<ApiResponse<List<StaffScheduleResponse>>> getWorkingGroomers(
+            @RequestParam(required = false) LocalDate date) {
+        return ResponseEntity.ok(ApiResponse.success(staffScheduleService.getWorkingGroomers(date)));
     }
 
     @PatchMapping("/{staffScheduleId}/check-in")

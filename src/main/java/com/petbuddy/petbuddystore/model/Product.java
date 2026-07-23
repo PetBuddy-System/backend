@@ -1,10 +1,8 @@
 package com.petbuddy.petbuddystore.model;
 
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
+import com.petbuddy.petbuddystore.common.enums.ProductUnit;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.hibernate.annotations.CreationTimestamp;
@@ -31,21 +29,31 @@ public class Product {
     @Column(name = "product_id")
     UUID productId;
 
-
     @Column(name = "product_code", nullable = false, unique = true, length = 12)
     String productCode;
 
-    @NotBlank(message = "PRODUCT_NAME_REQUIRED")
-    @Column(nullable = false, unique = true, columnDefinition = "NVARCHAR(255)")
+    @Column(nullable = false, columnDefinition = "NVARCHAR(255)")
     String name;
 
-    @Column(columnDefinition = "NVARCHAR(2000)")
+    @Column(columnDefinition = "TEXT")
     String description;
 
-    @NotNull(message = "PRODUCT_PRICE_REQUIRED")
-    @DecimalMin(value = "0.0", inclusive = false, message = "PRODUCT_PRICE_INVALID")
+    @Column(columnDefinition = "TEXT")
+    private String ingredients;
+
+    @Column(columnDefinition = "TEXT")
+    private String usageInstructions;
+
     @Column(nullable = false)
-    BigDecimal price;
+    BigDecimal salePrice;
+
+    @Column(nullable = false)
+    private Integer weight;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    ProductUnit unit = ProductUnit.PIECE;
 
     @Column(columnDefinition = "NVARCHAR(100)")
     String brandName;
@@ -61,8 +69,9 @@ public class Product {
     @JoinColumn(name = "category_id")
     Category category;
 
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    List<String> imageUrls = new ArrayList<>();
+    List<MediaFile> mediaFiles = new ArrayList<>();
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
@@ -74,4 +83,17 @@ public class Product {
 
     @UpdateTimestamp
     LocalDateTime updatedAt;
+
+    @Builder.Default
+    Long lastBatchSequence = 0L;
+
+    @OneToMany(mappedBy = "product")
+    @Builder.Default
+    List<PromotionDetail> promotionDetails = new ArrayList<>();
+
+    Long thumbnailMediaId;
+
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    List<Review> reviews = new ArrayList<>();
 }

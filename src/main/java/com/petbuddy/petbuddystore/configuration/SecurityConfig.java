@@ -1,9 +1,11 @@
 package com.petbuddy.petbuddystore.configuration;
 
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -22,31 +24,35 @@ import java.util.List;
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
-    private final String[] PUBLIC_ENDPOINTS = {"/api/users", "/api/auth/signup", "/api/auth/login",
-            "/api/auth/logout", "/api/auth/introspect", "/api/auth/refresh", "/api/auth/verify-email",
-            "/api/auth/resend-otp", "/api/auth/forgot-password", "/api/auth/reset-password"};
+    private final String[] PUBLIC_POST_ENDPOINTS = {"/api/users", "/api/auth/signup", "/api/auth/login",
+            "/api/auth/introspect", "/api/auth/refresh", "/api/auth/verify-email", "/api/auth/resend-otp",
+            "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/verify-reset-otp","/api/returns/calculate-refund",
+            "/api/chatbot/chat"};
 
-    private final String[] GET_ENDPOINTS = {"/api/categories", "/api/categories/{categoryId}", "/api/products",
-            "/api/products/{productId}", "/api/blogs", "/api/blogs/**"
+    private final String[] PUBLIC_GET_ENDPOINTS = {"/api/categories", "/api/categories/{categoryId}", "/api/products",
+            "/api/products/{productId}", "/api/catalogs", "/api/catalogs/**", "/api/blogs", "/api/blogs/**",
+            "/api/auth/outbound/authentication","/api/products/{productId}/reviews","/api/payments/vnpay/ipn"
     };
 
     private static final String[] PUBLIC_ENDPOINTS_SWAGGER = {
+            "/v3/api-docs",
             "/v3/api-docs/**",
-            "/swagger-ui/**",
             "/swagger-ui.html",
-            "/pet-buddy/v3/api-docs/**",
-            "/pet-buddy/swagger-ui/**",
-            "/pet-buddy/swagger-ui.html",
+            "/swagger-ui/**",
+            "/swagger-ui/index.html"
     };
+
+    private static final String[] WEBHOOK_ENDPOINT = {"/api/payments/webhook","/api/payments/momo/ipn"};
 
     private final CustomJwtDecoder customJwtDecoder;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity.authorizeHttpRequests(auth ->
-                auth.requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS).permitAll()
-                        .requestMatchers(HttpMethod.GET, GET_ENDPOINTS).permitAll()
-                        .requestMatchers(PUBLIC_ENDPOINTS_SWAGGER).permitAll()
+                auth.requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
+                        .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
+                        .requestMatchers(HttpMethod.GET,PUBLIC_ENDPOINTS_SWAGGER).permitAll()
+                        .requestMatchers(HttpMethod.POST, WEBHOOK_ENDPOINT).permitAll()
                         .anyRequest().authenticated());
 
         httpSecurity.oauth2ResourceServer(oauth2 ->
@@ -59,7 +65,6 @@ public class SecurityConfig {
 
         httpSecurity.csrf(AbstractHttpConfigurer::disable);
         httpSecurity.cors(cors -> cors.configurationSource(corsConfigurationSource()));
-
         return httpSecurity.build();
     }
 
@@ -77,7 +82,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration corsConfiguration = new CorsConfiguration();
-        corsConfiguration.setAllowedOrigins(List.of("http://localhost:5173"));
+        corsConfiguration.setAllowedOrigins(List.of("http://localhost:5173", "https://petbuddy2.vercel.app"));
         corsConfiguration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         corsConfiguration.setAllowedHeaders(List.of("*"));
         corsConfiguration.setAllowCredentials(true);

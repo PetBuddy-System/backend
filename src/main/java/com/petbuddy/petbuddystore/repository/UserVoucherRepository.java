@@ -9,4 +9,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface UserVoucherRepository extends CrudRepository<UserVouchers, String> {
     long countByUserAndVoucher(User user, Voucher voucher);
+    void deleteByUserAndVoucher(User user, Voucher voucher);
 }

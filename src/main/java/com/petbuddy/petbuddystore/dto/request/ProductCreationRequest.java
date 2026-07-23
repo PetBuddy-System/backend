@@ -1,9 +1,7 @@
 package com.petbuddy.petbuddystore.dto.request;
 
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
+import com.petbuddy.petbuddystore.common.enums.ProductUnit;
+import jakarta.validation.constraints.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,16 +17,31 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ProductCreationRequest {
     @NotBlank(message = "PRODUCT_NAME_REQUIRED")
+    @Size(max = 255, message = "PRODUCT_NAME_INVALID")
     String name;
 
     String description;
 
+    String ingredients;
+
+    String usageInstructions;
+
+    @NotNull(message = "PRODUCT_WEIGHT_REQUIRED")
+    @Min(value = 1, message = "PRODUCT_WEIGHT_INVALID")
+    @Max(value = 100000, message = "PRODUCT_WEIGHT_INVALID")
+    Integer weight; // gram (g)
+
     @NotNull(message = "PRODUCT_PRICE_REQUIRED")
     @DecimalMin(value = "0.0", inclusive = false, message = "PRODUCT_PRICE_INVALID")
-    BigDecimal price;
+    private BigDecimal salePrice;
 
+    @NotNull(message = "PRODUCT_UNIT_REQUIRED")
+    private ProductUnit unit;
+
+    @NotBlank(message = "PRODUCT_BRAND_REQUIRED")
+    @Size(max = 255, message = "PRODUCT_BRAND_INVALID")
     String brandName;
 
-    @NotNull(message = "CATEGORY_REQUIRED")
+    @NotNull(message = "CATEGORY_ID_REQUIRED")
     Long categoryId;
 }

@@ -1,6 +1,5 @@
 package com.petbuddy.petbuddystore.dto.response;
 
-import com.petbuddy.petbuddystore.common.enums.ScheduleStatus;
 import com.petbuddy.petbuddystore.common.enums.ShiftType;
 import lombok.*;
 import lombok.experimental.FieldDefaults;

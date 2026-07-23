@@ -10,4 +10,6 @@ public interface StaffScheduleService {
     List<StaffScheduleResponse> getMySchedules(LocalDate fromDate, LocalDate toDate, ScheduleStatus status);
     StaffScheduleResponse checkIn(String staffScheduleId);
     StaffScheduleResponse checkOut(String staffScheduleId);
+    StaffScheduleResponse getStaffSchedule(String staffScheduleId);
+    List<StaffScheduleResponse> getWorkingGroomers(LocalDate date);
 }

@@ -15,8 +15,13 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
 
     boolean existsByProductCode(String productCode);
 
-    boolean existsByNameIgnoreCase(String name);
+    boolean existsByNameIgnoreCaseAndStatusNot(String name, ProductStatus status);
 
-    Optional<Product> findByNameIgnoreCase(String name);
+    Optional<Product> findByNameIgnoreCaseAndStatusNot(String name, ProductStatus status);
 
-    boolean existsByCategory_CategoryIdAndStatusIn(Long categoryId, List<ProductStatus> statuses);}
+    boolean existsByCategory_CategoryIdAndStatusIn(Long categoryId, List<ProductStatus> statuses);
+
+    Optional<Product> findByProductCode(String productCode);
+
+    List<Product> findByProductCodeContaining(String productCode);
+}

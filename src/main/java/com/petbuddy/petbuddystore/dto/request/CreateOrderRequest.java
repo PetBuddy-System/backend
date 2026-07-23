@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -13,9 +14,12 @@ import java.util.List;
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CreateOrderRequest {
-    String userName;
+    String recipientName;
     String phoneNumber;
     String address;
     String note;
     String voucherCode;
+    Double latitude;
+    Double longitude;
+    String paymentMethod;
 }

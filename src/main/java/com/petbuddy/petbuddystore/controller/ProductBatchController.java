@@ -2,6 +2,7 @@ package com.petbuddy.petbuddystore.controller;
 
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
+import com.petbuddy.petbuddystore.dto.request.ProductBatchCreationListRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductBatchCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductBatchUpdateRequest;
 import com.petbuddy.petbuddystore.dto.response.ProductBatchResponse;
@@ -42,9 +43,9 @@ public class ProductBatchController {
     )
     public ResponseEntity<ApiResponse<List<ProductBatchResponse>>> createBatches(
             @PathVariable UUID productId,
-            @Valid @RequestBody List<ProductBatchCreationRequest> requests
+            @Valid @RequestBody ProductBatchCreationListRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Product batches created successfully", productBatchService.createBatches(productId, requests)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Product batches created successfully", productBatchService.createBatches(productId, request.getBatches())));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
@@ -64,14 +65,6 @@ public class ProductBatchController {
         return ResponseEntity.ok(ApiResponse.success(productBatchService.getBatchesByProduct(productId, keyword, status, sortBy, pageable)));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
-    @GetMapping("/api/batches/{batchId}")
-    @Operation(summary = "Get batch detail",
-            description = "Lấy chi tiết một batch theo batchId để hiển thị hoặc chỉnh sửa."
-    )
-    public ResponseEntity<ApiResponse<ProductBatchResponse>> getBatchDetail(@PathVariable UUID batchId) {
-        return ResponseEntity.ok(ApiResponse.success(productBatchService.getBatchDetail(batchId)));
-    }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @PatchMapping("/api/batches/{batchId}")
@@ -84,13 +77,12 @@ public class ProductBatchController {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @PostMapping(value = "/api/products/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Import products and batches from Excel",
-            description = "Import Excel theo cơ chế preview/confirm. confirm=false chỉ kiểm tra và trả warnings/errors, confirm=true mới tạo Product và ProductBatch thật."
-    )
+    @Operation(summary = "Import products and batches from Excel")
     public ResponseEntity<ApiResponse<ProductImportResponse>> importProductsAndBatches(
-            @RequestPart("file") MultipartFile file,
-            @RequestParam(defaultValue = "false") boolean confirm
+            @RequestPart("file") MultipartFile file
     ) {
-        return ResponseEntity.ok(ApiResponse.success(confirm ? "Import completed successfully" : "Import preview completed", productBatchService.importProductsAndBatches(file, confirm)));
+        ProductImportResponse response = productBatchService.importProductsAndBatches(file);
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(ApiResponse.success("Import successfully", response));
     }
 }

@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.dto.request;
 
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
+import com.petbuddy.petbuddystore.common.enums.ProductUnit;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 import lombok.*;
@@ -18,17 +19,38 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProductUpdateRequest {
+    @Size(max = 255, message = "PRODUCT_NAME_INVALID")
     String name;
 
     String description;
 
-    BigDecimal price;
+    String ingredients;
 
+    String usageInstructions;
+
+    @NotNull(message = "PRODUCT_WEIGHT_REQUIRED")
+    @Min(value = 1, message = "PRODUCT_WEIGHT_INVALID")
+    @Max(value = 100000, message = "PRODUCT_WEIGHT_INVALID")
+    Integer weight; // gram (g)
+
+    @DecimalMin(value = "0.01", message = "PRODUCT_PRICE_INVALID")
+    BigDecimal salePrice;
+
+    ProductUnit unit;
+
+    @Size(max = 255, message = "PRODUCT_BRAND_INVALID")
     String brandName;
 
     Long categoryId;
 
     ProductStatus status;
 
-    Boolean mergeIfNameExists;
+    Long thumbnailMediaId;
+
+    @Size(max = 500, message = "PRODUCT_REASON_INVALID")
+    String reason;
+
+    @Size(max = 1000, message = "PRODUCT_NOTE_INVALID")
+    String note;
+
 }

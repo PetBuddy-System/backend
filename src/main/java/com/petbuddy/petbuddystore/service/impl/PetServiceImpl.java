@@ -3,11 +3,12 @@ package com.petbuddy.petbuddystore.service.impl;
 import com.petbuddy.petbuddystore.common.enums.PetStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
-import com.petbuddy.petbuddystore.dto.request.PetCreationRequest;
-import com.petbuddy.petbuddystore.dto.request.PetUpdateRequest;
-import com.petbuddy.petbuddystore.dto.response.PetResponse;
+import com.petbuddy.petbuddystore.dto.request.PetProfileCreationRequest;
+import com.petbuddy.petbuddystore.dto.request.PetProfileUpdateRequest;
+import com.petbuddy.petbuddystore.dto.response.PetProfileResponse;
 import com.petbuddy.petbuddystore.mapper.PetMapper;
-import com.petbuddy.petbuddystore.model.Pet;
+import com.petbuddy.petbuddystore.model.MediaFile;
+import com.petbuddy.petbuddystore.model.PetProfile;
 import com.petbuddy.petbuddystore.model.User;
 import com.petbuddy.petbuddystore.repository.PetRepository;
 import com.petbuddy.petbuddystore.service.FileService;
@@ -20,6 +21,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -30,38 +35,77 @@ public class PetServiceImpl implements PetService {
     UserService userService;
 
     @Override
-    public PetResponse createPet(PetCreationRequest request, MultipartFile image) {
+    public PetProfileResponse createPet(PetProfileCreationRequest request, List<MultipartFile> images) {
+        String userId = SecurityContextHolder.getContext().getAuthentication().getName();
+        User user = userService.getUserEntityById(userId);
+        validatePetWeight(request.getWeight());
+
+        PetProfile petProfile = petMapper.toPetProfile(request);
+        petProfile.setUser(user);
+        petProfile.setPetStatus(PetStatus.ACTIVE);
+
+        List<MediaFile> mediaFiles = new ArrayList<>();
+
+        if (images != null && !images.isEmpty()){
+            mediaFiles = images.stream()
+                    .filter(image -> image != null && !image.isEmpty())
+                    .map(file -> {
+                        MediaFile mediaFile = fileService.uploadPetImage(file);
+                        mediaFile.setPetProfile(petProfile);
+                        return mediaFile;
+                    })
+                    .toList();
+        }
+
+        petProfile.setMediaFiles(mediaFiles);
+        return petMapper.toPetProfileResponse(petRepository.save(petProfile));
+    }
+
+    @Override
+    public PetProfileResponse getPetById(String petId) {
+        PetProfile petProfile = petRepository.findById(petId)
+                .orElseThrow(() -> new AppException(ErrorCode.PET_NOT_EXISTED));
+        return petMapper.toPetProfileResponse(petProfile);
+    }
+
+    @Override
+    public List<PetProfileResponse> getAllPetProfiles() {
         String userId = SecurityContextHolder.getContext().getAuthentication().getName();
         User user = userService.getUserEntityById(userId);
 
-        Pet pet = petMapper.toPet(request);
-        pet.setUser(user);
-        pet.setPetStatus(PetStatus.ACTIVE);
-
-        if (!image.isEmpty()){
-            String avatarUrl = fileService.uploadPetImage(image);
-            pet.setAvatarUrl(avatarUrl);
-        }
-        return petMapper.toPetResponse(petRepository.save(pet));
+        return petRepository.findByUser(user).stream()
+                .map(petMapper::toPetProfileResponse)
+                .collect(Collectors.toList());
     }
 
     @Override
-    public PetResponse getPetById(String petId) {
-        Pet pet = petRepository.findById(petId)
+    public PetProfileResponse updatePet(String petId, PetProfileUpdateRequest request, List<MultipartFile> images) {
+        PetProfile petProfile = petRepository.findById(petId)
                 .orElseThrow(() -> new AppException(ErrorCode.PET_NOT_EXISTED));
-        return petMapper.toPetResponse(pet);
+        validatePetWeight(request.getWeight());
+        petMapper.updatePet(request, petProfile);
+
+        if (images != null && !images.isEmpty()){
+            List<MediaFile> mediaFiles = images.stream()
+                    .filter(image -> image != null && !image.isEmpty())
+                    .map(file -> {
+                        MediaFile mediaFile = fileService.uploadPetImage(file);
+                        mediaFile.setPetProfile(petProfile);
+                        return mediaFile;
+                    })
+                    .toList();
+
+            if (!mediaFiles.isEmpty()) {
+                petProfile.getMediaFiles().clear();
+                petProfile.getMediaFiles().addAll(mediaFiles);
+            }
+        }
+        return petMapper.toPetProfileResponse(petRepository.save(petProfile));
     }
 
-    @Override
-    public PetResponse updatePet(String petId, PetUpdateRequest request, MultipartFile image) {
-        Pet pet = petRepository.findById(petId)
-                .orElseThrow(() -> new AppException(ErrorCode.PET_NOT_EXISTED));
-        petMapper.updatePet(request, pet);
-
-        if (!image.isEmpty()){
-            String avatarUrl = fileService.uploadPetImage(image);
-            pet.setAvatarUrl(avatarUrl);
+    private void validatePetWeight(Double weight) {
+        if (weight != null && (weight <= 0 || weight > 100)) {
+            throw new AppException(ErrorCode.INVALID_PET_WEIGHT);
         }
-        return petMapper.toPetResponse(petRepository.save(pet));
     }
 }

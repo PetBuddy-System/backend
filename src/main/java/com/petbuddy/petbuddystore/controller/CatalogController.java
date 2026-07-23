@@ -1,5 +1,6 @@
 package com.petbuddy.petbuddystore.controller;
 
+import com.petbuddy.petbuddystore.common.enums.CatalogStatus;
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.CatalogCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.CatalogUpdateRequest;
@@ -12,8 +13,11 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -27,6 +31,7 @@ public class CatalogController {
 
 
     @PostMapping("/create")
+    @PreAuthorize("hasRole('MANAGER')")
     @Operation(
             summary = "Create pet service catalog",
             description = "Tạo mới một dịch vụ chăm sóc thú cưng."
@@ -64,6 +69,7 @@ public class CatalogController {
         );
     }
     @PutMapping("/{catalogId}/update")
+    @PreAuthorize("hasRole('MANAGER')")
     @Operation(
             summary = "Update catalog",
             description = "Cập nhật dịch vụ chăm sóc thú cưng (hỗ trợ cập nhật lẻ các trường)."
@@ -75,6 +81,46 @@ public class CatalogController {
                 ApiResponse.success(
                         "Catalog updated successfully",
                         catalogService.updateCatalog(catalogId, updateRequest)
+                )
+        );
+    }
+
+    @PutMapping("/{catalogId}/status")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Update catalog status")
+    public ResponseEntity<ApiResponse<CatalogResponse>> updateCatalogStatus(
+            @PathVariable Integer catalogId,
+            @RequestParam CatalogStatus status) {
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Catalog status updated successfully",
+                        catalogService.updateCatalogStatus(catalogId, status)
+                )
+        );
+    }
+
+    @PutMapping(value = "/{catalogId}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Upload catalog image")
+    public ResponseEntity<ApiResponse<CatalogResponse>> uploadCatalogImage(
+            @PathVariable Integer catalogId,
+            @RequestPart("file") MultipartFile file) {
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Catalog image uploaded successfully",
+                        catalogService.uploadCatalogImage(catalogId, file)
+                )
+        );
+    }
+
+    @DeleteMapping("/{catalogId}/image")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Delete catalog image")
+    public ResponseEntity<ApiResponse<CatalogResponse>> deleteCatalogImage(@PathVariable Integer catalogId) {
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Catalog image deleted successfully",
+                        catalogService.deleteCatalogImage(catalogId)
                 )
         );
     }

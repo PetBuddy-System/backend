@@ -1,0 +1,14 @@
+package com.petbuddy.petbuddystore.common.enums;
+
+public enum MediaPurpose {
+    PET_PROFILE,
+    PRODUCT,
+    CATALOG,
+    BOOKING,
+    BLOG,
+    SHIPPING,
+    USER_PROFILE,
+    RETURN_REQUEST,
+    AI_CHAT,
+    ;
+}

@@ -1,6 +1,8 @@
 package com.petbuddy.petbuddystore.model;
 
+import com.petbuddy.petbuddystore.common.enums.AuthProvider;
 import com.petbuddy.petbuddystore.common.enums.Role;
+import com.petbuddy.petbuddystore.common.enums.StaffTask;
 import com.petbuddy.petbuddystore.common.enums.UserStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -42,12 +44,35 @@ public class User {
     @Column(name = "date_of_birth")
     LocalDate dateOfBirth;
 
+    @Column(name = "payment_fail_streak", nullable = false)
+    int paymentFailStreak = 0;
+
+    @Column(name = "suspended_until")
+    LocalDateTime suspendedUntil;
+
     @Column(columnDefinition = "VARCHAR(50)")
     @Enumerated(EnumType.STRING)
     Role role;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "staff_task", columnDefinition = "VARCHAR(50)")
+    StaffTask staffTask;
+
+    @Column(name = "specialization")
+    String specialization;
+
+    @Column(name = "introduction", columnDefinition = "TEXT")
+    String introduction;
+
+    @Column(name = "years_of_experience")
+    Integer yearsOfExperience;
+
+    @Enumerated(EnumType.STRING)
     UserStatus status;
+
+    @Column(name = "auth_provider")
+    @Enumerated(EnumType.STRING)
+    AuthProvider authProvider;
 
     @CreationTimestamp
     @Column(updatable = false)
@@ -57,9 +82,18 @@ public class User {
     LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    List<Pet> pets = new ArrayList<>();
+    List<PetProfile> petProfiles = new ArrayList<>();
 
     @OneToMany(mappedBy = "staff", cascade = CascadeType.ALL, orphanRemoval = true)
     List<StaffSchedule> staffSchedules = new ArrayList<>();
 
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    Cart cart;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    List<MediaFile> mediaFiles = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    List<Review> reviews = new ArrayList<>();
 }

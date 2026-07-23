@@ -36,8 +36,6 @@ public class Blog {
     @Column(nullable = false, columnDefinition = "TEXT")
     String content;
 
-    List<String> imageUrls = new ArrayList<>();
-
     @CreationTimestamp
     @Column(updatable = false)
     LocalDateTime createdAt;
@@ -48,4 +46,7 @@ public class Blog {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     User user;
+
+    @OneToMany(mappedBy = "blog", cascade = CascadeType.ALL, orphanRemoval = true)
+    List<MediaFile> mediaFiles = new ArrayList<>();
 }

@@ -9,6 +9,7 @@ import lombok.experimental.FieldDefaults;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -31,8 +32,6 @@ public class ProductBatch {
     @Column(name = "batch_code", nullable = false, unique = true, length = 30)
     String batchCode;
 
-    @NotNull(message = "PRODUCT_STOCK_REQUIRED")
-    @Min(value = 0, message = "PRODUCT_STOCK_INVALID")
     @Column(nullable = false)
     Integer stockQuantity;
 
@@ -45,6 +44,10 @@ public class ProductBatch {
     ProductStatus status = ProductStatus.ACTIVE;
 
     LocalDateTime deletedAt;
+
+    @Column(name = "base_price", precision = 19, scale = 2)
+    @Builder.Default
+    BigDecimal basePrice = BigDecimal.ZERO;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)

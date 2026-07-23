@@ -12,12 +12,7 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ResetPasswordRequest {
-    @NotBlank(message = "EMAIL_REQUIRED")
-    @Email(message = "INVALID_EMAIL")
-    String email;
-
-    @NotBlank(message = "OTP_REQUIRED")
-    String otp;
+    String resetToken;
 
     @NotBlank(message = "PASSWORD_REQUIRED")
     @Size(min = 8, message = "Password must be at least 8 characters")

@@ -5,13 +5,13 @@ import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import com.petbuddy.petbuddystore.common.enums.AuthProvider;
 import com.petbuddy.petbuddystore.common.enums.Role;
 import com.petbuddy.petbuddystore.common.enums.UserStatus;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.*;
-import com.petbuddy.petbuddystore.dto.response.AuthenticationResponse;
-import com.petbuddy.petbuddystore.dto.response.IntrospectResponse;
+import com.petbuddy.petbuddystore.dto.response.*;
 import com.petbuddy.petbuddystore.mapper.UserMapper;
 import com.petbuddy.petbuddystore.model.InvalidatedToken;
 import com.petbuddy.petbuddystore.model.User;
@@ -20,18 +20,20 @@ import com.petbuddy.petbuddystore.repository.UserRepository;
 import com.petbuddy.petbuddystore.service.AuthenticationService;
 import com.petbuddy.petbuddystore.service.EmailService;
 import com.petbuddy.petbuddystore.service.OtpService;
-import com.petbuddy.petbuddystore.session.CartSession;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.text.ParseException;
 import java.time.Instant;
@@ -50,11 +52,31 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     InvalidatedTokenRepository invalidatedTokenRepository;
     OtpService otpService;
     EmailService emailService;
-    CartSession cartSession;
+    RestClient restClient;
 
     @NonFinal
     @Value("${jwt.signerKey}")
     protected String SIGNER_KEY;
+
+    @NonFinal
+    @Value("${outbound.identity.google.client-id}")
+    protected String GOOGLE_CLIENT_ID;
+
+    @NonFinal
+    @Value("${outbound.identity.google.client-secret}")
+    protected String GOOGLE_CLIENT_SECRET;
+
+    @NonFinal
+    @Value("${outbound.identity.google.redirect-uri}")
+    protected String GOOGLE_REDIRECT_URI;
+
+    @NonFinal
+    @Value("${outbound.identity.google.token-uri}")
+    protected String GOOGLE_TOKEN_URI;
+
+    @NonFinal
+    @Value("${outbound.identity.google.user-info-uri}")
+    protected String GOOGLE_USER_INFO_URI;
 
     private void validateUserCreation(UserCreationRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -84,6 +106,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         user.setStatus(UserStatus.PENDING);
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         user.setRole(role);
+        user.setAuthProvider(AuthProvider.LOCAL);
         userRepository.save(user);
 
         String otp = otpService.generateOtp(user.getEmail());
@@ -96,7 +119,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
         validateUserStatus(user);
-        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
         boolean authenticated = passwordEncoder.matches(request.getPassword(), user.getPassword());
 
         if (!authenticated) {
@@ -105,7 +127,81 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         var accessToken = generateAccessToken(user);
         var refreshToken = generateRefreshToken(user);
-        cartSession.initialize(user.getUserId());
+        return AuthenticationResponse.builder()
+                .authenticated(true)
+                .userResponse(userMapper.toUserResponse(user))
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse outboundAuthenticate(String code) {
+        String requestBody = UriComponentsBuilder.newInstance()
+                .queryParam("code", code)
+                .queryParam("client_id", GOOGLE_CLIENT_ID)
+                .queryParam("client_secret", GOOGLE_CLIENT_SECRET)
+                .queryParam("redirect_uri", GOOGLE_REDIRECT_URI)
+                .queryParam("grant_type", "authorization_code")
+                .build()
+                .getQuery();
+
+        OutboundTokenResponse tokenResponse = restClient.post()
+                .uri(GOOGLE_TOKEN_URI)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(requestBody)
+                .retrieve()
+                .body(OutboundTokenResponse.class);
+
+        if (tokenResponse == null || tokenResponse.getAccessToken() == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        GoogleUserInfoResponse googleUser = restClient.get()
+                .uri(GOOGLE_USER_INFO_URI)
+                .headers(headers -> headers.setBearerAuth(tokenResponse.getAccessToken()))
+                .retrieve()
+                .body(GoogleUserInfoResponse.class);
+
+        if (googleUser == null || googleUser.getEmail() == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        if (!Boolean.TRUE.equals(googleUser.getEmailVerified())) {
+            throw new AppException(ErrorCode.USER_NOT_VERIFIED);
+        }
+
+        User user = userRepository.findByEmail(googleUser.getEmail())
+                .map(existingUser -> {
+                    switch (existingUser.getStatus()) {
+                        case SUSPENDED -> throw new AppException(ErrorCode.USER_SUSPENDED);
+                        case DELETED -> throw new AppException(ErrorCode.USER_DELETED);
+                        case INACTIVE -> throw new AppException(ErrorCode.USER_INACTIVE);
+                        case PENDING -> existingUser.setStatus(UserStatus.ACTIVE);
+                        case ACTIVE -> {}
+                        default -> throw new AppException(ErrorCode.UNAUTHENTICATED);
+                    }
+
+                    if (existingUser.getFullName() == null || existingUser.getFullName().isBlank()) {
+                        existingUser.setFullName(googleUser.getName());
+                    }
+                    return existingUser;
+                })
+                .orElseGet(() -> User.builder()
+                            .email(googleUser.getEmail())
+                            .fullName(googleUser.getName())
+                            .password(passwordEncoder.encode(UUID.randomUUID().toString()))
+                            .role(Role.CUSTOMER)
+                            .status(UserStatus.ACTIVE)
+                            .authProvider(AuthProvider.GOOGLE)
+                            .build()
+                );
+
+        userRepository.save(user);
+        String accessToken = generateAccessToken(user);
+        String refreshToken = generateRefreshToken(user);
+
         return AuthenticationResponse.builder()
                 .authenticated(true)
                 .userResponse(userMapper.toUserResponse(user))
@@ -158,8 +254,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         } catch (AppException e){
             log.info("Token already expired");
         }
-
-        cartSession.clear();
     }
 
     @Override
@@ -206,6 +300,11 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private String generateAccessToken(User user){
         JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
 
+        StringBuilder scope = new StringBuilder("ROLE_" + user.getRole());
+        if (user.getStaffTask() != null) {
+            scope.append(" TASK_").append(user.getStaffTask().name());
+        }
+
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .subject(user.getUserId())
                 .issuer("petbuddy.com")
@@ -214,7 +313,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                         Instant.now().plus(20, ChronoUnit.MINUTES).toEpochMilli()
                 ))
                 .jwtID(UUID.randomUUID().toString())
-                .claim("scope", "ROLE_" + user.getRole())
+                .claim("scope", scope.toString())
                 .build();
 
         Payload payload = new Payload(claims.toJSONObject());
@@ -223,7 +322,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         try {
             jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes()));
         } catch (JOSEException e) {
-            log.error("Cannot create token", e);
+            log.error("Cannot create access token", e);
             throw new RuntimeException(e);
         }
         return jwsObject.serialize();
@@ -248,7 +347,31 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         try {
             jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes()));
         } catch (JOSEException e) {
-            log.error("Cannot create token", e);
+            log.error("Cannot create refresh token", e);
+            throw new RuntimeException(e);
+        }
+        return jwsObject.serialize();
+    }
+
+    private String generateResetPasswordToken(User user){
+        JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
+        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .subject(user.getUserId())
+                .issuer("petbuddy.com")
+                .issueTime(new Date())
+                .expirationTime(new Date(
+                        Instant.now().plus(4, ChronoUnit.MINUTES).toEpochMilli()
+                ))
+                .jwtID(UUID.randomUUID().toString())
+                .claim("scope", "RESET_PASSWORD")
+                .build();
+
+        JWSObject jwsObject = new JWSObject(header, new Payload(claims.toJSONObject()));
+
+        try {
+            jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes()));
+        } catch (JOSEException e) {
+            log.error("Cannot create reset password token", e);
             throw new RuntimeException(e);
         }
         return jwsObject.serialize();
@@ -261,7 +384,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         Date expirationTime = signedJWT.getJWTClaimsSet().getExpirationTime();
         var verified = signedJWT.verify(verifier);
 
-        if (!verified && expirationTime.after(new Date())){
+        if (!verified || expirationTime.before(new Date())){
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
 
@@ -298,14 +421,31 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     @Override
-    public void resetPassword(ResetPasswordRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
+    public void resetPassword(ResetPasswordRequest request) throws ParseException, JOSEException {
+        SignedJWT signedJWT = verifyResetPasswordToken(request.getResetToken());
+        String userId;
+
+        try {
+            userId = signedJWT.getJWTClaimsSet().getSubject();
+        } catch (ParseException e) {
+            throw new AppException(ErrorCode.INVALID_TOKEN);
+        }
+
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-        otpService.verifyOtp(request.getEmail(), request.getOtp());
         validateNewPassword(request.getNewPassword(), request.getConfirmNewPassword(), user.getPassword());
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+
+        String jwtTokenId = signedJWT.getJWTClaimsSet().getJWTID();
+        Date expirationTime = signedJWT.getJWTClaimsSet().getExpirationTime();
+        InvalidatedToken invalidatedToken = InvalidatedToken.builder()
+                .id(jwtTokenId)
+                .expiryTime(expirationTime)
+                .build();
+
+        invalidatedTokenRepository.save(invalidatedToken);
     }
 
     @Override
@@ -317,5 +457,32 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         emailService.sendForgotPasswordOtp(user.getEmail(), otp);
     }
 
+    @Override
+    public ResetOtpResponse verifyResetOtp(VerifyEmailRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        otpService.verifyOtp(request.getEmail(), request.getOtp());
+        String resetToken = generateResetPasswordToken(user);
+        return ResetOtpResponse.builder()
+                .resetToken(resetToken)
+                .build();
+    }
 
+    private SignedJWT verifyResetPasswordToken(String token) throws ParseException, JOSEException {
+        SignedJWT signedJWT = verifyToken(token);
+
+        try {
+            String scope = signedJWT.getJWTClaimsSet().getStringClaim("scope");
+            if (!"RESET_PASSWORD".equals(scope)) {
+                log.warn("Reset password token invalid scope: {}", scope);
+                throw new AppException(ErrorCode.INVALID_TOKEN);
+            }
+
+            return signedJWT;
+
+        } catch (ParseException e) {
+            log.warn("Invalid token: {}", e.getMessage(), e);
+            throw new AppException(ErrorCode.INVALID_TOKEN);
+        }
+    }
 }

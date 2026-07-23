@@ -39,11 +39,23 @@ public interface WorkScheduleRepository extends JpaRepository<WorkSchedule, Stri
     Page<WorkSchedule> findWorkSchedules(@Param("fromDate") LocalDate fromDate, @Param("toDate") LocalDate toDate,
                                                    @Param("shiftType") ShiftType shiftType, Pageable pageable);
 
+    @Query("SELECT CASE WHEN COUNT(w) > 0 THEN true ELSE false END " +
+                  "FROM WorkSchedule w JOIN w.staffSchedules ss " +
+                  "WHERE w.workDate = :workDate AND ss.scheduleStatus IN " +
+                  "(com.petbuddy.petbuddystore.common.enums.ScheduleStatus.SCHEDULED, " +
+                  " com.petbuddy.petbuddystore.common.enums.ScheduleStatus.WORKING)")
+    boolean existsByWorkDateWithActiveStaff(@Param("workDate") LocalDate workDate);
 
-//
-//    List<StaffSchedule> findByStaff_UserIdOrderByWorkDateAscStartTimeAsc(String staffId);
-//    List<StaffSchedule> findByStaff_UserIdAndWorkDateBetweenOrderByWorkDateAscStartTimeAsc(String staffId, LocalDate fromDate, LocalDate toDate);
-//
-//    List<StaffSchedule> findByWorkDateOrderByStartTimeAsc(LocalDate workDate);
-//    List<StaffSchedule> findByWorkDateBetweenOrderByWorkDateAscStartTimeAsc(LocalDate fromDate, LocalDate toDate);
+    @Query("SELECT MIN(w.startTime) FROM WorkSchedule w JOIN w.staffSchedules ss " +
+            "WHERE w.workDate = :workDate AND ss.scheduleStatus IN " +
+            "(com.petbuddy.petbuddystore.common.enums.ScheduleStatus.SCHEDULED, " +
+            " com.petbuddy.petbuddystore.common.enums.ScheduleStatus.WORKING)")
+    Optional<LocalTime> findEarliestStartTimeWithActiveStaff(@Param("workDate") LocalDate workDate);
+
+    @Query("SELECT MAX(w.endTime) FROM WorkSchedule w JOIN w.staffSchedules ss " +
+            "WHERE w.workDate = :workDate AND ss.scheduleStatus IN " +
+            "(com.petbuddy.petbuddystore.common.enums.ScheduleStatus.SCHEDULED, " +
+            " com.petbuddy.petbuddystore.common.enums.ScheduleStatus.WORKING)")
+    Optional<LocalTime> findLatestEndTimeWithActiveStaff(@Param("workDate") LocalDate workDate);
+
 }

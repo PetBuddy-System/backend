@@ -8,6 +8,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,21 +47,35 @@ public class Order {
     @Column(columnDefinition = "NVARCHAR(255)")
     String address;
 
+    Double latitude;
+
+    Double longitude;
+
     BigDecimal shippingFee;
 
     BigDecimal totalAmount;
 
+    BigDecimal originalTotalAmount;
+
     BigDecimal discountAmount;
 
+    BigDecimal originalDiscountAmount;
+
+    BigDecimal shippingDiscountAmount;
+    
     BigDecimal finalAmount;
 
     @Column(columnDefinition = "NVARCHAR(500)")
     String note;
 
+    @Builder.Default
+    @Column(nullable = false)
+    Integer deliveryFailCount = 0;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     List<OrderDetail> orderDetails = new ArrayList<>();
 
-    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     Payment payment;
 
     @Enumerated(EnumType.STRING)
@@ -69,10 +84,35 @@ public class Order {
     @Column(name = "cancelled_at")
     LocalDateTime cancelledAt;
 
+    @Column(name = "cancel_reason")
+    String cancelReason;
+
     @CreationTimestamp
     @Column(updatable = false)
     LocalDateTime createdAt;
 
     @UpdateTimestamp
     LocalDateTime updatedAt;
+
+    LocalDateTime paymentExpiredAt;
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    List<MediaFile> mediaFiles = new ArrayList<>();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "staff_schedule_id")
+    StaffSchedule staffSchedule;
+
+    @Column(name = "shipped_at")
+    LocalDateTime shippedAt;
+
+    @Column(name = "estimated_delivery_at")
+    LocalDateTime estimatedDeliveryAt;
+
+    @Builder.Default
+    @Column(name = "post_coordinator_redelivery", nullable = false)
+    Boolean postCoordinatorRedelivery = false;
+
+    @Column(name = "negotiated_delivery_date")
+    LocalDate negotiatedDeliveryDate;
 }

@@ -20,5 +20,9 @@ public class CatalogCreationRequest {
     BigDecimal price;
     WeightRange weightRange;
     Integer durationMinute;
+    Integer bufferTime;
     CatalogStatus status;
+    String additionalDurationConfig;
+    BigDecimal additionalPricePerMinute;
+    String imageUrl;
 }

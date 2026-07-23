@@ -15,6 +15,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -30,6 +31,7 @@ public class BlogController {
     BlogService blogService;
     ObjectMapper objectMapper;
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(description = "Tạo mới Blog")
     public ResponseEntity<ApiResponse<BlogResponse>> createBlog(@RequestPart("data") String requestJson,
@@ -57,6 +59,7 @@ public class BlogController {
                 .body(ApiResponse.success(blogService.getBlogById(blogId)));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @PutMapping(value = "/{blogId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<BlogResponse>> updateBlog(
             @PathVariable String blogId,

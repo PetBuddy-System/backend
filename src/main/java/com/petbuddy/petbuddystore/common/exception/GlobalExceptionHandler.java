@@ -4,6 +4,7 @@ import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -32,16 +33,6 @@ public class GlobalExceptionHandler {
                 .status(errorCode.getHttpStatusCode())
                 .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage()));
     }
-
-//    @ExceptionHandler(value = AccessDeniedException.class)
-//    public ResponseEntity<ApiResponse<?>> handleAccessDeniedException(AccessDeniedException ex) {
-//        ErrorCode errorCode = ErrorCode.UNAUTHORIZED;
-////        log.info("AccessDeniedException: {}", ex.getMessage());
-//        return ResponseEntity
-//                .status(errorCode.getHttpStatusCode())
-//                .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage()));
-//
-//    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<?>> handlingValidationException(MethodArgumentNotValidException exception) {
@@ -80,5 +71,13 @@ public class GlobalExceptionHandler {
                         errorCode.getCode(),
                         errorCode.getMessage()
                 ));
+    }
+
+    @ExceptionHandler(AuthorizationDeniedException.class)
+    public ResponseEntity<ApiResponse<?>> handleAuthorizationDeniedException(AuthorizationDeniedException exception) {
+        ErrorCode errorCode = ErrorCode.ACCESS_DENIED;
+        return ResponseEntity
+                .status(errorCode.getHttpStatusCode())
+                .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage()));
     }
 }

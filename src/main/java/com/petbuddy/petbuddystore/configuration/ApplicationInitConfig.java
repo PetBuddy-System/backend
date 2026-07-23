@@ -1,6 +1,7 @@
 package com.petbuddy.petbuddystore.configuration;
 
 import com.petbuddy.petbuddystore.common.enums.Role;
+import com.petbuddy.petbuddystore.common.enums.StaffTask;
 import com.petbuddy.petbuddystore.common.enums.UserStatus;
 import com.petbuddy.petbuddystore.model.User;
 import com.petbuddy.petbuddystore.repository.UserRepository;
@@ -26,7 +27,7 @@ public class ApplicationInitConfig {
             if (userRepository.findByEmail("admin@gmail.com").isEmpty()) {
                 User user = User.builder()
                         .email("admin@gmail.com")
-                        .password(passwordEncoder.encode("admin"))
+                        .password(passwordEncoder.encode("Admin@1234"))
                         .fullName("Admin")
                         .role(Role.ADMIN)
                         .status(UserStatus.ACTIVE)
@@ -38,7 +39,7 @@ public class ApplicationInitConfig {
             if (userRepository.findByEmail("manager@gmail.com").isEmpty()) {
                 User user = User.builder()
                         .email("manager@gmail.com")
-                        .password(passwordEncoder.encode("manager"))
+                        .password(passwordEncoder.encode("Manager@1234"))
                         .fullName("Manager")
                         .role(Role.MANAGER)
                         .status(UserStatus.ACTIVE)
@@ -47,28 +48,55 @@ public class ApplicationInitConfig {
                 log.warn("Manager has been created");
             }
 
-            if (userRepository.findByEmail("staff@gmail.com").isEmpty()) {
+            if (userRepository.findByEmail("groomer@gmail.com").isEmpty()) {
                 User user = User.builder()
-                        .email("staff@gmail.com")
-                        .password(passwordEncoder.encode("staff"))
-                        .fullName("Staff")
+                        .email("groomer@gmail.com")
+                        .password(passwordEncoder.encode("Groomer@1234"))
+                        .fullName("Groomer Staff")
                         .role(Role.STAFF)
+                        .staffTask(StaffTask.GROOMER)
                         .status(UserStatus.ACTIVE)
                         .build();
                 userRepository.save(user);
-                log.warn("Staff has been created");
+                log.warn("Groomer Staff has been created");
             }
 
-            if (userRepository.findByEmail("user@gmail.com").isEmpty()) {
+            if (userRepository.findByEmail("coordinator@gmail.com").isEmpty()) {
                 User user = User.builder()
-                        .email("user@gmail.com")
-                        .password(passwordEncoder.encode("user"))
-                        .fullName("User")
+                        .email("coordinator@gmail.com")
+                        .password(passwordEncoder.encode("Coordinator@1234"))
+                        .fullName("Coordinator Staff")
+                        .role(Role.STAFF)
+                        .staffTask(StaffTask.COORDINATOR)
+                        .status(UserStatus.ACTIVE)
+                        .build();
+                userRepository.save(user);
+                log.warn("Coordinator Staff has been created");
+            }
+
+            if (userRepository.findByEmail("shipper@gmail.com").isEmpty()) {
+                User user = User.builder()
+                        .email("shipper@gmail.com")
+                        .password(passwordEncoder.encode("Shipper@1234"))
+                        .fullName("Shipper Staff")
+                        .role(Role.STAFF)
+                        .staffTask(StaffTask.SHIPPER)
+                        .status(UserStatus.ACTIVE)
+                        .build();
+                userRepository.save(user);
+                log.warn("Shipper Staff has been created");
+            }
+
+            if (userRepository.findByEmail("customer@gmail.com").isEmpty()) {
+                User user = User.builder()
+                        .email("customer@gmail.com")
+                        .password(passwordEncoder.encode("Customer@1234"))
+                        .fullName("Customer")
                         .role(Role.CUSTOMER)
                         .status(UserStatus.ACTIVE)
                         .build();
                 userRepository.save(user);
-                log.warn("User has been created");
+                log.warn("Customer has been created");
             }
         };
     }

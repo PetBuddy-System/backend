@@ -1,72 +1,98 @@
 package com.petbuddy.petbuddystore.service.impl;
 
-import com.petbuddy.petbuddystore.common.enums.DiscountType;
-import com.petbuddy.petbuddystore.common.enums.OrderStatus;
-import com.petbuddy.petbuddystore.common.enums.ProductStatus;
-import com.petbuddy.petbuddystore.common.enums.VoucherStatus;
+import com.petbuddy.petbuddystore.common.enums.*;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
 import com.petbuddy.petbuddystore.dto.request.CreateOrderRequest;
+import com.petbuddy.petbuddystore.dto.request.UpdateOrderRequest;
 import com.petbuddy.petbuddystore.dto.response.*;
 import com.petbuddy.petbuddystore.mapper.OrderMapper;
 import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.*;
-import com.petbuddy.petbuddystore.service.CartService;
-import com.petbuddy.petbuddystore.service.OrderService;
-import com.petbuddy.petbuddystore.service.ProductService;
-import jakarta.transaction.Transactional;
+import com.petbuddy.petbuddystore.repository.PaymentRepository;
+import com.petbuddy.petbuddystore.service.*;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @Transactional
+@Slf4j
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class OrderServiceImpl implements OrderService {
 
     OrderRepository orderRepository;
     ProductBatchRepository productBatchRepository;
+    UserRepository userRepository;
+    OrderDetailRepository orderDetailRepository;
+    OrderBatchLocationRepository orderBatchLocationRepository; // ⭐ THÊM: để cộng lại kho đúng batch khi RETURNED_TO_WAREHOUSE
+    StaffScheduleRepository staffScheduleRepository;
     ProductService productService;
     CartService cartService;
+    PaymentService paymentService;
+    VoucherService voucherService;
+    ShippingRuleService shippingRuleService;
+    EmailService emailService;
+    AuditService auditService;
+    ShipperAssignmentService shipperAssignmentService;
+    FileService fileService;
     OrderMapper orderMapper;
-    UserRepository userRepository;
-    UserVoucherRepository userVoucherRepository;
-    VoucherRepository voucherRepository;
+    PaymentRepository paymentRepository;
+
+    static final int SHIPPER_DELIVERY_ATTEMPTS = 2;
+    static final BigDecimal DELIVERY_FAILURE_PENALTY = new BigDecimal("30000");
 
     @Override
     public OrderResponse createOrder(CreateOrderRequest request) {
         checkLogin();
-
         User user = getCurrentUser();
+        PaymentMethod method;
+        try {
+            method = PaymentMethod.valueOf(request.getPaymentMethod().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new AppException(ErrorCode.PAYMENT_INVALID_METHOD);
+        }
 
-        List<CartItemResponse> cartItems = cartService.getCart().getItems();
-
+        List<CartItemResponse> cartItems = cartService.getCart().getCartItems();
         if (cartItems.isEmpty()) {
             throw new AppException(ErrorCode.CART_EMPTY);
         }
 
+        ShippingFeeResponse shippingFeeResponse = shippingRuleService.calculateFee(request.getLatitude(), request.getLongitude());
+        BigDecimal shippingFee = shippingFeeResponse.getShippingFee();
+
         Order order = Order.builder()
                 .orderCode(generateOrderCode())
                 .user(user)
-                .recipientName(request.getUserName())
+                .recipientName(request.getRecipientName())
                 .phoneNumber(request.getPhoneNumber())
                 .address(request.getAddress())
+                .longitude(request.getLongitude())
+                .latitude(request.getLatitude())
                 .note(request.getNote())
+                .shippingFee(shippingFee)
+                .shippingDiscountAmount(BigDecimal.ZERO)
                 .status(OrderStatus.PENDING)
+                .paymentExpiredAt(LocalDateTime.now().plusMinutes(15))
                 .createdAt(LocalDateTime.now())
                 .build();
 
@@ -74,118 +100,234 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal total = BigDecimal.ZERO;
 
         for (CartItemResponse item : cartItems) {
+            BigDecimal unitPrice = item.getPrice();
+            BigDecimal salePrice = item.getSalePrice();
+            BigDecimal effectivePrice = salePrice != null ? salePrice : unitPrice;
             Product product = productService.getProductEntityById(item.getProductId());
+            int physicalStock = productBatchRepository.findAvailableStockByProductId(product.getProductId());
+            int held = orderDetailRepository.sumHeldQuantityByProductId(product.getProductId(), LocalDateTime.now());
+            int virtualAvailable = physicalStock - held;
 
-            int availableStock = productBatchRepository.findAvailableStockByProductId(product.getProductId());
-
-            if (availableStock < item.getQuantity()) {throw new AppException(ErrorCode.PRODUCT_OUT_OF_STOCK);}
+            if (virtualAvailable < item.getQuantity()) {
+                throw new AppException(ErrorCode.PRODUCT_OUT_OF_STOCK);
+            }
 
             OrderDetail detail = OrderDetail.builder()
                     .order(order)
                     .product(product)
                     .productName(product.getName())
-//                    .productImage(product.getImageUrls().getFirst())
-                    .unitPrice(item.getPrice())
+                    .productImage(getFirstImage(product))
+                    .unitPrice(unitPrice)
+                    .salePrice(salePrice)
                     .quantity(item.getQuantity())
-                    .totalPrice(item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+                    .weight(product.getWeight())
+                    .totalPrice(effectivePrice.multiply(BigDecimal.valueOf(item.getQuantity())))
                     .build();
 
             total = total.add(detail.getTotalPrice());
             orderDetails.add(detail);
         }
 
-        BigDecimal finalAmount = total;
-        Voucher voucher;
-
-        if(request.getVoucherCode() != null && !request.getVoucherCode().trim().isEmpty()){
-            voucher = voucherRepository.findByVoucherCode(request.getVoucherCode())
-                    .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
-
-            validateVoucher(voucher, user, total);
-
-            BigDecimal discountAmount = calculateDiscount(voucher, total);
-            finalAmount = total.subtract(discountAmount);
-
-            voucher.setUsedCount(voucher.getUsedCount() + 1);
-            voucherRepository.save(voucher);
-
-            UserVouchers userVoucher = UserVouchers.builder()
-                    .user(user)
-                    .voucher(voucher)
-                    .usedAt(LocalDateTime.now())
-                    .build();
-            userVoucherRepository.save(userVoucher);
-        }
+        BigDecimal discountAmount = voucherService.applyVoucherToOrder(order, request.getVoucherCode(), user, total);
+        BigDecimal finalAmount = total.subtract(discountAmount)
+                .add(order.getShippingFee())
+                .subtract(order.getShippingDiscountAmount());
 
         order.setOrderDetails(orderDetails);
         order.setTotalAmount(total);
+        order.setOriginalTotalAmount(total);
+        order.setDiscountAmount(discountAmount);
+        order.setOriginalDiscountAmount(discountAmount);
         order.setFinalAmount(finalAmount);
         orderRepository.save(order);
-//        cartService.clearCart();
+
+        paymentService.createPayment(order, method);
+        cartService.clearCart();
         return orderMapper.toOrderResponse(order);
     }
 
     @Override
-    public void updateOrderStatus(Long orderId, OrderStatus newStatus) {
-        checkLogin();
+    public OrderResponse updateOrder(Long orderId, UpdateOrderRequest request) {
+        Order order = findOrder(orderId);
+        User user = getCurrentUser();
 
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new AppException(ErrorCode.ORDER_CANNOT_BE_UPDATED);
+        }
+
+        if (StringUtils.hasText(request.getRecipientName())) {
+            order.setRecipientName(request.getRecipientName());
+        }
+        if (StringUtils.hasText(request.getPhoneNumber())) {
+            order.setPhoneNumber(request.getPhoneNumber());
+        }
+        if (StringUtils.hasText(request.getAddress())) {
+            order.setAddress(request.getAddress());
+        }
+
+        if (request.getNote() != null) {
+            order.setNote(request.getNote());
+        }
+
+        order.setOriginalTotalAmount(order.getTotalAmount());
+        if (request.getVoucherCode() != null) {
+            voucherService.releaseVoucherFromOrder(order);
+            BigDecimal discountAmount = voucherService.applyVoucherToOrder(
+                    order, request.getVoucherCode(), user, order.getTotalAmount());
+            order.setDiscountAmount(discountAmount);
+            order.setOriginalDiscountAmount(discountAmount);
+            order.setFinalAmount(order.getTotalAmount().subtract(discountAmount)
+                    .add(order.getShippingFee())
+                    .subtract(order.getShippingDiscountAmount()));
+        }
+        else {
+            voucherService.releaseVoucherFromOrder(order);
+            order.setDiscountAmount(BigDecimal.ZERO);
+            order.setOriginalDiscountAmount(BigDecimal.ZERO);
+            order.setFinalAmount(order.getTotalAmount().add(order.getShippingFee()).subtract(order.getShippingDiscountAmount()));
+        }
+
+        Order updated = orderRepository.save(order);
+        return orderMapper.toOrderResponse(updated);
+    }
+
+    @Override
+    public void updateOrderStatus(Long orderId, OrderStatus newStatus, MultipartFile proofImage) {
+        checkLogin();
+        User currentUser = getCurrentUser();
         Order order = findOrder(orderId);
         OrderStatus currentStatus = order.getStatus();
 
         switch (currentStatus) {
             case PENDING -> {
-                if (newStatus != OrderStatus.CONFIRMED && newStatus != OrderStatus.CANCELED) {
+                if (newStatus != OrderStatus.CONFIRMED && newStatus != OrderStatus.CANCELLED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
-                }
-            }
-
-            case CONFIRMED -> {
-                if (newStatus != OrderStatus.PICKING && newStatus != OrderStatus.CANCELED) {
-                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
-                }
-            }
-
-            case PICKING -> {
-                if (newStatus != OrderStatus.SHIPPING && newStatus != OrderStatus.CANCELED) {
-                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
-                }
-
-                if (newStatus == OrderStatus.SHIPPING) {
-                    for (OrderDetail detail : order.getOrderDetails()) {
-                        deductStockByFefo(
-                                detail.getProduct().getProductId(),
-                                detail.getQuantity()
-                        );
+                if (newStatus == OrderStatus.CONFIRMED) {
+                    PaymentMethod method = order.getPayment().getPaymentMethod();
+                    if (method == PaymentMethod.CASH) {
+                        paymentService.markPaymentSucceeded(order);
+                    } else if (order.getPayment().getStatus() != PaymentStatus.PAID) {
+                        throw new AppException(ErrorCode.PAYMENT_NOT_COMPLETED);
                     }
+                    emailService.sendOrderPaymentSuccessEmail(order.getUser().getEmail(), order);
+                    shipperAssignmentService.updateEstimatedDeliveryTime(orderId);
                 }
             }
-
+            case CONFIRMED -> {
+                if (newStatus != OrderStatus.PICKING && newStatus != OrderStatus.CANCELLED)
+                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+            }
+            case PICKING -> {
+                if (newStatus != OrderStatus.PICKED && newStatus != OrderStatus.CANCELLED)
+                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+            }
+            case PICKED -> {
+                if (newStatus != OrderStatus.CANCELLED)
+                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+            }
             case SHIPPING -> {
-                if (newStatus != OrderStatus.DELIVERED) {
+                if (newStatus != OrderStatus.DELIVERED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+                if (proofImage == null || proofImage.isEmpty()) {
+                    throw new AppException(ErrorCode.DELIVERY_PROOF_IMAGE_REQUIRED);
+                }
+                validateShipperOnDuty(currentUser);
+                if (!order.getStaffSchedule().getStaff().getUserId().equals(currentUser.getUserId())){
+                    throw new AppException(ErrorCode.NOT_THE_ASSIGNED_SHIPPER);
+                }
+                if (order.getPayment().getStatus() != PaymentStatus.PAID) {
+                    Payment payment = order.getPayment();
+                    payment.setStatus(PaymentStatus.PAID);
+                    payment.setPaidAt(LocalDateTime.now());
+                    paymentRepository.save(payment);
                 }
             }
-
             case DELIVERED -> {
-                if (newStatus != OrderStatus.COMPLETED) {
+                if (newStatus != OrderStatus.COMPLETED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
-                }
             }
 
-            case COMPLETED, CANCELED -> {
-                throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
-            }
+            case COMPLETED, CANCELLED, DELIVERY_FAILED, RETURNED_TO_WAREHOUSE,AWAITING_REDELIVERY, COORDINATOR_REVIEW ->
+                    throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
         }
+
+        if (newStatus == OrderStatus.CANCELLED) {
+            paymentService.cancelPaymentForOrder(order);
+        }
+
+        if (newStatus == OrderStatus.DELIVERED) {
+            MediaFile proof = fileService.uploadShippingProofImage(proofImage);
+            proof.setOrder(order);
+            order.getMediaFiles().add(proof);
+        }
+
         order.setStatus(newStatus);
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
     }
 
     @Override
+    public OrderResponse requestCancelOrder(Long orderId, String cancelReason) {
+        Order order = findOrder(orderId);
+
+        if (order.getStatus() != OrderStatus.CONFIRMED && order.getStatus() != OrderStatus.PENDING) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        Payment payment = order.getPayment();
+        order.setCancelReason(cancelReason);
+
+        if (payment.getPaymentMethod() == PaymentMethod.CASH) {
+            paymentService.cancelPaymentForOrder(order);
+            order.setStatus(OrderStatus.CANCELLED);
+        } else {
+            paymentRepository.save(payment);
+            order.setStatus(OrderStatus.CANCEL_REQUESTED);
+        }
+
+        order.setUpdatedAt(LocalDateTime.now());
+        Order saved = orderRepository.save(order);
+
+        return orderMapper.toOrderResponse(saved);
+    }
+
+    @Override
+    public OrderResponse confirmCancelOrder(Long orderId) {
+        Order order = findOrder(orderId);
+
+        if (order.getStatus() != OrderStatus.CANCEL_REQUESTED) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        paymentService.cancelPaymentForOrder(order);
+
+        order.setStatus(OrderStatus.CANCELLED);
+        order.setUpdatedAt(LocalDateTime.now());
+        Order saved = orderRepository.save(order);
+        auditService.logPaymentRefund(order.getPayment(), order.getPayment().getAmount(), order.getCancelReason(), getCurrentUser());
+        return orderMapper.toOrderResponse(saved);
+    }
+
+    @Override
+    public Order getOrderEntityById(Long orderId) {
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+    }
+
+    @Override
+    public boolean hasUserPurchasedProduct(String userId, UUID productId) {
+        return orderRepository.existsByUserUserIdAndOrderDetailsProductProductIdAndStatus(
+                userId,
+                productId,
+                OrderStatus.COMPLETED
+        );
+    }
+
+    @Override
     public List<PickingItemResponse> getPickingList(Long orderId) {
         checkLogin();
         Order order = findOrder(orderId);
-        if(order.getStatus() != OrderStatus.PICKING){
+        if (order.getStatus() != OrderStatus.PICKING) {
             throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
         }
         return buildPickingList(order);
@@ -199,103 +341,221 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public Page<StaffOrderResponse> getAllOrder(Pageable pageable) {
+    public Page<OrderResponse> getAllOrder(Pageable pageable) {
         checkLogin();
-        Page<Order> orders = orderRepository.findAll(pageable);
-        return orders.map(orderMapper::toStaffOrderResponse);
+        User user = getCurrentUser();
+        Page<Order> orders;
+        if (user.getRole() == Role.STAFF && user.getStaffTask() == StaffTask.SHIPPER) {
+            orders = orderRepository.findByStaffSchedule_Staff_UserId(user.getUserId(), pageable);
+        } else {
+            orders = orderRepository.findAll(pageable);
+        }
+        return orders.map(orderMapper::toOrderResponse);
     }
 
     @Override
     public OrderResponse getOrder(Long orderId) {
         getCurrentUser();
-        Order order = orderRepository.findById(orderId).orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
         return orderMapper.toOrderResponse(order);
+    }
+
+    @Override
+    public OrderResponse reportDeliveryFailed(Long orderId, String reason) {
+        checkLogin();
+        User currentUser = getCurrentUser();
+        Order order = findOrder(orderId);
+
+        if (order.getStatus() != OrderStatus.SHIPPING) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        validateShipperOnDuty(currentUser);
+        if (!order.getStaffSchedule().getStaff().getUserId().equals(currentUser.getUserId())) {
+            throw new AppException(ErrorCode.NOT_THE_ASSIGNED_SHIPPER);
+        }
+
+        order.setCancelReason(reason);
+        order.setUpdatedAt(LocalDateTime.now());
+
+        if (Boolean.TRUE.equals(order.getPostCoordinatorRedelivery())) {
+            finalizeDeliveryFailure(order, currentUser,
+                    "Giao lại sau thương lượng vẫn không liên lạc được khách: " + reason);
+            return orderMapper.toOrderResponse(orderRepository.save(order));
+        }
+
+        int failCount = (order.getDeliveryFailCount() != null ? order.getDeliveryFailCount() : 0) + 1;
+        order.setDeliveryFailCount(failCount);
+
+        if (failCount < SHIPPER_DELIVERY_ATTEMPTS) {
+            order.setStatus(OrderStatus.AWAITING_REDELIVERY);
+        } else {
+            order.setStatus(OrderStatus.COORDINATOR_REVIEW);
+            order.setStaffSchedule(null);
+            auditService.logOrderBombed(order,
+                    "Không liên lạc được khách sau " + failCount + " lần giao, chuyển coordinator xử lý: " + reason,
+                    currentUser);
+        }
+
+        return orderMapper.toOrderResponse(orderRepository.save(order));
+    }
+
+    @Override
+    public OrderResponse confirmReturnedToWarehouse(Long orderId) {
+        checkLogin();
+        User currentUser = getCurrentUser();
+        Order order = findOrder(orderId);
+
+        if (order.getStatus() != OrderStatus.DELIVERY_FAILED) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        List<OrderBatchLocation> locations = orderBatchLocationRepository.findByOrderDetail_Order_OrderId(orderId);
+
+        for (OrderBatchLocation location : locations) {
+            ProductBatch batch = location.getBatch();
+            batch.setStockQuantity(batch.getStockQuantity() + location.getQuantity());
+            if (batch.getStatus() != ProductStatus.ACTIVE) {
+                batch.setStatus(ProductStatus.ACTIVE);
+            }
+            productBatchRepository.save(batch);
+        }
+
+        if (order.getPayment().getStatus() == PaymentStatus.PAID) {
+            BigDecimal refundedAmount = order.getPayment().getAmount().subtract(DELIVERY_FAILURE_PENALTY);
+            if (refundedAmount.compareTo(BigDecimal.ZERO) < 0) {
+                refundedAmount = BigDecimal.ZERO;
+            }
+            paymentService.cancelPaymentForOrderWithPenalty(order, DELIVERY_FAILURE_PENALTY);
+            auditService.logPaymentRefund(order.getPayment(), refundedAmount,
+                    "Hoàn tiền sau khi xác nhận hàng đã về kho (trừ phí phạt giao thất bại)", currentUser);
+        }
+
+        order.setStatus(OrderStatus.RETURNED_TO_WAREHOUSE);
+        order.setUpdatedAt(LocalDateTime.now());
+        Order saved = orderRepository.save(order);
+
+        auditService.logOrderReturnedToWarehouse(order, "Xác nhận đã trả hàng về kho, cộng lại tồn kho", currentUser);
+
+        return orderMapper.toOrderResponse(saved);
+    }
+    @Override
+    public void retryNoonDeliveryContacts() {
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime now = LocalDateTime.now();
+        List<Order> orders = orderRepository.findByStatusAndDeliveryFailCountAndUpdatedAtBetween(
+                OrderStatus.AWAITING_REDELIVERY, 1, startOfDay, now);
+
+        for (Order order : orders) {
+            order.setStatus(OrderStatus.SHIPPING);
+            order.setUpdatedAt(LocalDateTime.now());
+            orderRepository.save(order);
+            shipperAssignmentService.updateEstimatedDeliveryTime(order.getOrderId());
+        }
+    }
+
+    @Override
+    public OrderResponse coordinatorReportUnreachable(Long orderId, String note) {
+        checkLogin();
+        User currentUser = getCurrentUser();
+        Order order = findOrder(orderId);
+
+        if (order.getStatus() != OrderStatus.COORDINATOR_REVIEW) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        finalizeDeliveryFailure(order, currentUser, "Coordinator không liên lạc được khách: " + note);
+
+        return orderMapper.toOrderResponse(orderRepository.save(order));
+    }
+
+    @Override
+    public OrderResponse coordinatorNegotiateRedelivery(Long orderId, LocalDate negotiatedDate, String note) {
+        checkLogin();
+        User currentUser = getCurrentUser();
+        Order order = findOrder(orderId);
+
+        if (order.getStatus() != OrderStatus.COORDINATOR_REVIEW) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+        if (negotiatedDate == null || negotiatedDate.isBefore(LocalDate.now())) {
+            throw new AppException(ErrorCode.INVALID_NEGOTIATED_DATE);
+        }
+
+        order.setNegotiatedDeliveryDate(negotiatedDate);
+        order.setPostCoordinatorRedelivery(true);
+        order.setStatus(OrderStatus.PICKED);
+        order.setUpdatedAt(LocalDateTime.now());
+
+        auditService.logOrderBombed(order,
+                "Coordinator đã thương lượng lại ngày giao " + negotiatedDate + ": " + note, currentUser);
+
+        return orderMapper.toOrderResponse(orderRepository.save(order));
+    }
+
+    private void finalizeDeliveryFailure(Order order, User currentUser, String logMessage) {
+        order.setStatus(OrderStatus.DELIVERY_FAILED);
+        order.setStaffSchedule(null);
+        order.setUpdatedAt(LocalDateTime.now());
+
+        auditService.logOrderBombed(order, logMessage, currentUser);
+        emailService.sendOrderBombedEmail(order.getUser().getEmail(), order);
     }
 
     private List<PickingItemResponse> buildPickingList(Order order) {
         List<PickingItemResponse> result = new ArrayList<>();
-
-        for(OrderDetail detail : order.getOrderDetails()) {
+        for (OrderDetail detail : order.getOrderDetails()) {
             result.addAll(calculatePickingItems(detail.getProduct().getProductId(), detail.getQuantity()));
         }
-
         return result;
     }
 
     private List<PickingItemResponse> calculatePickingItems(UUID productId, int quantity) {
         List<ProductBatch> batches = getActiveBatchesByFefo(productId);
-
         int remaining = quantity;
         List<PickingItemResponse> result = new ArrayList<>();
 
         for (ProductBatch batch : batches) {
-            if (remaining <= 0) {
-                break;
-            }
-
+            if (remaining <= 0) break;
             int picked = Math.min(batch.getStockQuantity(), remaining);
-
             result.add(PickingItemResponse.builder()
-                            .productId(batch.getProduct().getProductId())
-                            .name(batch.getProduct().getName())
-                            .expiryDate(batch.getExpiryDate())
-                            .quantityToPick(picked)
-                            .build()
-            );
-
+                    .productId(batch.getProduct().getProductId())
+                    .name(batch.getProduct().getName())
+                    .imageUrl(getFirstImage(batch.getProduct()))
+                    .expiryDate(batch.getExpiryDate())
+                    .quantityToPick(picked)
+                    .build());
             remaining -= picked;
         }
 
-        if(remaining > 0){
-            throw new AppException(ErrorCode.PRODUCT_OUT_OF_STOCK);
-        }
-
+        if (remaining > 0) throw new AppException(ErrorCode.PRODUCT_OUT_OF_STOCK);
         return result;
     }
 
 
-
-    private void deductStockByFefo(UUID productId, int quantity) {
-        List<ProductBatch> batches = getActiveBatchesByFefo(productId);
-        List<ProductBatch> updatedBatches = new ArrayList<>();
-        int remaining = quantity;
-
-        for (ProductBatch batch : batches) {
-            if (remaining <= 0) break;
-
-            int picked = Math.min(batch.getStockQuantity(), remaining);
-            batch.setStockQuantity(batch.getStockQuantity() - picked);
-            updatedBatches.add(batch);
-            remaining -= picked;
-        }
-
-        if (remaining > 0) {
-            throw new AppException(ErrorCode.PRODUCT_OUT_OF_STOCK);
-        }
-        productBatchRepository.saveAll(updatedBatches);
-    }
-
     private List<ProductBatch> getActiveBatchesByFefo(UUID productId) {
         return productBatchRepository
                 .findByProduct_ProductIdAndStockQuantityGreaterThanAndStatusOrderByExpiryDateAscCreatedAtAscBatchCodeAsc(
-                        productId,
-                        0,
-                        ProductStatus.ACTIVE
-                );
+                        productId, 0, ProductStatus.ACTIVE);
     }
 
-    private String generateOrderCode() {return "OD" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));}
+    private String generateOrderCode() {
+        return "OD" + ThreadLocalRandom.current().nextInt(100000, 1000000);
+    }
 
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null) {throw new AppException(ErrorCode.UNAUTHENTICATED);}
+        if (authentication == null) throw new AppException(ErrorCode.UNAUTHENTICATED);
         String userId = authentication.getName();
-        return userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     }
 
     private void checkLogin() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || authentication.getName().equals("anonymousUser")) {
+        if (authentication == null || !authentication.isAuthenticated()
+                || authentication.getName().equals("anonymousUser")) {
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
     }
@@ -305,46 +565,27 @@ public class OrderServiceImpl implements OrderService {
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
     }
 
-    private BigDecimal calculateDiscount(Voucher voucher, BigDecimal orderAmount) {
-        BigDecimal discount;
 
-        if (voucher.getDiscountType() == DiscountType.PERCENTAGE) {
-            discount = orderAmount.multiply(voucher.getDiscountValue()).divide(BigDecimal.valueOf(100));
-            if (voucher.getMaxDiscount() != null) {
-                discount = discount.min(voucher.getMaxDiscount());
-            }
-        } else {
-            discount = voucher.getDiscountValue();
+    private String getFirstImage(Product product) {
+        if (product == null || product.getMediaFiles() == null || product.getMediaFiles().isEmpty()) {
+            return null;
         }
-
-        return discount.min(orderAmount);
+        return product.getMediaFiles().getFirst().getFileUrl();
     }
-
-    private void validateVoucher(Voucher voucher, User user, BigDecimal totalAmount) {
-        LocalDateTime now = LocalDateTime.now();
-        if (voucher.getStatus() != VoucherStatus.ACTIVE) {
-            throw new AppException(ErrorCode.VOUCHER_INVALID_STATUS);
+    private void validateShipperOnDuty(User user) {
+        if (user.getRole() != Role.STAFF || user.getStaffTask() != StaffTask.SHIPPER) {
+            throw new AppException(ErrorCode.NOT_SHIPPER);
         }
-
-        if (now.isBefore(voucher.getStartAt())) {
-            throw new AppException(ErrorCode.VOUCHER_NOT_STARTED);
-        }
-
-        if (now.isAfter(voucher.getExpiredAt())) {
-            throw new AppException(ErrorCode.VOUCHER_EXPIRED);
-        }
-
-        if (voucher.getUsageLimit() != null && voucher.getUsedCount() >= voucher.getUsageLimit()) {
-            throw new AppException(ErrorCode.VOUCHER_OUT_OF_USAGE);
-        }
-
-        if (voucher.getMinOrderValue() != null && totalAmount.compareTo(voucher.getMinOrderValue()) < 0) {
-            throw new AppException(ErrorCode.VOUCHER_MIN_ORDER_NOT_MET);
-        }
-
-        long userUsedCount = userVoucherRepository.countByUserAndVoucher(user, voucher);
-        if (voucher.getPerUserLimit() != null && userUsedCount >= voucher.getPerUserLimit()) {
-            throw new AppException(ErrorCode.VOUCHER_USER_LIMIT_EXCEEDED);
+        boolean onDutyToday = staffScheduleRepository.existsSchedule(
+                user.getUserId(),
+                LocalDate.now(),
+                LocalTime.MIN,
+                LocalTime.of(23, 59, 59),
+                null,
+                List.of(ScheduleStatus.SCHEDULED, ScheduleStatus.WORKING)
+        );
+        if (!onDutyToday) {
+            throw new AppException(ErrorCode.SHIPPER_NOT_ON_DUTY);
         }
     }
 }

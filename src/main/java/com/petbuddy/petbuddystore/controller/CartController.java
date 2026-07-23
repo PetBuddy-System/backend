@@ -2,7 +2,9 @@ package com.petbuddy.petbuddystore.controller;
 
 import com.petbuddy.petbuddystore.common.response.ApiResponse;
 import com.petbuddy.petbuddystore.dto.request.AddToCartRequest;
+import com.petbuddy.petbuddystore.dto.request.MergeCartRequest;
 import com.petbuddy.petbuddystore.dto.request.UpdateCartItemRequest;
+import com.petbuddy.petbuddystore.dto.response.CartItemResponse;
 import com.petbuddy.petbuddystore.dto.response.CartResponse;
 import com.petbuddy.petbuddystore.service.CartService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -10,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -20,11 +23,11 @@ import java.util.UUID;
 @RequestMapping("/api/cart")
 @RequiredArgsConstructor
 @Tag(name = "Cart API", description = "Quản lý giỏ hàng")
+@FieldDefaults(level = lombok.AccessLevel.PRIVATE, makeFinal = true)
 public class CartController {
 
-    private final CartService cartService;
+    CartService cartService;
 
-    @PreAuthorize("hasRole('CUSTOMER')")
     @PostMapping("/items")
     @Operation(description = "Thêm sản phẩm vào giỏ hàng")
     public ResponseEntity<ApiResponse<Void>> addToCart(@RequestBody @Valid AddToCartRequest request) {
@@ -33,7 +36,6 @@ public class CartController {
                 ApiResponse.success("Product added to cart successfully", null));
     }
 
-    @PreAuthorize("hasRole('CUSTOMER')")
     @Operation(description = "Get current cart")
     @GetMapping
     public ResponseEntity<ApiResponse<CartResponse>> getCart() {
@@ -41,36 +43,30 @@ public class CartController {
                 ApiResponse.success("Cart retrieved successfully", cartService.getCart()));
     }
 
-    @PreAuthorize("hasRole('CUSTOMER')")
     @Operation(description = "Update product quantity in cart")
     @PutMapping("/items/{cartItemId}")
-    public ResponseEntity<ApiResponse<Void>> updateItemQuantity(@PathVariable UUID cartItemId,
-                                                                @RequestBody @Valid UpdateCartItemRequest request){
-        cartService.updateCart(cartItemId, request);
+    public ResponseEntity<ApiResponse<CartItemResponse>> updateItemQuantity(@PathVariable UUID cartItemId,
+                                                                            @RequestBody @Valid UpdateCartItemRequest request) {
         return ResponseEntity.ok(
-                ApiResponse.success("Cart item quantity updated successfully", null));
+                ApiResponse.success("Cart item quantity updated successfully",
+                        cartService.updateCart(cartItemId, request)));
     }
 
-    @PreAuthorize("hasRole('CUSTOMER')")
+
     @Operation(description = "Remove product from cart")
     @DeleteMapping("/items/{productId}")
-    public ResponseEntity<ApiResponse<Void>> removeItem(
-            @PathVariable UUID productId) {
+    public ResponseEntity<ApiResponse<Void>> removeItem(@PathVariable UUID productId) {
 
         cartService.removeItem(productId);
-
         return ResponseEntity.ok(
                 ApiResponse.success("Product removed from cart successfully", null));
     }
 
     @PreAuthorize("hasRole('CUSTOMER')")
-    @Operation(description = "Clear cart")
-    @DeleteMapping
-    public ResponseEntity<ApiResponse<Void>> clearCart() {
-
-        cartService.clearCart();
-
+    @Operation(description = "Merge guest cart vào cart của user sau khi login")
+    @PostMapping("/merge")
+    public ResponseEntity<ApiResponse<CartResponse>> mergeCart(@RequestBody MergeCartRequest request) {
         return ResponseEntity.ok(
-                ApiResponse.success("Cart cleared successfully", null));
+                ApiResponse.success("Cart merged successfully", cartService.mergeCart(request)));
     }
 }

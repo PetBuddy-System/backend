@@ -1,39 +1,29 @@
 package com.petbuddy.petbuddystore.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.petbuddy.petbuddystore.common.enums.ProductStatus;
 import lombok.*;
 
-import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @Getter
 @Setter
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ProductManagementResponse {
-
-    UUID productId;
-    
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class ProductManagementResponse extends ProductBaseResponse {
     String productCode;
-
-    String name;
-
-    BigDecimal price;
-
-    String brandName;
-
     ProductStatus status;
+    LocalDateTime createdAt;
+    LocalDateTime updatedAt;
 
-    List<String> imageUrls;
 
-    Integer totalStock;
-
+    Long nearExpiredStock;
+    Long nearExpiredBatchCount;
+    LocalDate nearestExpiryDate;
     Integer batchCount;
 
-    LocalDateTime createdAt;
-
-    LocalDateTime updatedAt;
+    UUID promotionId;
 }

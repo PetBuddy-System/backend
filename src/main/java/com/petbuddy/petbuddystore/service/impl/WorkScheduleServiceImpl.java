@@ -5,6 +5,7 @@ import com.petbuddy.petbuddystore.common.enums.ScheduleStatus;
 import com.petbuddy.petbuddystore.common.enums.ShiftType;
 import com.petbuddy.petbuddystore.common.exception.AppException;
 import com.petbuddy.petbuddystore.common.exception.ErrorCode;
+import com.petbuddy.petbuddystore.configuration.DeliveryCapacityProperties;
 import com.petbuddy.petbuddystore.dto.request.StaffReassignRequest;
 import com.petbuddy.petbuddystore.dto.request.StaffsAssignRequest;
 import com.petbuddy.petbuddystore.dto.request.WorkScheduleCreationRequest;
@@ -30,6 +31,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -46,11 +48,18 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
     UserRepository userRepository;
     StaffScheduleRepository staffScheduleRepository;
     StaffScheduleMapper staffScheduleMapper;
+    DeliveryCapacityProperties capacityProperties;
 
     @Override
     public WorkScheduleResponse createWorkSchedule(WorkScheduleCreationRequest request) {
         if (!request.getStartTime().isBefore(request.getEndTime())) {
             throw new AppException(ErrorCode.INVALID_WORKING_TIME);
+        }
+
+        LocalDateTime startScheduleTime = LocalDateTime.of(request.getWorkDate(), request.getStartTime());
+
+        if (startScheduleTime.isBefore(LocalDateTime.now())) {
+            throw new AppException(ErrorCode.WORK_SCHEDULE_IN_THE_PAST);
         }
 
         if (workScheduleRepository.existsByWorkDateAndStartTimeAndEndTime(request.getWorkDate(),
@@ -187,6 +196,7 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
                     .workSchedule(workSchedule)
                     .assignedAt(LocalDateTime.now())
                     .scheduleStatus(ScheduleStatus.SCHEDULED)
+                    .maxOrderCapacity(estimateDefaultCapacity(workSchedule.getStartTime(), workSchedule.getEndTime()))
                     .build();
             StaffSchedule savedStaffSchedule = staffScheduleRepository.save(staffSchedule);
             workSchedule.getStaffSchedules().add(savedStaffSchedule);
@@ -218,5 +228,15 @@ public class WorkScheduleServiceImpl implements WorkScheduleService {
             throw new AppException(ErrorCode.USER_NOT_STAFF);
         }
         return staff;
+    }
+    private int estimateDefaultCapacity(LocalTime startTime, LocalTime endTime) {
+        double shiftMinutes = Duration.between(startTime, endTime).toMinutes();
+        double availableMinutes = shiftMinutes * (1 - capacityProperties.getSafetyBufferPercent() / 100.0);
+
+        double avgTravelMinutesPerOrder =
+                (capacityProperties.getMaxOperationalRadiusKm() / 3.0 / capacityProperties.getAvgSpeedKmh()) * 60;
+        double perOrderMinutes = capacityProperties.getHandlingTimeMinutes() + avgTravelMinutesPerOrder;
+
+        return (int) Math.floor(availableMinutes / perOrderMinutes);
     }
 }

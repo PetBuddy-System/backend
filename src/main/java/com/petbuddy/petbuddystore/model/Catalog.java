@@ -1,8 +1,7 @@
 package com.petbuddy.petbuddystore.model;
 
 
-import com.petbuddy.petbuddystore.common.enums.CatalogStatus;
-import com.petbuddy.petbuddystore.common.enums.WeightRange;
+import com.petbuddy.petbuddystore.common.enums.*;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
@@ -12,6 +11,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table (name = "catalogs")
@@ -24,7 +25,6 @@ import java.time.LocalDateTime;
 public class Catalog {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-
     @Column (name = "catalog_id")
     Integer catalogId;
 
@@ -35,14 +35,14 @@ public class Catalog {
     @Column (name = "description")
     String description;
 
-    @Column (name = "catalog_type")
-    String catalogType;
+    @Enumerated(EnumType.STRING)
+    @Column (name = "catalog_type", nullable = false)
+    LocationType catalogType;
 
     @Column (name = "pet_species")
     String petSpecies;
 
-    @Column (name = "price")
-    @NotNull
+    @Column(name = "prices", nullable = false)
     BigDecimal price;
 
     @Enumerated(EnumType.STRING)
@@ -51,6 +51,24 @@ public class Catalog {
 
     @Column (name = "duration_minute")
     Integer durationMinute;
+
+    @Column(name = "buffer_time")
+    Integer bufferTime;
+
+    @Column(name = "surcharge_config")
+    String surchargeConfig;
+
+    @Column(name = "duration_config")
+    String durationConfig;
+
+    @Column(name = "additional_duration_config")
+    String additionalDurationConfig;
+
+    @Column(name = "additional_price_per_minute")
+    BigDecimal additionalPricePerMinute;
+
+    @Column(name = "image_url")
+    String imageUrl;
 
     @Column (name = "status")
     @Enumerated (EnumType.STRING)
@@ -64,7 +82,7 @@ public class Catalog {
     @UpdateTimestamp
     LocalDateTime updatedAt;
 
-
-
+    @OneToMany(mappedBy = "catalog", cascade = CascadeType.ALL, orphanRemoval = true)
+    List<CatalogTimeSlot> catalogTimeSlots = new ArrayList<>();
 
 }

@@ -1,15 +1,17 @@
 package com.petbuddy.petbuddystore.mapper;
 
+import com.petbuddy.petbuddystore.common.enums.FileType;
 import com.petbuddy.petbuddystore.dto.request.ProductCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.ProductUpdateRequest;
-import com.petbuddy.petbuddystore.dto.response.ProductDetailResponse;
 import com.petbuddy.petbuddystore.dto.response.ProductManagementResponse;
 import com.petbuddy.petbuddystore.dto.response.ProductPublicResponse;
+import com.petbuddy.petbuddystore.model.MediaFile;
 import com.petbuddy.petbuddystore.model.Product;
-import org.mapstruct.Mapper;
-import org.mapstruct.MappingTarget;
-import org.mapstruct.NullValuePropertyMappingStrategy;
-import org.mapstruct.ReportingPolicy;
+import org.mapstruct.*;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Mapper(
         componentModel = "spring",
@@ -21,9 +23,25 @@ public interface ProductMapper {
 
     Product toProduct(ProductCreationRequest request);
 
-    ProductPublicResponse toPublicResponse(Product product);
-
+    @Mapping(target = "promotionType", ignore = true)
+    @Mapping(target = "discountValue", ignore = true)
+    @Mapping(target = "promotionPrice", ignore = true)
+    @Mapping(target = "discountAmount", ignore = true)
+    @Mapping(target = "promotionEndDate", ignore = true)
     ProductManagementResponse toManagementResponse(Product product);
 
-    ProductDetailResponse toDetailResponse(Product product);
+    @Mapping(target = "description", ignore = true)
+    @Mapping(target = "ingredients", ignore = true)
+    @Mapping(target = "usageInstructions", ignore = true)
+    @Mapping(target = "totalStock", ignore = true)
+    ProductPublicResponse toListResponse(Product product);
+
+    ProductPublicResponse toDetailPublicResponse(Product product);
+
+    @Mapping(target = "mediaFiles", ignore = true)
+    @Mapping(target = "batches", ignore = true)
+    @Mapping(target = "promotionDetails", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    Product cloneProduct(Product product);
 }

@@ -1,0 +1,26 @@
+package com.petbuddy.petbuddystore.dto.response;
+
+import com.petbuddy.petbuddystore.common.enums.PromotionType;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class PromotionDetailResponse {
+    UUID promotionDetailId;
+    UUID productId;
+    String productName;
+    String productCode;
+    BigDecimal salePrice;
+    PromotionType promotionType;
+    BigDecimal discountValue;
+    BigDecimal promotionPrice;
+    BigDecimal discountAmount;
+}

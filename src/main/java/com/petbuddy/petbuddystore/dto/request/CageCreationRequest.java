@@ -11,8 +11,7 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CageCreationRequest {
-    String cageCode;
     CageSize cageSize;
-    Integer capacity;
-    CageStatus cageStatus;
+    Integer quantity;
+    String note;
 }

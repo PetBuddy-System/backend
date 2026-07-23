@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hoàn tiền thành công - PetBuddy</title>
+</head>
+
+<body style="margin:0;padding:0;background:#f2f9ff;font-family:Arial, sans-serif">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:30px 10px">
+    <tr>
+        <td align="center">
+
+            <table width="520" cellpadding="0" cellspacing="0"
+                   style="background:#ffffff;border-radius:16px;padding:30px;border:1px solid #d8efff">
+
+                <tr>
+                    <td align="center">
+                        <h1 style="margin:0;color:#38aeea;">🐾 PetBuddy</h1>
+                        <p style="margin:6px 0 22px;color:#7aaec8;font-size:13px">
+                            Cửa hàng chăm sóc thú cưng
+                        </p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td align="center">
+                        <h2 style="color:#2b7de9;margin-bottom:10px">
+                            Hoàn tiền thành công 💸
+                        </h2>
+                        <p style="color:#667085;font-size:14px;line-height:1.6">
+                            Xin chào <b th:text="${recipientName}"></b>, đơn hàng
+                            <b th:text="${orderCode}"></b> của bạn đã được hoàn tiền thành công.
+                        </p>
+                    </td>
+                </tr>
+
+                <!-- Tổng kết hoàn tiền -->
+                <tr>
+                    <td>
+                        <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:15px;font-size:13px;color:#667085">
+                            <tr>
+                                <td style="padding:4px 0">Mã đơn hàng</td>
+                                <td align="right" th:text="${orderCode}"></td>
+                            </tr>
+                            <tr>
+                                <td style="padding:4px 0">Tổng tiền đơn hàng</td>
+                                <td align="right" th:text="${#numbers.formatInteger(totalAmount, 0, 'POINT')} + ' đ'"></td>
+                            </tr>
+                            <tr>
+                                <td style="padding:10px 0 0;font-size:15px;font-weight:bold;color:#334155;border-top:1px solid #eef4f8">
+                                    Số tiền được hoàn
+                                </td>
+                                <td align="right" style="padding:10px 0 0;font-size:15px;font-weight:bold;color:#2b7de9;border-top:1px solid #eef4f8"
+                                    th:text="${#numbers.formatInteger(refundAmount, 0, 'POINT')} + ' đ'"></td>
+                            </tr>
+                            <tr>
+                                <td style="padding:8px 0 0">Thời điểm hoàn tiền</td>
+                                <td align="right" style="padding:8px 0 0"
+                                    th:text="${#temporals.format(refundedAt, 'HH:mm dd/MM/yyyy')}"></td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td align="center">
+                        <div style="
+                            margin-top:20px;
+                            padding:14px;
+                            background:#eaf2fa;
+                            border:1px dashed #2b7de9;
+                            border-radius:12px;
+                            font-size:14px;
+                            font-weight:bold;
+                            color:#2b7de9;
+                        ">
+                            ✅ Tiền sẽ về tài khoản/thẻ của bạn sau vài ngày làm việc tùy ngân hàng
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td align="center" style="padding-top:25px">
+                        <p style="font-size:12px;color:#a0aec0;line-height:1.5">
+                            PetBuddy Store — mọi thắc mắc xin liên hệ bộ phận hỗ trợ.
+                        </p>
+                    </td>
+                </tr>
+
+            </table>
+
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

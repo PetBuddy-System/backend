@@ -5,6 +5,7 @@ import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -13,15 +14,27 @@ import java.time.LocalDateTime;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class OrderResponse {
-     Long orderId;
-
-     String orderCode;
-
-     String status;
-
-     BigDecimal finalAmount;
-
-     LocalDateTime createdAt;
-
-     LocalDateTime updatedAt;
+    Long orderId;
+    String orderCode;
+    String recipientName;
+    String phoneNumber;
+    String address;
+    String note;
+    String status;
+    BigDecimal finalAmount;
+    BigDecimal shippingFee;
+    String clientSecret;
+    LocalDateTime createdAt;
+    LocalDateTime updatedAt;
+    LocalDateTime shippedAt;
+    LocalDateTime cancelledAt;
+    LocalDateTime estimatedDeliveryAt;
+    String cancelReason;
+    LocalDateTime paymentExpiredAt;
+    List<OrderDetailResponse> orderDetails;
+    List<MediaFileResponse> mediaFiles;
+    PaymentResponse payment;
+    VoucherResponse voucher;
+    Double latitude;
+    Double longitude;
 }
