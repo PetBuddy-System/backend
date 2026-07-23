@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -72,9 +73,9 @@ public class UserController {
                 .body(ApiResponse.success(userService.getUserById(userId)));
     }
 
-    @PutMapping("/{userId}")
+    @PutMapping(value = "/{userId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(description = "Update thông tin user theo id")
-    public ResponseEntity<ApiResponse<UserResponse>> updateUser(@PathVariable String userId, @RequestPart("data") String requestJson,
+    public ResponseEntity<ApiResponse<UserResponse>> updateUser(@PathVariable String userId, @RequestPart(value = "data", required = false) String requestJson,
                                                                 @RequestPart(value = "images", required = false) List<MultipartFile> images) throws IOException{
         UserUpdateRequest request = objectMapper.readValue(requestJson, UserUpdateRequest.class);
         return ResponseEntity.status(HttpStatus.CREATED)
