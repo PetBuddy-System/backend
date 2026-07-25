@@ -47,6 +47,27 @@ public class Booking {
     @Column(name = "address_snapshot")
     String address;
 
+    @Column(name = "latitude_snapshot")
+    Double latitude;
+
+    @Column(name = "longitude_snapshot")
+    Double longitude;
+
+    @Column(name = "address_note_snapshot")
+    String addressNote;
+
+    @Column(name = "distance_km_snapshot")
+    Double distanceKm;
+
+    @Column(name = "travel_fee_snapshot")
+    BigDecimal travelFee;
+
+    @Column(name = "estimated_travel_minute_snapshot")
+    Integer estimatedTravelMinute;
+
+    @Column(name = "home_service_requirements_accepted")
+    Boolean homeServiceRequirementsAccepted;
+
     @Column(name = "scheduled_at", nullable = false)
     LocalDateTime scheduledAt;
 
@@ -84,6 +105,15 @@ public class Booking {
 
     @Column(name = "cancel_deadline_at")
     LocalDateTime cancelDeadlineAt;
+
+    @Column(name = "departed_at")
+    LocalDateTime departedAt;
+
+    @Column(name = "actual_started_at")
+    LocalDateTime actualStartedAt;
+
+    @Column(name = "actual_completed_at")
+    LocalDateTime actualCompletedAt;
 
     @Column(name = "create_at")
     @CreationTimestamp

@@ -8,6 +8,7 @@ import com.petbuddy.petbuddystore.dto.request.BookingCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.BookingUpdateRequest;
 import com.petbuddy.petbuddystore.dto.response.AvailableGroomerResponse;
 import com.petbuddy.petbuddystore.dto.response.BookingResponse;
+import com.petbuddy.petbuddystore.dto.response.BookingPreviewResponse;
 import com.petbuddy.petbuddystore.dto.response.MediaFileResponse;
 import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
 import com.petbuddy.petbuddystore.service.BookingService;
@@ -41,6 +42,13 @@ public class BookingController {
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Booking created successfully", bookingService.createBooking(request)));
+    }
+
+    @PostMapping("/preview")
+    public ResponseEntity<ApiResponse<BookingPreviewResponse>> previewBooking(
+            @Valid @RequestBody BookingCreationRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(bookingService.previewBooking(request)));
     }
 
     @GetMapping("/my-bookings")

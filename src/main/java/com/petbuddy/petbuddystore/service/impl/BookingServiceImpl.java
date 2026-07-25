@@ -9,8 +9,10 @@ import com.petbuddy.petbuddystore.dto.request.BookingDetailCreationRequest;
 import com.petbuddy.petbuddystore.dto.request.BookingUpdateRequest;
 import com.petbuddy.petbuddystore.dto.response.AvailableGroomerResponse;
 import com.petbuddy.petbuddystore.dto.response.BookingResponse;
+import com.petbuddy.petbuddystore.dto.response.BookingPreviewResponse;
 import com.petbuddy.petbuddystore.dto.response.MediaFileResponse;
 import com.petbuddy.petbuddystore.dto.response.PaymentResponse;
+import com.petbuddy.petbuddystore.dto.response.ShippingFeeResponse;
 import com.petbuddy.petbuddystore.mapper.BookingMapper;
 import com.petbuddy.petbuddystore.model.*;
 import com.petbuddy.petbuddystore.repository.*;
@@ -19,6 +21,7 @@ import com.petbuddy.petbuddystore.service.BookingAssignmentService;
 import com.petbuddy.petbuddystore.service.EmailService;
 import com.petbuddy.petbuddystore.service.FileService;
 import com.petbuddy.petbuddystore.service.PaymentService;
+import com.petbuddy.petbuddystore.service.ShippingRuleService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -46,9 +49,12 @@ import java.util.concurrent.ThreadLocalRandom;
 public class BookingServiceImpl implements BookingService {
     static final int MAX_PETS_PER_SLOT = 5;
     static final BigDecimal DEPOSIT_RATE = BigDecimal.valueOf(0.2);
+    static final int DEFAULT_HOME_TRAVEL_MINUTE = 30;
+    static final double DEFAULT_TRAVEL_SPEED_KMH = 25.0;
     static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     static final List<BookingStatus> STAFF_OCCUPYING_STATUSES = List.of(
             BookingStatus.ACCEPTED,
+            BookingStatus.ON_THE_WAY,
             BookingStatus.IN_PROGRESS,
             BookingStatus.READY_FOR_PICKUP
     );
@@ -67,6 +73,7 @@ public class BookingServiceImpl implements BookingService {
     UserRepository userRepository;
     PaymentService paymentService;
     BookingAssignmentService bookingAssignmentService;
+    ShippingRuleService shippingRuleService;
     FileService fileService;
     EmailService emailService;
     BookingMapper bookingMapper;
@@ -78,9 +85,12 @@ public class BookingServiceImpl implements BookingService {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
         validateSingleTimeSlot(request);
+        validateNoDuplicatePets(request);
+        validateHomeBookingRequest(request);
         LocalDate bookingDate = request.getScheduledAt();
         LocalDateTime scheduledAt = resolveScheduledAt(request, bookingDate);
         StaffAssignmentMode assignmentMode = resolveAssignmentMode(request.getAssignmentMode());
+        HomeFeeSnapshot homeFeeSnapshot = resolveHomeFeeSnapshot(request);
 
         Booking booking = Booking.builder()
                 .bookingCode(generateBookingCode(bookingDate))
@@ -88,6 +98,13 @@ public class BookingServiceImpl implements BookingService {
                 .customerName(request.getCustomerName())
                 .customerPhone(request.getCustomerPhone())
                 .address(request.getAddress())
+                .latitude(request.getLatitude())
+                .longitude(request.getLongitude())
+                .addressNote(request.getAddressNote())
+                .distanceKm(homeFeeSnapshot.distanceKm())
+                .travelFee(homeFeeSnapshot.travelFee())
+                .estimatedTravelMinute(homeFeeSnapshot.estimatedTravelMinute())
+                .homeServiceRequirementsAccepted(request.getHomeServiceRequirementsAccepted())
                 .scheduledAt(scheduledAt)
                 .note(request.getNote())
                 .bookingStatus(BookingStatus.PENDING_PAYMENT)
@@ -110,9 +127,9 @@ public class BookingServiceImpl implements BookingService {
         }
 
         booking.setBookingDetails(details);
-        booking.setTotalAmount(totalAmount);
-        booking.setDepositAmount(totalAmount.multiply(DEPOSIT_RATE));
-        booking.setRemainingAmount(totalAmount.subtract(booking.getDepositAmount()));
+        booking.setTotalAmount(totalAmount.add(homeFeeSnapshot.travelFee()));
+        booking.setDepositAmount(booking.getTotalAmount().multiply(DEPOSIT_RATE));
+        booking.setRemainingAmount(booking.getTotalAmount().subtract(booking.getDepositAmount()));
         if (assignmentMode == StaffAssignmentMode.SELECTED) {
             bookingAssignmentService.validateSelectedGroomer(booking, request.getRequestedStaffId());
         }
@@ -120,12 +137,58 @@ public class BookingServiceImpl implements BookingService {
         Booking savedBooking = bookingRepository.save(booking);
         Payment payment = paymentService.createBookingDepositPayment(savedBooking, PaymentMethod.CARD);
         
-        BookingResponse response = bookingMapper.toBookingResponse(savedBooking);
+        BookingResponse response = toBookingResponse(savedBooking);
         if (payment != null) {
             response.setStripeClientSecret(payment.getStripeClientSecret());
         }
         
         return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BookingPreviewResponse previewBooking(BookingCreationRequest request) {
+        User user = getCurrentUser();
+        if (user.getRole() != Role.CUSTOMER) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+        validateSingleTimeSlot(request);
+        validateNoDuplicatePets(request);
+        validateHomeBookingRequest(request);
+        LocalDate bookingDate = request.getScheduledAt();
+        LocalDateTime scheduledAt = resolveScheduledAt(request, bookingDate);
+        HomeFeeSnapshot homeFeeSnapshot = resolveHomeFeeSnapshot(request);
+
+        BigDecimal serviceAmount = BigDecimal.ZERO;
+        BigDecimal surchargeAmount = BigDecimal.ZERO;
+        int estimatedServiceMinute = 0;
+        Map<Integer, Integer> slotReservations = new HashMap<>();
+
+        Booking previewBooking = Booking.builder()
+                .bookingType(request.getBookingType())
+                .scheduledAt(scheduledAt)
+                .build();
+
+        for (BookingDetailCreationRequest detailRequest : request.getBookingDetails()) {
+            int reservedInRequest = slotReservations.getOrDefault(detailRequest.getTimeSlotId(), 0);
+            BookingDetail detail = buildBookingDetail(detailRequest, previewBooking, user, bookingDate, scheduledAt, reservedInRequest);
+            serviceAmount = serviceAmount.add(detail.getBasePrice() == null ? BigDecimal.ZERO : detail.getBasePrice());
+            surchargeAmount = surchargeAmount.add(detail.getAdditionalPrice() == null ? BigDecimal.ZERO : detail.getAdditionalPrice());
+            estimatedServiceMinute += getDetailDuration(detail);
+            slotReservations.merge(detailRequest.getTimeSlotId(), 1, Integer::sum);
+        }
+
+        BigDecimal totalAmount = serviceAmount.add(surchargeAmount).add(homeFeeSnapshot.travelFee());
+        return BookingPreviewResponse.builder()
+                .serviceAmount(serviceAmount)
+                .surchargeAmount(surchargeAmount)
+                .travelFee(homeFeeSnapshot.travelFee())
+                .distanceKm(homeFeeSnapshot.distanceKm())
+                .estimatedTravelMinute(homeFeeSnapshot.estimatedTravelMinute())
+                .estimatedServiceMinute(estimatedServiceMinute)
+                .totalAmount(totalAmount)
+                .depositAmount(totalAmount.multiply(DEPOSIT_RATE))
+                .build();
     }
 
     @Override
@@ -137,7 +200,7 @@ public class BookingServiceImpl implements BookingService {
         }
         return bookingRepository.findByUser_UserIdOrderByCreateAtDesc(user.getUserId())
                 .stream()
-                .map(bookingMapper::toBookingResponse)
+                .map(this::toBookingResponse)
                 .toList();
     }
 
@@ -172,6 +235,7 @@ public class BookingServiceImpl implements BookingService {
                                         List.of(
                                                 BookingStatus.WAITING_STAFF,
                                                 BookingStatus.ACCEPTED,
+                                                BookingStatus.ON_THE_WAY,
                                                 BookingStatus.IN_PROGRESS,
                                                 BookingStatus.READY_FOR_PICKUP
                                         ),
@@ -183,7 +247,7 @@ public class BookingServiceImpl implements BookingService {
                                 toDate
                         )
                         .stream()
-                        .map(bookingMapper::toBookingResponse)
+                        .map(this::toBookingResponse)
                         .toList();
             }
 
@@ -196,7 +260,7 @@ public class BookingServiceImpl implements BookingService {
                                 toDate
                         )
                         .stream()
-                        .map(bookingMapper::toBookingResponse)
+                        .map(this::toBookingResponse)
                         .toList();
             }
 
@@ -212,7 +276,7 @@ public class BookingServiceImpl implements BookingService {
         Collection<BookingStatus> statuses = status == null ? Arrays.asList(BookingStatus.values()) : List.of(status);
         return bookingRepository.findByBookingStatusInAndScheduledAtBetweenOrderByCreateAtDesc(statuses, from, to)
                 .stream()
-                .map(bookingMapper::toBookingResponse)
+                .map(this::toBookingResponse)
                 .toList();
     }
 
@@ -222,7 +286,7 @@ public class BookingServiceImpl implements BookingService {
         User user = getCurrentUser();
         Booking booking = findBooking(bookingId);
         assertCanViewBooking(booking, user);
-        return bookingMapper.toBookingResponse(booking);
+        return toBookingResponse(booking);
     }
 
     @Override
@@ -238,11 +302,14 @@ public class BookingServiceImpl implements BookingService {
         }
 
         int bookingDuration = calculateBookingDurationForRequest(request.getBookingDetails(), user);
-        LocalDateTime bookingStart = request.getScheduledAt();
-        LocalDateTime bookingEnd = bookingStart.plusMinutes(bookingDuration);
+        boolean homeBooking = isHomeBookingForAvailableGroomers(request);
+        int travelMinute = homeBooking ? resolveTravelMinuteForAvailableGroomers(request) : 0;
+        LocalDateTime serviceStart = request.getScheduledAt();
+        LocalDateTime bookingStart = serviceStart.minusMinutes(travelMinute);
+        LocalDateTime bookingEnd = serviceStart.plusMinutes(bookingDuration).plusMinutes(travelMinute);
 
         return staffScheduleRepository.findGroomerSchedulesForAssignment(
-                        bookingStart.toLocalDate(),
+                        serviceStart.toLocalDate(),
                         ASSIGNABLE_SCHEDULE_STATUSES,
                         StaffTask.GROOMER,
                         UserStatus.ACTIVE
@@ -265,14 +332,28 @@ public class BookingServiceImpl implements BookingService {
 
         if (newStatus == BookingStatus.CANCELLED) {
             cancelBooking(booking, request.getCancelReason(), user);
-            return bookingMapper.toBookingResponse(bookingRepository.save(booking));
+            return toBookingResponse(bookingRepository.save(booking));
         }
 
         assertCanUpdateAssignedBooking(booking, user);
-        validateStatusTransition(booking.getBookingStatus(), newStatus);
+        validateStatusTransition(booking, newStatus);
         validateRequiredBookingMedia(booking, newStatus);
         if (newStatus == BookingStatus.IN_PROGRESS) {
             validateAssignedStaffCheckedIn(booking);
+            if (isHomeBooking(booking)) {
+                validateNoOtherInProgressBooking(booking);
+            }
+        }
+        if (newStatus == BookingStatus.ON_THE_WAY) {
+            validateAssignedStaffCheckedIn(booking);
+            validateHomeDepartureTime(booking);
+            booking.setDepartedAt(LocalDateTime.now(VIETNAM_ZONE));
+        }
+        if (newStatus == BookingStatus.IN_PROGRESS) {
+            booking.setActualStartedAt(LocalDateTime.now(VIETNAM_ZONE));
+        }
+        if (newStatus == BookingStatus.COMPLETED) {
+            booking.setActualCompletedAt(LocalDateTime.now(VIETNAM_ZONE));
         }
         booking.setBookingStatus(newStatus);
         Booking savedBooking = bookingRepository.save(booking);
@@ -284,7 +365,7 @@ public class BookingServiceImpl implements BookingService {
                     "Booking " + savedBooking.getBookingCode() + " is ready for pickup."
             );
         }
-        return bookingMapper.toBookingResponse(savedBooking);
+        return toBookingResponse(savedBooking);
     }
 
     @Override
@@ -297,8 +378,13 @@ public class BookingServiceImpl implements BookingService {
         }
 
         Booking booking = findBooking(bookingId);
+        if (currentUser.getRole() == Role.STAFF
+                && currentUser.getStaffTask() == StaffTask.COORDINATOR
+                && booking.getBookingStatus() != BookingStatus.WAITING_STAFF) {
+            throw new AppException(ErrorCode.INVALID_BOOKING_STATUS);
+        }
         bookingAssignmentService.assignManual(booking, groomerId);
-        return bookingMapper.toBookingResponse(bookingRepository.save(booking));
+        return toBookingResponse(bookingRepository.save(booking));
     }
 
     @Override
@@ -336,9 +422,20 @@ public class BookingServiceImpl implements BookingService {
                     continue;
                 }
 
-                LocalDateTime bookingStart = booking.getScheduledAt();
-                LocalDateTime bookingEnd = bookingStart.plusMinutes(getBookingDuration(booking));
                 String oldStaffId = oldSchedule.getStaff().getUserId();
+
+                if (booking.getAssignmentMode() == StaffAssignmentMode.SELECTED) {
+                    booking.setStaffSchedule(null);
+                    booking.setBookingStatus(BookingStatus.WAITING_STAFF);
+                    booking.setLastAutoReassignAt(now);
+                    bookingRepository.save(booking);
+                    log.warn("Booking {} moved to WAITING_STAFF because selected staff {} has not checked in",
+                            booking.getBookingId(), oldStaffId);
+                    continue;
+                }
+
+                LocalDateTime bookingStart = getOccupiedStart(booking);
+                LocalDateTime bookingEnd = getOccupiedEnd(booking);
                 StaffSchedule newSchedule = bookingAssignmentService.findBestAvailableGroomer(bookingStart, bookingEnd, oldStaffId);
 
                 if (newSchedule == null) {
@@ -471,21 +568,31 @@ public class BookingServiceImpl implements BookingService {
         );
     }
 
-    private void validateStatusTransition(BookingStatus currentStatus, BookingStatus newStatus) {
-        Map<BookingStatus, List<BookingStatus>> transitions = Map.of(
-                BookingStatus.ACCEPTED, List.of(BookingStatus.IN_PROGRESS, BookingStatus.CANCELLED),
-                BookingStatus.IN_PROGRESS, List.of(BookingStatus.READY_FOR_PICKUP, BookingStatus.CANCELLED),
-                BookingStatus.READY_FOR_PICKUP, List.of(BookingStatus.COMPLETED, BookingStatus.CANCELLED)
-        );
+    private void validateStatusTransition(Booking booking, BookingStatus newStatus) {
+        Map<BookingStatus, List<BookingStatus>> transitions = isHomeBooking(booking)
+                ? Map.of(
+                        BookingStatus.ACCEPTED, List.of(BookingStatus.ON_THE_WAY, BookingStatus.CANCELLED),
+                        BookingStatus.ON_THE_WAY, List.of(BookingStatus.IN_PROGRESS, BookingStatus.CANCELLED),
+                        BookingStatus.IN_PROGRESS, List.of(BookingStatus.COMPLETED, BookingStatus.CANCELLED)
+                )
+                : Map.of(
+                        BookingStatus.ACCEPTED, List.of(BookingStatus.IN_PROGRESS, BookingStatus.CANCELLED),
+                        BookingStatus.IN_PROGRESS, List.of(BookingStatus.READY_FOR_PICKUP, BookingStatus.CANCELLED),
+                        BookingStatus.READY_FOR_PICKUP, List.of(BookingStatus.COMPLETED, BookingStatus.CANCELLED)
+                );
 
-        if (!transitions.getOrDefault(currentStatus, List.of()).contains(newStatus)) {
+        if (isHomeBooking(booking) && newStatus == BookingStatus.READY_FOR_PICKUP) {
+            throw new AppException(ErrorCode.HOME_BOOKING_CANNOT_READY_FOR_PICKUP);
+        }
+        if (!transitions.getOrDefault(booking.getBookingStatus(), List.of()).contains(newStatus)) {
             throw new AppException(ErrorCode.INVALID_BOOKING_STATUS);
         }
     }
 
     private void validateBookingMediaUpload(Booking booking, BookingMediaType bookingMediaType) {
+        BookingStatus expectedBeforeStatus = isHomeBooking(booking) ? BookingStatus.ON_THE_WAY : BookingStatus.ACCEPTED;
         if (bookingMediaType == BookingMediaType.BEFORE_SERVICE
-                && booking.getBookingStatus() != BookingStatus.ACCEPTED) {
+                && booking.getBookingStatus() != expectedBeforeStatus) {
             throw new AppException(ErrorCode.INVALID_BOOKING_STATUS);
         }
         if (bookingMediaType == BookingMediaType.AFTER_SERVICE
@@ -496,21 +603,22 @@ public class BookingServiceImpl implements BookingService {
 
     private void validateRequiredBookingMedia(Booking booking, BookingStatus newStatus) {
         if (newStatus == BookingStatus.IN_PROGRESS
-                && !hasBookingMedia(booking.getBookingId(), BookingMediaType.BEFORE_SERVICE)) {
+                && !hasBookingMediaForEveryDetail(booking, BookingMediaType.BEFORE_SERVICE)) {
             throw new AppException(ErrorCode.BOOKING_BEFORE_SERVICE_MEDIA_REQUIRED);
         }
-        if (newStatus == BookingStatus.READY_FOR_PICKUP
-                && !hasBookingMedia(booking.getBookingId(), BookingMediaType.AFTER_SERVICE)) {
+        if ((newStatus == BookingStatus.READY_FOR_PICKUP || newStatus == BookingStatus.COMPLETED)
+                && !hasBookingMediaForEveryDetail(booking, BookingMediaType.AFTER_SERVICE)) {
             throw new AppException(ErrorCode.BOOKING_AFTER_SERVICE_MEDIA_REQUIRED);
         }
     }
 
-    private boolean hasBookingMedia(Integer bookingId, BookingMediaType bookingMediaType) {
-        return mediaFileRepository.existsByBookingDetail_Booking_BookingIdAndBookingMediaTypeAndMediaStatus(
-                bookingId,
-                bookingMediaType,
-                MediaStatus.ACTIVE
-        );
+    private boolean hasBookingMediaForEveryDetail(Booking booking, BookingMediaType bookingMediaType) {
+        return booking.getBookingDetails().stream()
+                .allMatch(detail -> mediaFileRepository.existsByBookingDetail_BookingDetailIdAndBookingMediaTypeAndMediaStatus(
+                        detail.getBookingDetailId(),
+                        bookingMediaType,
+                        MediaStatus.ACTIVE
+                ));
     }
 
     private void assertCanViewBooking(Booking booking, User user) {
@@ -549,6 +657,7 @@ public class BookingServiceImpl implements BookingService {
         return EnumSet.of(
                 BookingStatus.WAITING_STAFF,
                 BookingStatus.ACCEPTED,
+                BookingStatus.ON_THE_WAY,
                 BookingStatus.IN_PROGRESS,
                 BookingStatus.READY_FOR_PICKUP
         ).contains(booking.getBookingStatus());
@@ -590,6 +699,109 @@ public class BookingServiceImpl implements BookingService {
 
         if (timeSlotCount > 1) {
             throw new AppException(ErrorCode.ONLY_ONE_TIMESLOT_PER_BOOKING);
+        }
+    }
+
+    private void validateNoDuplicatePets(BookingCreationRequest request) {
+        long petCount = request.getBookingDetails().stream()
+                .map(BookingDetailCreationRequest::getPetId)
+                .distinct()
+                .count();
+        if (petCount != request.getBookingDetails().size()) {
+            throw new AppException(ErrorCode.PET_BOOKING_OVERLAP);
+        }
+    }
+
+    private void validateHomeBookingRequest(BookingCreationRequest request) {
+        if (!isHomeBooking(request.getBookingType())) {
+            return;
+        }
+        if (request.getAddress() == null || request.getAddress().isBlank()) {
+            throw new AppException(ErrorCode.HOME_ADDRESS_REQUIRED);
+        }
+        if (request.getLatitude() == null || request.getLongitude() == null) {
+            throw new AppException(ErrorCode.HOME_LOCATION_REQUIRED);
+        }
+        if (request.getLatitude() < -90 || request.getLatitude() > 90
+                || request.getLongitude() < -180 || request.getLongitude() > 180) {
+            throw new AppException(ErrorCode.INVALID_HOME_LOCATION);
+        }
+        if (!Boolean.TRUE.equals(request.getHomeServiceRequirementsAccepted())) {
+            throw new AppException(ErrorCode.HOME_REQUIREMENTS_NOT_ACCEPTED);
+        }
+
+        long catalogCount = request.getBookingDetails().stream()
+                .map(BookingDetailCreationRequest::getCatalogId)
+                .distinct()
+                .count();
+        if (catalogCount > 1) {
+            throw new AppException(ErrorCode.INVALID_BOOKING_TYPE);
+        }
+    }
+
+    private HomeFeeSnapshot resolveHomeFeeSnapshot(BookingCreationRequest request) {
+        if (!isHomeBooking(request.getBookingType())) {
+            return new HomeFeeSnapshot(null, BigDecimal.ZERO, 0);
+        }
+        try {
+            ShippingFeeResponse shippingFee = shippingRuleService.calculateFee(request.getLatitude(), request.getLongitude());
+            return new HomeFeeSnapshot(
+                    shippingFee.getDistanceKm(),
+                    shippingFee.getShippingFee() == null ? BigDecimal.ZERO : shippingFee.getShippingFee(),
+                    estimateTravelMinute(shippingFee.getDistanceKm())
+            );
+        } catch (AppException ex) {
+            if (ex.getErrorCode() == ErrorCode.LOCATION_OUTSIDE_HCM
+                    || ex.getErrorCode() == ErrorCode.LOCATION_ON_WATER
+                    || ex.getErrorCode() == ErrorCode.SHIPPING_CONFIG_NOT_FOUND) {
+                throw new AppException(ErrorCode.HOME_ADDRESS_OUT_OF_SERVICE_AREA);
+            }
+            if (ex.getErrorCode() == ErrorCode.INVALID_COORDINATES) {
+                throw new AppException(ErrorCode.INVALID_HOME_LOCATION);
+            }
+            throw ex;
+        }
+    }
+
+    private int estimateTravelMinute(Double distanceKm) {
+        if (distanceKm == null || distanceKm <= 0) {
+            return DEFAULT_HOME_TRAVEL_MINUTE;
+        }
+        return Math.max(DEFAULT_HOME_TRAVEL_MINUTE,
+                (int) Math.ceil(distanceKm / DEFAULT_TRAVEL_SPEED_KMH * 60));
+    }
+
+    private boolean isHomeBookingForAvailableGroomers(AvailableGroomerRequest request) {
+        if (request.getBookingType() == null || request.getBookingType().isBlank()) {
+            return false;
+        }
+        return isHomeBooking(request.getBookingType());
+    }
+
+    private int resolveTravelMinuteForAvailableGroomers(AvailableGroomerRequest request) {
+        if (request.getEstimatedTravelMinute() != null && request.getEstimatedTravelMinute() > 0) {
+            return request.getEstimatedTravelMinute();
+        }
+        if (request.getLatitude() != null && request.getLongitude() != null) {
+            ShippingFeeResponse shippingFee = shippingRuleService.calculateFee(request.getLatitude(), request.getLongitude());
+            return estimateTravelMinute(shippingFee.getDistanceKm());
+        }
+        return DEFAULT_HOME_TRAVEL_MINUTE;
+    }
+
+    private boolean isHomeBooking(String bookingType) {
+        return resolveBookingType(bookingType) == LocationType.AT_HOME;
+    }
+
+    private boolean isHomeBooking(Booking booking) {
+        return isHomeBooking(booking.getBookingType());
+    }
+
+    private LocationType resolveBookingType(String bookingType) {
+        try {
+            return LocationType.valueOf(bookingType);
+        } catch (Exception ex) {
+            throw new AppException(ErrorCode.INVALID_BOOKING_TYPE);
         }
     }
 
@@ -666,6 +878,27 @@ public class BookingServiceImpl implements BookingService {
         return detail.getDurationMinute() == null ? 0 : detail.getDurationMinute();
     }
 
+    private LocalDateTime getOccupiedStart(Booking booking) {
+        if (!isHomeBooking(booking)) {
+            return booking.getScheduledAt();
+        }
+        return booking.getScheduledAt().minusMinutes(getEstimatedTravelMinute(booking));
+    }
+
+    private LocalDateTime getOccupiedEnd(Booking booking) {
+        LocalDateTime serviceEnd = booking.getScheduledAt().plusMinutes(getBookingDuration(booking));
+        if (!isHomeBooking(booking)) {
+            return serviceEnd;
+        }
+        return serviceEnd.plusMinutes(getEstimatedTravelMinute(booking));
+    }
+
+    private int getEstimatedTravelMinute(Booking booking) {
+        return booking.getEstimatedTravelMinute() == null || booking.getEstimatedTravelMinute() <= 0
+                ? DEFAULT_HOME_TRAVEL_MINUTE
+                : booking.getEstimatedTravelMinute();
+    }
+
     private List<Booking> filterBookings(
             List<Booking> bookings,
             BookingStatus status,
@@ -682,6 +915,16 @@ public class BookingServiceImpl implements BookingService {
     private Booking findBooking(Integer bookingId) {
         return bookingRepository.findWithDetailsByBookingId(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
+    }
+
+    private BookingResponse toBookingResponse(Booking booking) {
+        BookingResponse response = bookingMapper.toBookingResponse(booking);
+        if (booking.getRequestedStaffId() != null && !booking.getRequestedStaffId().isBlank()) {
+            userRepository.findById(booking.getRequestedStaffId())
+                    .map(User::getFullName)
+                    .ifPresent(response::setRequestedStaffName);
+        }
+        return response;
     }
 
     private User getCurrentUser() {
@@ -765,8 +1008,8 @@ public class BookingServiceImpl implements BookingService {
                 .stream()
                 .filter(existing -> ignoredBookingId == null || !existing.getBookingId().equals(ignoredBookingId))
                 .anyMatch(existing -> {
-                    LocalDateTime existingStart = existing.getScheduledAt();
-                    LocalDateTime existingEnd = existingStart.plusMinutes(getBookingDuration(existing));
+                    LocalDateTime existingStart = getOccupiedStart(existing);
+                    LocalDateTime existingEnd = getOccupiedEnd(existing);
                     return bookingStart.isBefore(existingEnd) && bookingEnd.isAfter(existingStart);
                 });
     }
@@ -882,6 +1125,31 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
+    private void validateHomeDepartureTime(Booking booking) {
+        if (!isHomeBooking(booking)) {
+            return;
+        }
+        int travelMinute = booking.getEstimatedTravelMinute() == null || booking.getEstimatedTravelMinute() <= 0
+                ? DEFAULT_HOME_TRAVEL_MINUTE
+                : booking.getEstimatedTravelMinute();
+        LocalDateTime earliestDeparture = booking.getScheduledAt().minusMinutes(travelMinute + 15L);
+        if (LocalDateTime.now(VIETNAM_ZONE).isBefore(earliestDeparture)) {
+            throw new AppException(ErrorCode.INVALID_HOME_BOOKING_STATUS);
+        }
+    }
+
+    private void validateNoOtherInProgressBooking(Booking booking) {
+        boolean hasOtherInProgress = bookingRepository.findByStaffScheduleAndBookingStatusIn(
+                        booking.getStaffSchedule(),
+                        List.of(BookingStatus.IN_PROGRESS)
+                )
+                .stream()
+                .anyMatch(existing -> !existing.getBookingId().equals(booking.getBookingId()));
+        if (hasOtherInProgress) {
+            throw new AppException(ErrorCode.STAFF_BOOKING_OVERLAP);
+        }
+    }
+
     private record PricingSnapshot(
             WeightRange weightRange,
             int baseDurationMinute,
@@ -890,6 +1158,12 @@ public class BookingServiceImpl implements BookingService {
             BigDecimal basePrice,
             BigDecimal additionalPrice,
             BigDecimal totalPrice
+    ) {}
+
+    private record HomeFeeSnapshot(
+            Double distanceKm,
+            BigDecimal travelFee,
+            Integer estimatedTravelMinute
     ) {}
 
 }

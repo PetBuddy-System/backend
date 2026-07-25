@@ -5,6 +5,7 @@ public enum BookingStatus {
     FAILED,
     PENDING_ACCEPTANCE, //đơn hàng thanh toán thành công
     ACCEPTED,
+    ON_THE_WAY,
     IN_PROGRESS,        //đơn đang thực hiện sau khi duyệt
     READY_FOR_PICKUP,
     COMPLETED,

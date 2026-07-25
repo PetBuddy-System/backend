@@ -147,7 +147,7 @@ public enum ErrorCode {
     NOT_SHIPPER(5210, "You are not the shipper of this order", HttpStatus.FORBIDDEN),
     SHIPPER_NOT_ON_DUTY(5211, "Shipper is not on duty", HttpStatus.FORBIDDEN),
     NOT_THE_ASSIGNED_SHIPPER(5212, "You are not the assigned shipper for this order", HttpStatus.FORBIDDEN),
-    CANCELLED_NOT_ALLOWED(5513,"Không thể hủy yêu cầu khi đang trong quá trình vận chuyển", HttpStatus.BAD_REQUEST),
+    CANCELLED_NOT_ALLOWED(5218,"Không thể hủy yêu cầu khi đang trong quá trình vận chuyển", HttpStatus.BAD_REQUEST),
     SHIPPER_TOO_FAR_FROM_CLUSTER(5214,"The distance between orders are too far",HttpStatus.FORBIDDEN),
     ROUTE_CALCULATION_FAILED(5215,"Failed to calculate route",HttpStatus.INTERNAL_SERVER_ERROR),
     SHIPPER_CAPACITY_FULL(5216, "Shipper capacity is full", HttpStatus.BAD_REQUEST),
@@ -291,11 +291,19 @@ public enum ErrorCode {
     BOOKING_WAITING_FOR_STAFF(9048, "Booking is waiting for staff assignment", HttpStatus.BAD_REQUEST),
     CATALOG_IMAGE_INVALID(9049, "Catalog image is invalid", HttpStatus.BAD_REQUEST),
     INVALID_YEARS_OF_EXPERIENCE(9050, "Years of experience must be greater than or equal to 0", HttpStatus.BAD_REQUEST),
+    HOME_ADDRESS_REQUIRED(9051, "Home service address is required", HttpStatus.BAD_REQUEST),
+    HOME_LOCATION_REQUIRED(9052, "Home service location is required", HttpStatus.BAD_REQUEST),
+    HOME_REQUIREMENTS_NOT_ACCEPTED(9053, "Home service requirements must be accepted", HttpStatus.BAD_REQUEST),
+    HOME_ADDRESS_OUT_OF_SERVICE_AREA(9054, "Home service address is outside service area", HttpStatus.BAD_REQUEST),
+    INVALID_HOME_LOCATION(9055, "Home service location is invalid", HttpStatus.BAD_REQUEST),
+    HOME_BOOKING_CANNOT_READY_FOR_PICKUP(9056, "Home service booking cannot be marked ready for pickup", HttpStatus.BAD_REQUEST),
+    STAFF_TRAVEL_TIME_NOT_ENOUGH(9057, "Staff shift does not have enough travel time", HttpStatus.BAD_REQUEST),
+    INVALID_HOME_BOOKING_STATUS(9058, "Invalid home service booking status", HttpStatus.BAD_REQUEST),
 
-    WORK_SCHEDULE_IN_THE_PAST(9017, "Cannot create a work schedule in the past", HttpStatus.BAD_REQUEST),
-    TOO_EARLY_TO_CHECKIN(9018, "It's not time to check in yet", HttpStatus.BAD_REQUEST),
-    MISSED_CHECKIN(9019, "Check-in time has closed", HttpStatus.BAD_REQUEST),
-    TOO_EARLY_TO_CHECKOUT(9020, "It's not time to check out yet", HttpStatus.BAD_REQUEST),
+    WORK_SCHEDULE_IN_THE_PAST(9059, "Cannot create a work schedule in the past", HttpStatus.BAD_REQUEST),
+    TOO_EARLY_TO_CHECKIN(9060, "It's not time to check in yet", HttpStatus.BAD_REQUEST),
+    MISSED_CHECKIN(9061, "Check-in time has closed", HttpStatus.BAD_REQUEST),
+    TOO_EARLY_TO_CHECKOUT(9062, "It's not time to check out yet", HttpStatus.BAD_REQUEST),
     ;
 
     int code;

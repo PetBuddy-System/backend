@@ -28,6 +28,14 @@ public class BookingCreationRequest {
 
     String address;
 
+    Double latitude;
+
+    Double longitude;
+
+    String addressNote;
+
+    Boolean homeServiceRequirementsAccepted;
+
     @NotNull
     @FutureOrPresent
     LocalDate scheduledAt;

@@ -18,6 +18,14 @@ public class AvailableGroomerRequest {
     @NotNull
     LocalDateTime scheduledAt;
 
+    String bookingType;
+
+    Double latitude;
+
+    Double longitude;
+
+    Integer estimatedTravelMinute;
+
     @Valid
     @NotEmpty
     List<BookingDetailCreationRequest> bookingDetails;
