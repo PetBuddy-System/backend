@@ -58,7 +58,8 @@ public class OrderServiceImpl implements OrderService {
     OrderMapper orderMapper;
     PaymentRepository paymentRepository;
 
-    private static final int MAX_DELIVERY_FAIL_COUNT = 3;
+    static final int SHIPPER_DELIVERY_ATTEMPTS = 2;
+    static final BigDecimal DELIVERY_FAILURE_PENALTY = new BigDecimal("30000");
 
     @Override
     public OrderResponse createOrder(CreateOrderRequest request) {
@@ -245,8 +246,8 @@ public class OrderServiceImpl implements OrderService {
                 if (newStatus != OrderStatus.COMPLETED)
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
             }
-            // BOMBED chỉ được set qua reportDeliveryFailed(); RETURNED_TO_WAREHOUSE chỉ qua confirmReturnedToWarehouse()
-            case COMPLETED, CANCELLED, BOMBED, RETURNED_TO_WAREHOUSE ->
+
+            case COMPLETED, CANCELLED, DELIVERY_FAILED, RETURNED_TO_WAREHOUSE,AWAITING_REDELIVERY, COORDINATOR_REVIEW ->
                     throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
         }
 
@@ -375,29 +376,29 @@ public class OrderServiceImpl implements OrderService {
             throw new AppException(ErrorCode.NOT_THE_ASSIGNED_SHIPPER);
         }
 
-        int failCount = (order.getDeliveryFailCount() != null ? order.getDeliveryFailCount() : 0) + 1;
-        order.setDeliveryFailCount(failCount);
         order.setCancelReason(reason);
-        order.setStaffSchedule(null);
+        order.setUpdatedAt(LocalDateTime.now());
 
-        if (failCount >= MAX_DELIVERY_FAIL_COUNT) {
-            order.setStatus(OrderStatus.BOMBED);
-
-            if (order.getPayment().getStatus() == PaymentStatus.PAID) {
-                paymentService.cancelPaymentForOrder(order);
-                auditService.logPaymentRefund(order.getPayment(), order.getPayment().getAmount(),
-                        "Hoàn tiền do khách bom hàng sau " + failCount + " lần giao", currentUser);
-            }
-            auditService.logOrderBombed(order,
-                    "Không liên lạc được khách sau " + failCount + " lần giao: " + reason, currentUser);
-            emailService.sendOrderBombedEmail(order.getUser().getEmail(), order);
-        } else {
-            order.setStatus(OrderStatus.PICKED);
+        if (Boolean.TRUE.equals(order.getPostCoordinatorRedelivery())) {
+            finalizeDeliveryFailure(order, currentUser,
+                    "Giao lại sau thương lượng vẫn không liên lạc được khách: " + reason);
+            return orderMapper.toOrderResponse(orderRepository.save(order));
         }
 
-        order.setUpdatedAt(LocalDateTime.now());
-        Order saved = orderRepository.save(order);
-        return orderMapper.toOrderResponse(saved);
+        int failCount = (order.getDeliveryFailCount() != null ? order.getDeliveryFailCount() : 0) + 1;
+        order.setDeliveryFailCount(failCount);
+
+        if (failCount < SHIPPER_DELIVERY_ATTEMPTS) {
+            order.setStatus(OrderStatus.AWAITING_REDELIVERY);
+        } else {
+            order.setStatus(OrderStatus.COORDINATOR_REVIEW);
+            order.setStaffSchedule(null);
+            auditService.logOrderBombed(order,
+                    "Không liên lạc được khách sau " + failCount + " lần giao, chuyển coordinator xử lý: " + reason,
+                    currentUser);
+        }
+
+        return orderMapper.toOrderResponse(orderRepository.save(order));
     }
 
     @Override
@@ -406,7 +407,7 @@ public class OrderServiceImpl implements OrderService {
         User currentUser = getCurrentUser();
         Order order = findOrder(orderId);
 
-        if (order.getStatus() != OrderStatus.BOMBED) {
+        if (order.getStatus() != OrderStatus.DELIVERY_FAILED) {
             throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
         }
 
@@ -421,6 +422,16 @@ public class OrderServiceImpl implements OrderService {
             productBatchRepository.save(batch);
         }
 
+        if (order.getPayment().getStatus() == PaymentStatus.PAID) {
+            BigDecimal refundedAmount = order.getPayment().getAmount().subtract(DELIVERY_FAILURE_PENALTY);
+            if (refundedAmount.compareTo(BigDecimal.ZERO) < 0) {
+                refundedAmount = BigDecimal.ZERO;
+            }
+            paymentService.cancelPaymentForOrderWithPenalty(order, DELIVERY_FAILURE_PENALTY);
+            auditService.logPaymentRefund(order.getPayment(), refundedAmount,
+                    "Hoàn tiền sau khi xác nhận hàng đã về kho (trừ phí phạt giao thất bại)", currentUser);
+        }
+
         order.setStatus(OrderStatus.RETURNED_TO_WAREHOUSE);
         order.setUpdatedAt(LocalDateTime.now());
         Order saved = orderRepository.save(order);
@@ -428,6 +439,68 @@ public class OrderServiceImpl implements OrderService {
         auditService.logOrderReturnedToWarehouse(order, "Xác nhận đã trả hàng về kho, cộng lại tồn kho", currentUser);
 
         return orderMapper.toOrderResponse(saved);
+    }
+    @Override
+    public void retryNoonDeliveryContacts() {
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime now = LocalDateTime.now();
+        List<Order> orders = orderRepository.findByStatusAndDeliveryFailCountAndUpdatedAtBetween(
+                OrderStatus.AWAITING_REDELIVERY, 1, startOfDay, now);
+
+        for (Order order : orders) {
+            order.setStatus(OrderStatus.SHIPPING);
+            order.setUpdatedAt(LocalDateTime.now());
+            orderRepository.save(order);
+            shipperAssignmentService.updateEstimatedDeliveryTime(order.getOrderId());
+        }
+    }
+
+    @Override
+    public OrderResponse coordinatorReportUnreachable(Long orderId, String note) {
+        checkLogin();
+        User currentUser = getCurrentUser();
+        Order order = findOrder(orderId);
+
+        if (order.getStatus() != OrderStatus.COORDINATOR_REVIEW) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        finalizeDeliveryFailure(order, currentUser, "Coordinator không liên lạc được khách: " + note);
+
+        return orderMapper.toOrderResponse(orderRepository.save(order));
+    }
+
+    @Override
+    public OrderResponse coordinatorNegotiateRedelivery(Long orderId, LocalDate negotiatedDate, String note) {
+        checkLogin();
+        User currentUser = getCurrentUser();
+        Order order = findOrder(orderId);
+
+        if (order.getStatus() != OrderStatus.COORDINATOR_REVIEW) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+        if (negotiatedDate == null || negotiatedDate.isBefore(LocalDate.now())) {
+            throw new AppException(ErrorCode.INVALID_NEGOTIATED_DATE);
+        }
+
+        order.setNegotiatedDeliveryDate(negotiatedDate);
+        order.setPostCoordinatorRedelivery(true);
+        order.setStatus(OrderStatus.PICKED);
+        order.setUpdatedAt(LocalDateTime.now());
+
+        auditService.logOrderBombed(order,
+                "Coordinator đã thương lượng lại ngày giao " + negotiatedDate + ": " + note, currentUser);
+
+        return orderMapper.toOrderResponse(orderRepository.save(order));
+    }
+
+    private void finalizeDeliveryFailure(Order order, User currentUser, String logMessage) {
+        order.setStatus(OrderStatus.DELIVERY_FAILED);
+        order.setStaffSchedule(null);
+        order.setUpdatedAt(LocalDateTime.now());
+
+        auditService.logOrderBombed(order, logMessage, currentUser);
+        emailService.sendOrderBombedEmail(order.getUser().getEmail(), order);
     }
 
     private List<PickingItemResponse> buildPickingList(Order order) {

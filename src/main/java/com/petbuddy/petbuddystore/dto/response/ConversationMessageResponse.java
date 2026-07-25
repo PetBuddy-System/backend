@@ -1,10 +1,10 @@
 package com.petbuddy.petbuddystore.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.petbuddy.petbuddystore.common.enums.ChatInputType;
+import com.petbuddy.petbuddystore.common.enums.AIMessageRole;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -12,9 +12,10 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public class ChatAIResponse {
-    String conversationId;
-    String answer;
+public class ConversationMessageResponse {
+    String conversationMessageId;
+    AIMessageRole role;
+    String content;
     List<MediaFileResponse> mediaFiles;
+    LocalDateTime createdAt;
 }

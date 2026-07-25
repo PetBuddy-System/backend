@@ -751,7 +751,7 @@ public class AuditServiceImpl implements AuditService {
                 .build());
         changes.add(AuditChange.builder().field("status")
                 .oldValue(null)
-                .newValue(OrderStatus.BOMBED.name())
+                .newValue(OrderStatus.DELIVERY_FAILED.name())
                 .build());
         changes.add(AuditChange.builder().field("finalAmount")
                 .oldValue(null)

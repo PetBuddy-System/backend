@@ -25,11 +25,12 @@ import java.util.List;
 public class SecurityConfig {
     private final String[] PUBLIC_POST_ENDPOINTS = {"/api/users", "/api/auth/signup", "/api/auth/login",
             "/api/auth/introspect", "/api/auth/refresh", "/api/auth/verify-email", "/api/auth/resend-otp",
-            "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/verify-reset-otp","/api/returns/calculate-refund"};
+            "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/verify-reset-otp","/api/returns/calculate-refund",
+            "/api/chatbot/chat"};
 
     private final String[] PUBLIC_GET_ENDPOINTS = {"/api/categories", "/api/categories/{categoryId}", "/api/products",
             "/api/products/{productId}", "/api/catalogs", "/api/catalogs/**", "/api/blogs", "/api/blogs/**",
-            "/api/auth/outbound/authentication","/api/products/{productId}/reviews"
+            "/api/auth/outbound/authentication","/api/products/{productId}/reviews","/api/payments/vnpay/ipn"
     };
 
     private static final String[] PUBLIC_ENDPOINTS_SWAGGER = {
@@ -41,7 +42,7 @@ public class SecurityConfig {
             "/pet-buddy/swagger-ui.html",
     };
 
-    private static final String[] WEBHOOK_ENDPOINT = {"/api/payments/webhook","/pet-buddy/api/payments/ipn"};
+    private static final String[] WEBHOOK_ENDPOINT = {"/api/payments/webhook","/api/payments/momo/ipn"};
 
     private final CustomJwtDecoder customJwtDecoder;
 

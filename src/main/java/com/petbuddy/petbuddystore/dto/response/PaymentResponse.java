@@ -27,6 +27,7 @@ public class PaymentResponse {
     BigDecimal amount;
     String stripeClientSecret;
     String momoPayUrl;
+    String vnpayPayUrl;
     LocalDateTime paidAt;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;

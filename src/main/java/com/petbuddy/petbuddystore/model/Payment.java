@@ -78,4 +78,19 @@ public class Payment {
 
     @Column(name = "momo_pay_url", length = 500)
     String momoPayUrl;
+
+    @Column(name = "vnpay_txn_ref", unique = true)
+    String vnpayTxnRef;
+
+    @Column(name = "vnpay_transaction_no", unique = true)
+    String vnpayTransactionNo;
+
+    @Column(name = "vnpay_pay_url", length = 1000)
+    String vnpayPayUrl;
+
+    @Column(name = "vnpay_create_date")
+    String vnpayCreateDate;
+
+    @Column(name = "compensation_fee")
+    BigDecimal compensationFee;
 }

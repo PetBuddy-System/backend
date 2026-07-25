@@ -11,12 +11,13 @@ public interface FileService {
     MediaFile uploadPetImage(MultipartFile file);
     MediaFile uploadBlogImage(MultipartFile file);
     MediaFile uploadBookingImage(MultipartFile file);
-    MediaFile uploadCatalogImage(MultipartFile file);
     MediaFile uploadProductImageFromBytes(byte[] bytes);
     void validateExcelFile(MultipartFile file);
     MediaFile uploadShippingProofImage(MultipartFile file);
     MediaFile uploadUserProfileImage(MultipartFile file);
     MediaFile uploadReturnImage(MultipartFile file);
     void validateReturnImages(List<MultipartFile> files);
+    MediaFile uploadAIChatImage(MultipartFile file);
     void deleteFile(String fileUrlOrKey);
+    MediaFile uploadCatalogImage(MultipartFile file);
 }
