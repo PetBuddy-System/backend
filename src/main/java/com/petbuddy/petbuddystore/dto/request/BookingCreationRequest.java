@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -38,6 +39,7 @@ public class BookingCreationRequest {
 
     @NotNull
     @FutureOrPresent
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     LocalDate scheduledAt;
 
     String note;
