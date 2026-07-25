@@ -3,6 +3,7 @@ package com.petbuddy.petbuddystore.model;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import org.attoparser.dom.Text;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -21,6 +22,7 @@ public class CartItem {
     UUID cartItemId;
     @Column(name = "product_name")
     String productName;
+    @Column(columnDefinition = "TEXT")
     String description;
     BigDecimal price;
     @Column(name = "sale_price")

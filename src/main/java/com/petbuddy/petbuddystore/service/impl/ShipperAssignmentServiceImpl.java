@@ -42,9 +42,7 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
     UserRepository userRepository;
 
     static double MAX_DISTANCE_FOR_ORS_CALL_KM = 7.0;
-    static double MAX_CLUSTER_DISTANCE_KM = 7.0;
     static List<OrderStatus> ACTIVE_ORDER_STATUSES = List.of(OrderStatus.PICKED, OrderStatus.SHIPPING);
-    static int SAFETY_LIMIT_DAYS = 30;
     static int MAX_LOOKAHEAD_DAYS = 60;
 
     @Override
@@ -232,18 +230,7 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
             throw new AppException(ErrorCode.NOT_SHIPPER);
         }
 
-        Integer maxCapacity = schedule.getMaxOrderCapacity();
-        if (maxCapacity == null) {
-            throw new AppException(ErrorCode.SHIPPER_ZONE_NOT_COMPUTED);
-        }
-
-        long currentLoad = orderRepository.countByStaffSchedule_StaffScheduleIdAndStatusIn(
-                schedule.getStaffScheduleId(), ACTIVE_ORDER_STATUSES);
-        if (currentLoad >= maxCapacity) {
-            throw new AppException(ErrorCode.SHIPPER_CAPACITY_FULL);
-        }
-
-        validateClusterDistance(order, schedule);
+        validateShipperCapacityForOrder(order, schedule);
 
         order.setStaffSchedule(schedule);
         order.setShippedAt(LocalDateTime.now());
@@ -252,11 +239,84 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
         orderRepository.save(order);
     }
 
-    private void validateClusterDistance(Order order, StaffSchedule schedule) {
-        Double distance = distanceToShipperZone(order, schedule);
-        if (distance != null && distance > MAX_CLUSTER_DISTANCE_KM) {
-            throw new AppException(ErrorCode.SHIPPER_TOO_FAR_FROM_CLUSTER);
+    private void validateShipperCapacityForOrder(Order order, StaffSchedule schedule) {
+        if (order.getLatitude() == null || order.getLongitude() == null) {
+            throw new AppException(ErrorCode.ROUTE_CALCULATION_FAILED);
         }
+
+        StoreLocation store = storeLocationRepository.findByActiveTrue()
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_LOCATION_NOT_FOUND));
+
+        List<Order> committedOrders = schedule.getOrders().stream()
+                .filter(o -> ACTIVE_ORDER_STATUSES.contains(o.getStatus()))
+                .filter(o -> o.getLatitude() != null && o.getLongitude() != null)
+                .toList();
+
+        List<Order> routeOrders = new ArrayList<>(committedOrders);
+        routeOrders.add(order);
+
+        WorkSchedule workSchedule = schedule.getWorkSchedule();
+        LocalDateTime shiftEnd = LocalDateTime.of(workSchedule.getWorkDate(), workSchedule.getEndTime());
+        double remainingShiftMinutes = Duration.between(LocalDateTime.now(), shiftEnd).toMinutes();
+
+        if (remainingShiftMinutes <= 0) {
+            throw new AppException(ErrorCode.SHIPPER_CAPACITY_FULL);
+        }
+
+        double availableMinutes = remainingShiftMinutes * (1 - capacityProperties.getSafetyBufferPercent() / 100.0);
+        double maxWeightGrams = capacityProperties.getMaxLoadWeightKg() * 1000.0;
+
+        RouteSimulationResult result = simulateRoute(
+                store.getLatitude(), store.getLongitude(), routeOrders, availableMinutes, maxWeightGrams);
+
+        if (!result.allOrdersFit()) {
+            throw new AppException(ErrorCode.SHIPPER_CAPACITY_FULL);
+        }
+    }
+
+    private RouteSimulationResult simulateRoute(double startLat, double startLon, List<Order> orders,
+                                                double availableMinutes, double maxWeightGrams) {
+        List<Order> remaining = new ArrayList<>(orders);
+        double currentLat = startLat;
+        double currentLon = startLon;
+        double elapsedMinutes = 0;
+        double currentWeightGrams = 0;
+        int fitted = 0;
+
+        while (!remaining.isEmpty()) {
+            Order nearest = null;
+            double nearestEstDistance = Double.MAX_VALUE;
+
+            for (Order candidate : remaining) {
+                double d = GeoUtils.estimateRoadDistanceKm(
+                        GeoUtils.distanceKm(currentLat, currentLon, candidate.getLatitude(), candidate.getLongitude()));
+                if (d < nearestEstDistance) {
+                    nearestEstDistance = d;
+                    nearest = candidate;
+                }
+            }
+
+            double actualDistance = resolveDistanceKm(currentLat, currentLon, nearest.getLatitude(), nearest.getLongitude());
+            double legMinutes = (actualDistance / capacityProperties.getAvgSpeedKmh()) * 60;
+            double handlingMinutes = capacityProperties.getHandlingTimeMinutes();
+            double projectedMinutes = elapsedMinutes + legMinutes + handlingMinutes;
+
+            double nearestWeightGrams = orderWeightGrams(nearest);
+            double projectedWeightGrams = currentWeightGrams + nearestWeightGrams;
+
+            if (projectedMinutes > availableMinutes || projectedWeightGrams > maxWeightGrams) {
+                break;
+            }
+
+            elapsedMinutes = projectedMinutes;
+            currentWeightGrams = projectedWeightGrams;
+            currentLat = nearest.getLatitude();
+            currentLon = nearest.getLongitude();
+            remaining.remove(nearest);
+            fitted++;
+        }
+
+        return new RouteSimulationResult(fitted, elapsedMinutes, currentWeightGrams, fitted == orders.size());
     }
 
     private Double distanceToShipperZone(Order order, StaffSchedule schedule) {
@@ -376,7 +436,8 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
                 ReturnStatus.PICKED_UP,
                 ReturnStatus.RETURNED_TO_STORE,
                 ReturnStatus.READY_TO_DELIVER,
-                ReturnStatus.DELIVERING
+                ReturnStatus.DELIVERING,
+                ReturnStatus.DELIVERING_FAILED
         );
 
         return schedules.stream()
@@ -413,7 +474,9 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
         ReturnRequest returnRequest = returnRequestRepository.findById(returnRequestId)
                 .orElseThrow(() -> new AppException(ErrorCode.RETURN_REQUEST_NOT_FOUND));
 
-        if (returnRequest.getStatus() != ReturnStatus.APPROVED) {
+        // Allow APPROVED or DELIVERING_FAILED
+        if (returnRequest.getStatus() != ReturnStatus.APPROVED
+                && returnRequest.getStatus() != ReturnStatus.DELIVERING_FAILED) {
             throw new AppException(ErrorCode.INVALID_RETURN_STATUS);
         }
 
@@ -437,6 +500,12 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
         }
 
         returnRequest.setShipper(shipper);
+
+        // If reassigned after a failed delivery, reset to READY_TO_DELIVER
+        if (returnRequest.getStatus() == ReturnStatus.DELIVERING_FAILED) {
+            returnRequest.setStatus(ReturnStatus.READY_TO_DELIVER);
+        }
+
         returnRequestRepository.save(returnRequest);
     }
     @Override
@@ -624,51 +693,19 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
         double availableMinutes = shiftMinutes * (1 - capacityProperties.getSafetyBufferPercent() / 100.0);
         double maxWeightGrams = capacityProperties.getMaxLoadWeightKg() * 1000.0;
 
-        List<Order> remaining = new ArrayList<>(clusterOrders);
-        double currentLat = store.getLatitude();
-        double currentLon = store.getLongitude();
-        double elapsedMinutes = 0;
-        double currentWeightGrams = 0;
-        int capacity = 0;
+        RouteSimulationResult result = simulateRoute(
+                store.getLatitude(), store.getLongitude(), clusterOrders, availableMinutes, maxWeightGrams);
 
-        while (!remaining.isEmpty()) {
-            Order nearest = null;
-            double nearestDistance = Double.MAX_VALUE;
-
-            for (Order candidate : remaining) {
-                double d = GeoUtils.estimateRoadDistanceKm(
-                        GeoUtils.distanceKm(currentLat, currentLon, candidate.getLatitude(), candidate.getLongitude()));
-                if (d < nearestDistance) {
-                    nearestDistance = d;
-                    nearest = candidate;
-                }
-            }
-
-            double legMinutes = (nearestDistance / capacityProperties.getAvgSpeedKmh()) * 60;
-            double handlingMinutes = capacityProperties.getHandlingTimeMinutes();
-            double projectedTotalMinutes = elapsedMinutes + legMinutes + handlingMinutes;
-
-            double nearestWeightGrams = orderWeightGrams(nearest);
-            double projectedTotalWeightGrams = currentWeightGrams + nearestWeightGrams;
-
-            if (projectedTotalMinutes > availableMinutes || projectedTotalWeightGrams > maxWeightGrams) {
-                if (capacity == 0 && nearestWeightGrams > maxWeightGrams) {
-                    log.warn("Đơn {} nặng {}g vượt tải trọng tối đa {}g, không thể gán cho shipper trong đợt tính toán này",
-                            nearest.getOrderId(), nearestWeightGrams, maxWeightGrams);
-                }
-                break;
-            }
-
-            elapsedMinutes += legMinutes + handlingMinutes;
-            currentWeightGrams += nearestWeightGrams;
-            currentLat = nearest.getLatitude();
-            currentLon = nearest.getLongitude();
-            remaining.remove(nearest);
-            capacity++;
+        if (result.ordersFit() == 0) {
+            log.warn("Không có đơn nào trong cụm vừa với 1 shipper trong ca (thời gian/tải trọng), staffId={}",
+                    schedule.getStaff().getUserId());
         }
 
-        return capacity;
+        return result.ordersFit();
     }
+
+    record RouteSimulationResult(int ordersFit, double elapsedMinutes,
+                                 double weightGrams, boolean allOrdersFit) {}
 
     private int estimateExtraOrdersInRemainingTime(double remainingMinutes, double returnTripMinutes) {
         double usableMinutes = remainingMinutes - returnTripMinutes;
@@ -677,6 +714,7 @@ public class ShipperAssignmentServiceImpl implements ShipperAssignmentService {
                 + (capacityProperties.getMaxOperationalRadiusKm() / 3.0 / capacityProperties.getAvgSpeedKmh()) * 60;
         return (int) Math.floor(usableMinutes / perOrderMinutes);
     }
+
     private double orderWeightGrams(Order order) {
         if (order.getOrderDetails() == null) return 0;
         return order.getOrderDetails().stream()

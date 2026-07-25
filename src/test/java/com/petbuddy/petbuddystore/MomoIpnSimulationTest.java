@@ -8,11 +8,10 @@ import com.petbuddy.petbuddystore.model.Payment;
 import com.petbuddy.petbuddystore.repository.PaymentRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-
-import org.springframework.http.*;
+import org.springframework.http.MediaType;
+import org.springframework.web.client.RestClient;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -20,53 +19,71 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class MomoIpnSimulationTest {
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {
+                "SPRING_MAIL_HOST=localhost",
+                "SPRING_MAIL_PORT=1025",
+                "SPRING_MAIL_USERNAME=test",
+                "SPRING_MAIL_PASSWORD=test",
+                "SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/pet_buddy",
+                "SPRING_DATASOURCE_USERNAME=root",
+                "SPRING_DATASOURCE_PASSWORD=12345"
+        }
+)
+class MomoIpnSimulationTest {
+
     @LocalServerPort
     int port;
 
     @Autowired
-    MomoConfig momoConfig;
-
-    TestRestTemplate restTemplate = new TestRestTemplate();
+    private MomoConfig momoConfig;
 
     @Autowired
-    PaymentRepository paymentRepository;
+    private PaymentRepository paymentRepository;
 
     @Test
     void simulateSuccessfulMomoIpn() {
-        // ---- THAY orderId này bằng momoOrderId thật bạn đã tạo qua createQrPayment ----
-        // Lưu ý: đây là field "momoOrderId" (String) trong entity Payment,
-        // KHÔNG phải paymentId hay orderId (Long) của Order.
+
         String orderId = "OD634095-1784506504846";
+
         String requestId = UUID.randomUUID().toString();
         String transId = String.valueOf(System.currentTimeMillis());
-        long amount = 211000; // phải khớp amount lúc tạo payment
+
+        long amount = 211000L;
+
         String orderInfo = "Thanh toan don hang " + orderId;
         String orderType = "momo_wallet";
         String payType = "qr";
         String extraData = "";
         String message = "Successful.";
-        int resultCode = 0; // 0 = thành công theo MoMo
+        int resultCode = 0;
         String responseTime = String.valueOf(Instant.now().toEpochMilli());
 
-        String rawSignature = "accessKey=" + momoConfig.getAccessKey()
-                + "&amount=" + amount
-                + "&extraData=" + extraData
-                + "&message=" + message
-                + "&orderId=" + orderId
-                + "&orderInfo=" + orderInfo
-                + "&orderType=" + orderType
-                + "&partnerCode=" + momoConfig.getPartnerCode()
-                + "&payType=" + payType
-                + "&requestId=" + requestId
-                + "&responseTime=" + responseTime
-                + "&resultCode=" + resultCode
-                + "&transId=" + transId;
+        System.out.println("DS_URL = " + System.getenv("SPRING_DATASOURCE_URL"));
+        System.out.println("DS_URL_PROP = " + System.getProperty("SPRING_DATASOURCE_URL"));
 
-        String signature = MomoSignatureUtil.hmacSHA256(rawSignature, momoConfig.getSecretKey());
+        String rawSignature =
+                "accessKey=" + momoConfig.getAccessKey()
+                        + "&amount=" + amount
+                        + "&extraData=" + extraData
+                        + "&message=" + message
+                        + "&orderId=" + orderId
+                        + "&orderInfo=" + orderInfo
+                        + "&orderType=" + orderType
+                        + "&partnerCode=" + momoConfig.getPartnerCode()
+                        + "&payType=" + payType
+                        + "&requestId=" + requestId
+                        + "&responseTime=" + responseTime
+                        + "&resultCode=" + resultCode
+                        + "&transId=" + transId;
 
-        MomoIpnRequest ipn = MomoIpnRequest.builder()
+        String signature = MomoSignatureUtil.hmacSHA256(
+                rawSignature,
+                momoConfig.getSecretKey()
+        );
+
+        MomoIpnRequest request = MomoIpnRequest.builder()
                 .partnerCode(momoConfig.getPartnerCode())
                 .orderId(orderId)
                 .requestId(requestId)
@@ -82,28 +99,34 @@ public class MomoIpnSimulationTest {
                 .signature(signature)
                 .build();
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        HttpEntity<MomoIpnRequest> entity = new HttpEntity<>(ipn, headers);
+        RestClient client = RestClient.builder()
+                .baseUrl("http://localhost:" + port)
+                .build();
 
-        String url = "http://localhost:" + port + "/api/payments/ipn";
-        ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+        String body = client.post()
+                .uri("/pet-buddy/api/payments/ipn")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request)
+                .retrieve()
+                .body(String.class);
 
-        System.out.println("IPN response status: " + response.getStatusCode());
-        System.out.println("IPN response body: " + response.getBody());
+        System.out.println(body);
 
-        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        Optional<Payment> paymentOpt =
+                paymentRepository.findByMomoOrderId(orderId);
 
-        Optional<Payment> paymentOpt = paymentRepository.findByMomoOrderId(orderId);
         assertThat(paymentOpt).isPresent();
 
         Payment payment = paymentOpt.get();
-        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
-        assertThat(payment.getMomoTransId()).isEqualTo(transId);
-        assertThat(payment.getPaidAt()).isNotNull();
 
-        System.out.println("Payment sau IPN: status=" + payment.getStatus()
-                + ", momoTransId=" + payment.getMomoTransId()
-                + ", paidAt=" + payment.getPaidAt());
+        assertThat(payment.getStatus())
+                .isEqualTo(PaymentStatus.PAID);
+
+        assertThat(payment.getMomoTransId())
+                .isEqualTo(transId);
+
+        assertThat(payment.getPaidAt())
+                .isNotNull();
     }
+
 }

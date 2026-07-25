@@ -32,5 +32,5 @@ public class DeliveryCapacityProperties {
     int restockThresholdOrders = 2;
     double maxLoadWeightKg = 30.0;
     double pendingAssignmentBufferMinutes = 20.0;
-    int warehousePickupDays = 2;
+    int warehousePickupDays = 1;
 }

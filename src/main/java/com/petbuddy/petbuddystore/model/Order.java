@@ -54,7 +54,11 @@ public class Order {
 
     BigDecimal totalAmount;
 
+    BigDecimal originalTotalAmount;
+
     BigDecimal discountAmount;
+
+    BigDecimal originalDiscountAmount;
 
     BigDecimal shippingDiscountAmount;
     
@@ -63,6 +67,7 @@ public class Order {
     @Column(columnDefinition = "NVARCHAR(500)")
     String note;
 
+    @Builder.Default
     @Column(nullable = false)
     Integer deliveryFailCount = 0;
 
